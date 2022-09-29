@@ -21,7 +21,7 @@ make
 
 3) call satscm binary with *constant*, *timeout* and *quiet* as arguments
 
-./satscm <constant> <timeout> <quiet>
+./satscm *constant* *timeout* *quiet*
 
 e.g.
 
