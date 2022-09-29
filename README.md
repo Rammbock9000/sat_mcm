@@ -15,7 +15,7 @@ cmake -DCMAKE_PREFIX_PATH="/opt/cadical/" .
 
 make 
 
-3) call satscm binary with the <constant>, <timeout> and <quiet> as arguments
+3) call satscm binary with *constant*, *timeout* and *quiet* as arguments
 
 ./satscm <constant> <timeout> <quiet>
 
