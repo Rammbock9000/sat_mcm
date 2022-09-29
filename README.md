@@ -3,6 +3,10 @@ Installation instructions
 This project is set up to be extendable to various SAT backends.
 Only CaDiCaL is currently supported.
 
+0) Go to the repository directory via
+
+cd scm_sat
+
 1) Link CaDiCaL using cmake via
 
 cmake -DCMAKE_PREFIX_PATH="/path/to/cadical/install/dir/" .
