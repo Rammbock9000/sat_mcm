@@ -21,7 +21,7 @@ public:
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(int C, int timeout, bool quiet);
+	scm(int C, int timeout, bool quiet, int word_size);
 	/*!
 	 * solve the problem
 	 */

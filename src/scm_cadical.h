@@ -28,7 +28,7 @@ class scm_cadical : public scm {
 #define CADICAL_UNSAT 20
 
 public:
-	scm_cadical(int C, int timeout, bool quiet);
+	scm_cadical(int C, int timeout, bool quiet, int word_size);
 
 protected:
 	std::pair<bool, bool> check() override;

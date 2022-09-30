@@ -5,7 +5,7 @@
 #include "scm_cadical.h"
 #include <iostream>
 
-scm_cadical::scm_cadical(int C, int timeout, bool quiet) : scm(C, timeout, quiet) {}
+scm_cadical::scm_cadical(int C, int timeout, bool quiet, int word_size) : scm(C, timeout, quiet, word_size) {}
 
 void scm_cadical::reset_backend() {
 	// create new solver

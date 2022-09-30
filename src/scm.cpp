@@ -8,14 +8,19 @@
 #include <cmath>
 #include <chrono>
 
-scm::scm(int C, int timeout, bool quiet) : C(C), timeout(timeout), output_shift(0), quiet(quiet) {
+scm::scm(int C, int timeout, bool quiet, int word_size) : C(C), timeout(timeout), output_shift(0), quiet(quiet), word_size(word_size) {
 	// make it even and count shift
 	while ((this->C & 1) == 0) {
 		this->C = this->C >> 1;
 		this->output_shift++;
 	}
 	// set word sizes
-	this->word_size = this->ceil_log2(this->C)+1;
+	if (this->word_size == -1) {
+		this->word_size = this->ceil_log2(this->C);
+	}
+	else if (this->word_size == 0) {
+		this->word_size = this->ceil_log2(this->C)+1;
+	}
 	this->max_shift = this->word_size;
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
 }
@@ -333,35 +338,35 @@ void scm::create_input_output_constraints() {
 void scm::create_input_select_constraints(int idx) {
 	if (idx == 1) return; // stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	// create constraints for all muxs
-	//std::cout << "creating input select constraints for node #" << idx << std::endl;
+	if (!this->quiet) std::cout << "creating input select constraints for node #" << idx << std::endl;
 	auto select_word_size = this->ceil_log2(idx);
 	auto num_possible_muxs = (1 << select_word_size) - 1;
 	for (auto &dir : this->input_directions) {
-		//std::cout << "  dir = " << (dir==scm::left?"left":"right") << std::endl;
+		if (!this->quiet) std::cout << "  dir = " << (dir==scm::left?"left":"right") << std::endl;
 		int connected_inputs_counter = 0;
 		int mux_idx = 0;
 		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
-			//std::cout << "    mux stage = " << mux_stage << std::endl;
+			if (!this->quiet) std::cout << "    mux stage = " << mux_stage << std::endl;
 			auto num_muxs_per_stage = (1 << mux_stage);
 			auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage
 			for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
-				//std::cout << "      mux idx in stage = " << mux_idx_in_stage << std::endl;
-				//std::cout << "      mux idx = " << mux_idx << std::endl;
+				if (!this->quiet) std::cout << "      mux idx in stage = " << mux_idx_in_stage << std::endl;
+				if (!this->quiet) std::cout << "      mux idx = " << mux_idx << std::endl;
 				if (mux_stage == select_word_size-1) {
 					// connect with another node output
 					auto zero_input_node_idx = 2 * mux_idx_in_stage;
 					auto one_input_node_idx = zero_input_node_idx + 1;
 					if (zero_input_node_idx >= idx) zero_input_node_idx = idx-1;
 					if (one_input_node_idx >= idx) one_input_node_idx = idx-1;
-					//std::cout << "        zero input node idx = " << zero_input_node_idx << std::endl;
-					//std::cout << "        one input node idx = " << one_input_node_idx << std::endl;
+					if (!this->quiet) std::cout << "        zero input node idx = " << zero_input_node_idx << std::endl;
+					if (!this->quiet) std::cout << "        one input node idx = " << one_input_node_idx << std::endl;
 					for (int w = 0; w < this->word_size; w++) {
 						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
 						auto zero_input_var_idx = this->output_value_variables.at({zero_input_node_idx, w});
 						auto one_input_var_idx = this->output_value_variables.at({one_input_node_idx, w});
 						if (zero_input_node_idx == one_input_node_idx) {
 							// both inputs are equal -> mux output == mux input (select line does not matter...)
-							this->create_1x1_equivalence(zero_input_node_idx, mux_output_var_idx);
+							this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
 						}
 						else {
 							this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
@@ -376,8 +381,8 @@ void scm::create_input_select_constraints(int idx) {
 					auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
 					//auto zero_input_mux_idx = mux_idx + num_muxs_per_stage;
 					auto one_input_mux_idx = zero_input_mux_idx + 1;
-					//std::cout << "        zero input mux idx = " << zero_input_mux_idx << std::endl;
-					//std::cout << "        one input mux idx = " << one_input_mux_idx << std::endl;
+					if (!this->quiet) std::cout << "        zero input mux idx = " << zero_input_mux_idx << std::endl;
+					if (!this->quiet) std::cout << "        one input mux idx = " << one_input_mux_idx << std::endl;
 					for (int w = 0; w < this->word_size; w++) {
 						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
 						auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w});
@@ -388,7 +393,7 @@ void scm::create_input_select_constraints(int idx) {
 				}
 				// increment current mux idx
 				mux_idx++;
-				//std::cout << std::endl;
+				if (!this->quiet) std::cout << std::endl;
 			}
 		}
 	}
@@ -520,20 +525,16 @@ void scm::create_adder_constraints(int idx) {
 		this->create_add_sum(a, b, c_i, s);
 		this->constraint_counter++;
 		// build carry
-		/*
 		if (w != this->word_size-1) {
 			int c_o = this->adder_internal_variables.at({idx, w});
 			this->create_add_carry(a, b, c_i, c_o);
 			this->constraint_counter++;
 		}
-		 */
-		int c_o = this->adder_internal_variables.at({idx, w});
-		this->create_add_carry(a, b, c_i, c_o);
-		this->constraint_counter++;
+
 	}
 	// disallow overflows
-	this->force_bit(this->adder_internal_variables.at({idx, this->word_size-1}), 0);
-	this->constraint_counter++;
+	//this->force_bit(this->adder_internal_variables.at({idx, this->word_size-1}), 0);
+	//this->constraint_counter++;
 }
 
 void scm::create_input_select_limitation_constraints(int idx) {
@@ -604,9 +605,9 @@ void scm::print_solution() {
 			std::cout << "  node #" << idx << " = " << this->output_values[idx] << std::endl;
 			std::cout << "    left input: node " << this->input_select[{idx, scm::left}] << std::endl;
 			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
-			std::cout << "    shift input select: " << this->shift_input_select[idx] << std::endl;
+			std::cout << "    shift input select: " << this->shift_input_select[idx] << (this->shift_input_select[idx]==1?" (left)":" (right)") << std::endl;
 			std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
-			std::cout << "    negate select: " << this->negate_select[idx] << std::endl;
+			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (shifted)":" (non-shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
 		}
 		if (this->solution_is_valid()) {
@@ -652,7 +653,8 @@ bool scm::solution_is_valid() {
 			std::cout << "node #" << idx << " has invalid left input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_l << std::endl;
 			std::cout << "  expected value " << left_input_value << " but got " << this->input_select_mux_output[{idx, scm::left}] << std::endl;
-			for (int mux_idx = 0; mux_idx < idx-1; mux_idx++) {
+			auto num_muxs = (1 << this->ceil_log2(idx))-1;
+			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
 					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::left, mux_idx, w}]) << w);
@@ -670,7 +672,8 @@ bool scm::solution_is_valid() {
 			std::cout << "node #" << idx << " has invalid right input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_r << std::endl;
 			std::cout << "  expected value " << right_input_value << " but got " << this->input_select_mux_output[{idx, scm::right}] << std::endl;
-			for (int mux_idx = 0; mux_idx < idx-1; mux_idx++) {
+			auto num_muxs = (1 << this->ceil_log2(idx))-1;
+			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
 					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::right, mux_idx, w}]) << w);

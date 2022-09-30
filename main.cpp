@@ -8,6 +8,7 @@ int main(int argc, char** argv) {
 	int C = 42;
 	int timeout = 300;
 	bool quiet = true;
+	int word_size = 0;
 	if (argc == 1) {
 		std::cout << "Please call satscm like this: ./satscm <constant> <timeout> <quiet>" << std::endl;
 		std::cout << "  e.g. ./satscm 699829 300 1 for constant 699829 with 300 sec time budget and without debug outputs" << std::endl;
@@ -46,9 +47,20 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+	if (argc > 4) {
+		std::string s(argv[4]);
+		try {
+			word_size = std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to integer" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
 	std::cout << "Starting OSCM for C = " << C << " and timeout = " << timeout << " seconds" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
-	scm_cadical s(C, timeout, quiet);
+	scm_cadical s(C, timeout, quiet, word_size);
 	s.solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cout << "Finished solving after " << elapsed_time << " seconds" << std::endl;
