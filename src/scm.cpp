@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <chrono>
+#include <cstdint>
 
 scm::scm(int C, int timeout, bool quiet, int word_size) : C(C), timeout(timeout), output_shift(0), quiet(quiet), word_size(word_size) {
 	// make it even and count shift
@@ -626,10 +627,10 @@ bool scm::solution_is_valid() {
 	bool valid = true;
 	for (int idx = 1; idx <= this->num_adders; idx++) {
 		// verify node inputs
-		int input_node_idx_l = 0;
-		int input_node_idx_r = 0;
-		int actual_input_value_l = 1;
-		int actual_input_value_r = 1;
+		int64_t input_node_idx_l = 0;
+		int64_t input_node_idx_r = 0;
+		int64_t actual_input_value_l = 1;
+		int64_t actual_input_value_r = 1;
 		if (idx > 1) {
 			for (auto &dir : this->input_directions) {
 				for (auto w = 0; w < this->word_size; w++) {
@@ -642,8 +643,8 @@ bool scm::solution_is_valid() {
 			actual_input_value_l = this->input_select_mux_output[{idx, scm::left}];
 			actual_input_value_r = this->input_select_mux_output[{idx, scm::right}];
 		}
-		auto left_input_value = this->output_values[input_node_idx_l];
-		auto right_input_value = this->output_values[input_node_idx_r];
+		int64_t left_input_value = this->output_values[input_node_idx_l];
+		int64_t right_input_value = this->output_values[input_node_idx_r];
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " left input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_l << std::endl;
@@ -655,7 +656,7 @@ bool scm::solution_is_valid() {
 			std::cout << "  expected value " << left_input_value << " but got " << this->input_select_mux_output[{idx, scm::left}] << std::endl;
 			auto num_muxs = (1 << this->ceil_log2(idx))-1;
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-				int mux_output = 0;
+				int64_t mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
 					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::left, mux_idx, w}]) << w);
 				}
@@ -672,9 +673,9 @@ bool scm::solution_is_valid() {
 			std::cout << "node #" << idx << " has invalid right input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_r << std::endl;
 			std::cout << "  expected value " << right_input_value << " but got " << this->input_select_mux_output[{idx, scm::right}] << std::endl;
-			auto num_muxs = (1 << this->ceil_log2(idx))-1;
+			int64_t num_muxs = (1 << this->ceil_log2(idx))-1;
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-				int mux_output = 0;
+				int64_t mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
 					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::right, mux_idx, w}]) << w);
 				}
@@ -683,8 +684,8 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify shift mux outputs
-		int shift_mux_output_l = left_input_value;
-		int shift_mux_output_r = right_input_value;
+		int64_t shift_mux_output_l = left_input_value;
+		int64_t shift_mux_output_r = right_input_value;
 		if (idx > 1) {
 			if (this->get_result_value(this->input_shift_select_variables[idx]) == 0) {
 				shift_mux_output_l = right_input_value;
@@ -722,8 +723,8 @@ bool scm::solution_is_valid() {
 			}
 		}
 		// verify shifter output
-		int expected_shift_output = (shift_mux_output_l << this->shift_value[idx]) % (1 << this->word_size);
-		int actual_shift_output = 0;
+		int64_t expected_shift_output = (((int64_t)shift_mux_output_l) << this->shift_value[idx]) % (int64_t)(1 << this->word_size);
+		int64_t actual_shift_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w}]) << w);
 		}
@@ -742,8 +743,8 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify negate mux outputs
-		int negate_mux_output_l = actual_shift_output;
-		int negate_mux_output_r = shift_mux_output_r;
+		int64_t negate_mux_output_l = actual_shift_output;
+		int64_t negate_mux_output_r = shift_mux_output_r;
 		if (this->get_result_value(this->input_negate_select_variables[idx]) == 0) {
 			negate_mux_output_l = shift_mux_output_r;
 			negate_mux_output_r = actual_shift_output;
@@ -779,9 +780,9 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify xor output
-		int sub = this->get_result_value(this->input_negate_value_variables[idx]);
-		int expected_xor_output = sub==1?(~negate_mux_output_r) & ((1 << this->word_size) - 1):negate_mux_output_r;
-		int actual_xor_output = 0;
+		int64_t sub = this->get_result_value(this->input_negate_value_variables[idx]);
+		int64_t expected_xor_output = sub==1?(~negate_mux_output_r) & ((((int64_t)1) << this->word_size) - 1):negate_mux_output_r;
+		int64_t actual_xor_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_xor_output += (this->get_result_value(this->xor_output_variables[{idx, w}]) << w);
 		}
@@ -800,8 +801,8 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify node/adder output
-		int expected_adder_output = (negate_mux_output_l + actual_xor_output + sub) & ((1 << this->word_size) - 1);
-		int actual_adder_output = 0;
+		int64_t expected_adder_output = (negate_mux_output_l + actual_xor_output + sub) & ((((int64_t)1) << this->word_size) - 1);
+		int64_t actual_adder_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_adder_output += (this->get_result_value(this->output_value_variables[{idx, w}]) << w);
 		}
