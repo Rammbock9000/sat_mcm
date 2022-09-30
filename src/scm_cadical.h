@@ -37,6 +37,7 @@ protected:
 
 	void create_1x1_equivalence(int x, int y) override;
 	void create_2x1_mux(int a, int b, int s, int y) override;
+	void create_2x1_mux_shift_disallowed(int a, int b, int s, int y) override;
 	void create_2x1_xor(int a, int b, int y) override;
 	void create_add_sum(int a, int b, int c_i, int s) override;
 	void create_add_carry(int a, int b, int c_i, int c_o) override;

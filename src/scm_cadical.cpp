@@ -59,6 +59,37 @@ void scm_cadical::create_2x1_mux(int a, int b, int s, int y) {
 	this->solver->add(0);
 }
 
+void scm_cadical::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
+	// 1)
+	this->solver->add(-a);
+	this->solver->add(y);
+	this->solver->add(0);
+	// 2)
+	this->solver->add(-b);
+	this->solver->add(-s);
+	this->solver->add(y);
+	this->solver->add(0);
+	// 3)
+	this->solver->add(b);
+	this->solver->add(-s);
+	this->solver->add(-y);
+	this->solver->add(0);
+	// 4)
+	this->solver->add(a);
+	this->solver->add(s);
+	this->solver->add(-y);
+	this->solver->add(0);
+	// 5)
+	this->solver->add(-a);
+	this->solver->add(-s);
+	this->solver->add(0);
+	// 6)
+	this->solver->add(a);
+	this->solver->add(b);
+	this->solver->add(-y);
+	this->solver->add(0);
+}
+
 void scm_cadical::create_2x1_xor(int a, int b, int y) {
 	/*!
 	 * force y = a XOR b

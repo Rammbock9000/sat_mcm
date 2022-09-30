@@ -67,7 +67,7 @@ protected:
 	 */
 	virtual void create_1x1_equivalence(int x, int y);
 	/*!
-	 * force y = s ? a : b
+	 * force y = s ? a : b AND not (s and a)
 	 * clauses are:
 	 *   1) -a     s  y
 	 *   2)    -b -s  y
@@ -81,6 +81,21 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_mux(int a, int b, int s, int y);
+	/*!
+	 * force y = s ? a : b
+	 * clauses are:
+	 *   1) -a        y
+	 *   2)    -b -s  y
+	 *   3)     b -s -y
+	 *   4)  a     s -y
+	 *   5) -a    -s
+	 *   6)  a  b    -y
+	 * @param a
+	 * @param b
+	 * @param s
+	 * @param y
+	 */
+	virtual void create_2x1_mux_shift_disallowed(int a, int b, int s, int y);
 	/*!
 	 * force y = a XOR b
 	 * clauses are:

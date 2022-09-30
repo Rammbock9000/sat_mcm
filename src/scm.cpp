@@ -286,6 +286,10 @@ void scm::create_2x1_mux(int a, int b, int s, int o) {
 	throw std::runtime_error("create_2x1_mux is impossible in base class");
 }
 
+void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int o) {
+	throw std::runtime_error("create_2x1_mux_shift_disallowed is impossible in base class");
+}
+
 void scm::create_1x1_equivalence(int x, int y) {
 	throw std::runtime_error("create_1x1_equivalence is impossible in base class");
 }
@@ -404,6 +408,7 @@ void scm::create_shift_constraints(int idx) {
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
 		auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
+		auto first_disallowed_shift_bit = this->word_size - shift_width;
 		for (auto w = 0; w < this->word_size; w++) {
 			auto w_prev = w - shift_width;
 			auto connect_zero_const = w_prev < 0;
@@ -443,7 +448,12 @@ void scm::create_shift_constraints(int idx) {
 					one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
 				}
 			}
-			this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+			if (w >= first_disallowed_shift_bit) {
+				this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+			}
+			else {
+				this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+			}
 			this->constraint_counter++;
 		}
 	}
@@ -526,16 +536,16 @@ void scm::create_adder_constraints(int idx) {
 		this->create_add_sum(a, b, c_i, s);
 		this->constraint_counter++;
 		// build carry
-		if (w != this->word_size-1) {
+		//if (w != this->word_size-1) {
 			int c_o = this->adder_internal_variables.at({idx, w});
 			this->create_add_carry(a, b, c_i, c_o);
 			this->constraint_counter++;
-		}
-
+		//}
 	}
 	// disallow overflows
 	//this->force_bit(this->adder_internal_variables.at({idx, this->word_size-1}), 0);
-	//this->constraint_counter++;
+	this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
+	this->constraint_counter++;
 }
 
 void scm::create_input_select_limitation_constraints(int idx) {
@@ -608,7 +618,7 @@ void scm::print_solution() {
 			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
 			std::cout << "    shift input select: " << this->shift_input_select[idx] << (this->shift_input_select[idx]==1?" (left)":" (right)") << std::endl;
 			std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
-			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (shifted)":" (non-shifted)") << std::endl;
+			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (non-shifted)":" (shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
 		}
 		if (this->solution_is_valid()) {
@@ -723,7 +733,7 @@ bool scm::solution_is_valid() {
 			}
 		}
 		// verify shifter output
-		int64_t expected_shift_output = (((int64_t)shift_mux_output_l) << this->shift_value[idx]) % (int64_t)(1 << this->word_size);
+		int64_t expected_shift_output = (((int64_t)shift_mux_output_l) << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
 		int64_t actual_shift_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w}]) << w);
@@ -801,7 +811,8 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify node/adder output
-		int64_t expected_adder_output = (negate_mux_output_l + actual_xor_output + sub) & ((((int64_t)1) << this->word_size) - 1);
+		//int64_t expected_adder_output = (negate_mux_output_l + actual_xor_output + sub) & ((((int64_t)1) << this->word_size) - 1);
+		int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (negate_mux_output_l + negate_mux_output_r);
 		int64_t actual_adder_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_adder_output += (this->get_result_value(this->output_value_variables[{idx, w}]) << w);
