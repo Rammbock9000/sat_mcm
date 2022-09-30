@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-scm_cadical::scm_cadical(int C, int timeout, bool quiet, int word_size) : scm(C, timeout, quiet, word_size) {}
+scm_cadical::scm_cadical(int C, int timeout, bool quiet, int word_size) : scm(C, timeout, quiet, word_size, 1) {}
 
 void scm_cadical::reset_backend() {
 	// create new solver

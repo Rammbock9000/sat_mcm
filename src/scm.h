@@ -21,7 +21,7 @@ public:
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(int C, int timeout, bool quiet, int word_size);
+	scm(int C, int timeout, bool quiet, int word_size, int threads);
 	/*!
 	 * solve the problem
 	 */
@@ -219,6 +219,10 @@ protected:
 	 * suppress debug outputs if quiet = true
 	 */
 	bool quiet;
+	/*!
+	 * the number of CPU threads the backend is allowed to use
+	 */
+	int threads;
 
 private:
 	/*!

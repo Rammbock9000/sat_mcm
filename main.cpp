@@ -23,6 +23,7 @@ int main(int argc, char** argv) {
 	bool quiet = true;
 	int word_size = 0; // means "calculate necessary word size automatically"
 	std::string solver_name = "no_solver";
+	int threads = 1;
 #ifdef USE_Z3
 	solver_name = "z3";
 #endif
@@ -30,8 +31,8 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satscm like this: ./satscm <constant> <solver_name> <timeout> <quiet>" << std::endl;
-		std::cout << "  e.g. './satscm 14709 cadical 300 1' for constant 14709 with 300 sec time budget and without debug outputs using the cadical backend" << std::endl;
+		std::cout << "Please call satscm like this: ./satscm <constant> <solver_name> <timeout> <threads> <quiet>" << std::endl;
+		std::cout << "  e.g. './satscm 14709 z3 300 2 1' for constant 14709 with 300 sec time budget, 2 allowed CPU threads and without debug outputs using the Z3 backend" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -64,7 +65,7 @@ int main(int argc, char** argv) {
 	if (argc > 4) {
 		std::string s(argv[4]);
 		try {
-			quiet = (bool)std::stoi(s);
+			threads = std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -72,7 +73,18 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
-	std::cout << "Starting OSCM for C = " << C << " and timeout = " << timeout << " seconds with solver " << solver_name << std::endl;
+	if (argc > 5) {
+		std::string s(argv[5]);
+		try {
+			quiet = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
+	std::cout << "Starting OSCM for C = " << C << " and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL
@@ -83,7 +95,7 @@ int main(int argc, char** argv) {
 	}
 	else if (solver_name == "z3") {
 #ifdef USE_Z3
-		solver = std::make_unique<scm_z3>(C, timeout, quiet, word_size);
+		solver = std::make_unique<scm_z3>(C, timeout, quiet, word_size, threads);
 #else
 		throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif

@@ -17,7 +17,7 @@
 
 class scm_z3 : public scm {
 public:
-	scm_z3(int C, int timeout, bool quiet, int word_size);
+	scm_z3(int C, int timeout, bool quiet, int word_size, int threads);
 
 protected:
 	std::pair<bool, bool> check() override;

@@ -21,14 +21,15 @@ cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" .
 
 make
 
-3) call satscm binary with "constant", "backend name", "timeout" and "quiet" as arguments
+3) call satscm binary with "constant", "backend name", "timeout", "threads" and "quiet" as arguments
 
-./satscm "constant" "backend name" "timeout" "quiet"
+./satscm "constant" "backend name" "timeout" "threads" "quiet"
 
 e.g.
 
-./satscm 14709 cadical 300 1
+./satscm 14709 z3 300 2 1
 
-to start the program for constant 14709 with 300 seconds timeout and without any debug messages using cadical as backend solver.
+to start the program for constant 14709 with 300 seconds timeout, 2 CPU threads allowed and without any debug messages using Z3 as backend solver.
+Note that CaDiCaL only supports single-thread solving.
 Depending on your machine, the program should run for a few seconds (maybe up to a minute if your computer is slow?).
 Once a solution is found, sat_scm prints a description of the resulting SCM circuit on the console.

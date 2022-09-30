@@ -9,7 +9,8 @@
 #include <chrono>
 #include <cstdint>
 
-scm::scm(int C, int timeout, bool quiet, int word_size) : C(C), timeout(timeout), output_shift(0), quiet(quiet), word_size(word_size) {
+scm::scm(int C, int timeout, bool quiet, int word_size, int threads)
+	:	C(C), timeout(timeout), output_shift(0), quiet(quiet), word_size(word_size), threads(threads) {
 	// make it even and count shift
 	while ((this->C & 1) == 0) {
 		this->C = this->C >> 1;

@@ -6,13 +6,14 @@
 
 #ifdef USE_Z3
 
-scm_z3::scm_z3(int C, int timeout, bool quiet, int word_size)
-	:	scm(C, timeout, quiet, word_size), solver(this->context) {}
+scm_z3::scm_z3(int C, int timeout, bool quiet, int word_size, int threads)
+	:	scm(C, timeout, quiet, word_size, threads), solver(this->context) {}
 
 std::pair<bool, bool> scm_z3::check() {
 	if (this->timeout > 0) {
 		this->solver.set("timeout", (unsigned int)this->timeout*1000);
 	}
+	this->solver.set("threads", (unsigned int)this->threads);
 	auto stat = this->solver.check();
 	auto sat = stat == z3::sat;
 	auto unsat = stat == z3::unsat;
