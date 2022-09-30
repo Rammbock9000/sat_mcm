@@ -169,16 +169,6 @@ void scm::create_input_select_selection_variables(int idx) {
 	}
 }
 
-/*void scm::create_input_value_variables(int idx) {
-	if (idx == 1) return;
-	for (auto &dir : input_directions) {
-		for (int w = 0; w < this->word_size; w++) {
-			this->input_value_variables[{idx, dir, w}] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-		}
-	}
-}*/
-
 void scm::create_input_shift_select_variable(int idx) {
 	if (idx == 1) return;
 	this->input_shift_select_variables[idx] = ++this->variable_counter;
@@ -341,14 +331,13 @@ void scm::create_input_output_constraints() {
 }
 
 void scm::create_input_select_constraints(int idx) {
-	if (idx == 1) return; // stage 1 has no input MUX because it can only be connected to the input node with idx=0
+	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
+	if (idx == 1) return;
 	// create constraints for all muxs
 	if (!this->quiet) std::cout << "creating input select constraints for node #" << idx << std::endl;
 	auto select_word_size = this->ceil_log2(idx);
-	auto num_possible_muxs = (1 << select_word_size) - 1;
 	for (auto &dir : this->input_directions) {
 		if (!this->quiet) std::cout << "  dir = " << (dir==scm::left?"left":"right") << std::endl;
-		int connected_inputs_counter = 0;
 		int mux_idx = 0;
 		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
 			if (!this->quiet) std::cout << "    mux stage = " << mux_stage << std::endl;
@@ -384,7 +373,6 @@ void scm::create_input_select_constraints(int idx) {
 					auto num_muxs_in_next_stage = (1 << (mux_stage + 1));
 					auto zero_mux_idx_in_next_stage = 2 * mux_idx_in_stage;
 					auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
-					//auto zero_input_mux_idx = mux_idx + num_muxs_per_stage;
 					auto one_input_mux_idx = zero_input_mux_idx + 1;
 					if (!this->quiet) std::cout << "        zero input mux idx = " << zero_input_mux_idx << std::endl;
 					if (!this->quiet) std::cout << "        one input mux idx = " << one_input_mux_idx << std::endl;
@@ -536,14 +524,11 @@ void scm::create_adder_constraints(int idx) {
 		this->create_add_sum(a, b, c_i, s);
 		this->constraint_counter++;
 		// build carry
-		//if (w != this->word_size-1) {
-			int c_o = this->adder_internal_variables.at({idx, w});
-			this->create_add_carry(a, b, c_i, c_o);
-			this->constraint_counter++;
-		//}
+		int c_o = this->adder_internal_variables.at({idx, w});
+		this->create_add_carry(a, b, c_i, c_o);
+		this->constraint_counter++;
 	}
 	// disallow overflows
-	//this->force_bit(this->adder_internal_variables.at({idx, this->word_size-1}), 0);
 	this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
 	this->constraint_counter++;
 }
@@ -582,8 +567,6 @@ void scm::get_solution_from_backend() {
 			this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w})) << w);
 		}
 		if (idx > 0) {
-			int input_node_idx_l = 0;
-			int input_node_idx_r = 0;
 			if (idx > 1) {
 				// input_select
 				for (auto &dir : this->input_directions) {
@@ -811,7 +794,6 @@ bool scm::solution_is_valid() {
 			valid = false;
 		}
 		// verify node/adder output
-		//int64_t expected_adder_output = (negate_mux_output_l + actual_xor_output + sub) & ((((int64_t)1) << this->word_size) - 1);
 		int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (negate_mux_output_l + negate_mux_output_r);
 		int64_t actual_adder_output = 0;
 		for (int w = 0; w < this->word_size; w++) {

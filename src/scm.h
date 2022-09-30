@@ -173,11 +173,11 @@ protected:
 	/*!
 	 * count #variables
 	 */
-	int variable_counter;
+	int variable_counter = 0;
 	/*!
 	 * count #constraints
 	 */
-	int constraint_counter;
+	int constraint_counter = 0;
 
 	/*!
 	 * the constant by which we want to multiply
@@ -377,7 +377,7 @@ private:
 	 * a variable that is equal to a constant zero (needed for shifter)
 	 * variable idx
 	 */
-	int constant_zero_variable;
+	int constant_zero_variable = -1;
 };
 
 

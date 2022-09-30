@@ -1,41 +1,29 @@
 //
-// Created by nfiege on 9/26/22.
+// Created by nfiege on 9/30/22.
 //
 
-#ifndef SATSCM_SCM_CADICAL_H
-#define SATSCM_SCM_CADICAL_H
+#ifndef SATSCM_SAT_Z3_H
+#define SATSCM_SAT_Z3_H
 
-#ifdef USE_CADICAL
+#ifdef USE_Z3
 
 #include <scm.h>
-#include <cadical.hpp>
+#include <z3++.h>
 #include <chrono>
 #include <memory>
 #include <utility>
+#include <vector>
 
-class cadical_terminator : public CaDiCaL::Terminator {
+
+class scm_z3 : public scm {
 public:
-	explicit cadical_terminator(double timeout = 0.0);
-	bool terminate () override;
-	void reset(double newTimeout);
-	double get_elapsed_time() const;
-private:
-	double max_time;
-	std::chrono::steady_clock::time_point timer_start;
-};
-
-class scm_cadical : public scm {
-
-#define CADICAL_SAT 10
-#define CADICAL_UNSAT 20
-
-public:
-	scm_cadical(int C, int timeout, bool quiet, int word_size);
+	scm_z3(int C, int timeout, bool quiet, int word_size);
 
 protected:
 	std::pair<bool, bool> check() override;
 	void reset_backend() override;
 	int get_result_value(int var_idx) override;
+	void create_new_variable(int idx) override;
 
 	void create_1x1_equivalence(int x, int y) override;
 	void create_2x1_mux(int a, int b, int s, int y) override;
@@ -48,10 +36,11 @@ protected:
 	void force_number(const std::vector<int> &x, int val) override;
 
 private:
-	std::unique_ptr<CaDiCaL::Solver> solver;
-	cadical_terminator terminator;
+	z3::context context;
+	z3::solver solver;
+	std::vector<z3::expr> variables;
 };
 
-#endif //USE_CADICAL
+#endif //USE_Z3
 
-#endif //SATSCM_SCM_CADICAL_H
+#endif //SATSCM_SAT_Z3_H

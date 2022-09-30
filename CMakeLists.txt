@@ -11,6 +11,7 @@ FIND_PATH(SCALP_H
         )
 IF (SCALP_LIB AND SCALP_H)
     message(STATUS "Found ScaLP: ${SCALP_LIB} and ${SCALP_H}")
+    add_definitions(-DUSE_SCALP)
 ELSE (SCALP_LIB AND SCALP_H)
     message(STATUS "Could not find ScaLP (${SCALP_LIB} and ${SCALP_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
 ENDIF (SCALP_LIB AND SCALP_H)
@@ -25,6 +26,7 @@ FIND_PATH(Z3_H
         )
 IF (Z3_LIB AND Z3_H)
     message(STATUS "Found Z3: ${Z3_LIB} and ${Z3_H}")
+    add_definitions(-DUSE_Z3)
 ELSE (Z3_LIB AND Z3_H)
     message(STATUS "Could not find Z3 (${Z3_LIB} and ${Z3_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
 ENDIF (Z3_LIB AND Z3_H)
@@ -39,6 +41,7 @@ FIND_PATH(CADICAL_H
         )
 IF (CADICAL_LIB AND CADICAL_H)
     message(STATUS "Found CaDiCaL: ${CADICAL_LIB} and ${CADICAL_H}")
+    add_definitions(-DUSE_CADICAL)
 ELSE (CADICAL_LIB AND CADICAL_H)
     message(STATUS "Could not find CaDiCaL (${CADICAL_LIB} and ${CADICAL_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
 ENDIF (CADICAL_LIB AND CADICAL_H)
@@ -56,6 +59,7 @@ file(GLOB SOURCES
 
         # derived classes
         src/scm_cadical.cpp
+        src/scm_z3.cpp
      )
 
 # add executable

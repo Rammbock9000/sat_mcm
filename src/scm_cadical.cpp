@@ -3,6 +3,9 @@
 //
 
 #include "scm_cadical.h"
+
+#ifdef USE_CADICAL
+
 #include <iostream>
 
 scm_cadical::scm_cadical(int C, int timeout, bool quiet, int word_size) : scm(C, timeout, quiet, word_size) {}
@@ -91,14 +94,6 @@ void scm_cadical::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
 }
 
 void scm_cadical::create_2x1_xor(int a, int b, int y) {
-	/*!
-	 * force y = a XOR b
-	 * clauses are:
-	 *   1)  a  b -y
-	 *   2)  a -b  y
-	 *   3) -a  b  y
-	 *   4) -a -b -y
-	 */
 	// 1)
 	this->solver->add(a);
 	this->solver->add(b);
@@ -122,18 +117,6 @@ void scm_cadical::create_2x1_xor(int a, int b, int y) {
 }
 
 void scm_cadical::create_add_sum(int a, int b, int c_i, int s) {
-	/*!
-	 * force s to be the sum output of a full adder
-	 * clauses are:
-	 *   1)  a -b  c_i  s
-	 *   2) -a  b  c_i  s
-	 *   3)  a  b  c_i -s
-	 *   4) -a -b  c_i -s
-	 *   5)  a -b -c_i -s
-	 *   6) -a  b -c_i -s
-	 *   7)  a  b -c_i  s
-	 *   8) -a -b -c_i  s
-	 */
 	// 1)
 	this->solver->add(a);
 	this->solver->add(-b);
@@ -185,16 +168,6 @@ void scm_cadical::create_add_sum(int a, int b, int c_i, int s) {
 }
 
 void scm_cadical::create_add_carry(int a, int b, int c_i, int c_o) {
-	/*!
-	 * force c_o to be the carry output of a full adder
-	 * clauses are:
-	 *   1) -a -b       c_o
-	 *   2)  a     c_i -c_o
-	 *   3)     b  c_i -c_o
-	 *   4)  a  b      -c_o
-	 *   5)    -b -c_i  c_o
-	 *   6) -a    -c_i  c_o
-	 */
 	// 1)
 	this->solver->add(-a);
 	this->solver->add(-b);
@@ -289,3 +262,5 @@ void cadical_terminator::reset(double new_timeout) {
 double cadical_terminator::get_elapsed_time() const {
 	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - this->timer_start).count() / 1000.0;
 }
+
+#endif //USE_CADICAL
