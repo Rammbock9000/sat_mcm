@@ -31,8 +31,10 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satscm like this: ./satscm <constant> <solver_name> <timeout> <threads> <quiet>" << std::endl;
+		std::cout << "Please call satscm like this: ./satscm <constant(s)> <solver_name> <timeout> <threads> <quiet>" << std::endl;
+		std::cout << "If specifying multiple constants (for MCM instead of SCM), make sure to give them as a colon-separated list (duplicates, negative numbers and even numbers are getting pre-processed)" << std::endl;
 		std::cout << "  e.g. './satscm 14709 z3 300 2 1' for constant 14709 with 300 sec time budget, 2 allowed CPU threads and without debug outputs using the Z3 backend" << std::endl;
+		std::cout << "  e.g. './satscm 1:3:11:3:22 cadical 42 1 0' for constants 1, 3, 11, 3 and 22 (which gets transformed to constants 3 and 11) with 42 sec time budget, 1 allowed CPU thread and with debug outputs using the CaDiCaL backend" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
