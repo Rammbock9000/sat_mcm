@@ -8,6 +8,8 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <sstream>
+#include <cstdint>
 
 class scm {
 public:
@@ -21,7 +23,7 @@ public:
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(int C, int timeout, bool quiet, int word_size, int threads);
+	scm(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads);
 	/*!
 	 * solve the problem
 	 */
@@ -30,6 +32,13 @@ public:
 	 * print solution values
 	 */
 	void print_solution();
+	/*!
+	 * sign extend x and return that badboy
+	 * @param x 2's complement number with w bits
+	 * @param w word size of x
+	 * @return sign extended x
+	 */
+	static int64_t sign_extend(int64_t x, int w);
 
 protected:
 	/*!
@@ -58,6 +67,53 @@ protected:
 	//// create clauses for the following circuits ////
 	///////////////////////////////////////////////////
 	/*!
+	 * disallow shifting bits that are not equal to the sign bit
+	 * clauses are:
+	 *   1) -sel -s_a  a
+	 *   2) -sel  s_a -a
+	 * @param sel
+	 * @param s_a
+	 * @param a
+	 */
+	virtual void create_signed_shift_overflow_protection(int sel, int s_a, int a);
+	/*!
+	 * disallow overflows for signed additions/subtractions (sub=1: subtraction, sub=0: addition)
+	 * clauses are:
+	 *   1)  sub  s_a  s_b -s_y
+	 *   2)  sub -s_a -s_b  s_y
+	 *   3) -sub  s_a -s_b -s_y
+	 *   4) -sub -s_a  s_b  s_y
+	 * @param sub
+	 * @param s_a
+	 * @param s_b
+	 * @param s_y
+	 */
+	virtual void create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y);
+	/*!
+	 * force x_0 or x_1 or ... x_n = 1
+	 * clauses are:
+	 *   1) x_0 x_1 x_2 ...
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_or(std::vector<int> &x);
+	/*!
+	 * force a -> b
+	 * clauses are:
+	 *   1) -a  b
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_1x1_implication(int a, int b);
+	/*!
+	 * force a -> !b
+	 * clauses are:
+	 *   1) -a  -b
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_1x1_negated_implication(int a, int b);
+	/*!
 	 * force y = x
 	 * clauses are:
 	 *   1) -x  y
@@ -67,7 +123,7 @@ protected:
 	 */
 	virtual void create_1x1_equivalence(int x, int y);
 	/*!
-	 * force y = s ? a : b AND not (s and a)
+	 * force y = s ? a : b
 	 * clauses are:
 	 *   1) -a     s  y
 	 *   2)    -b -s  y
@@ -82,7 +138,7 @@ protected:
 	 */
 	virtual void create_2x1_mux(int a, int b, int s, int y);
 	/*!
-	 * force y = s ? a : b
+	 * force y = s ? a : b AND not (s and a)
 	 * clauses are:
 	 *   1) -a        y
 	 *   2)    -b -s  y
@@ -96,6 +152,18 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_mux_shift_disallowed(int a, int b, int s, int y);
+	/*!
+	 * force y = s ? a : b where b = 0
+	 * => y = !s and a
+	 * clauses are:
+	 *   1)    -s -y
+	 *   2)  a    -y
+	 *   3) -a  s  y
+	 * @param a
+	 * @param s
+	 * @param y
+	 */
+	virtual void create_2x1_mux_zero_const(int a, int s, int y);
 	/*!
 	 * force y = a XOR b
 	 * clauses are:
@@ -182,7 +250,7 @@ protected:
 	/*!
 	 * the constant by which we want to multiply
 	 */
-	int C;
+	std::vector<int> C;
 	/*!
 	 * word size of all operations
 	 */
@@ -202,7 +270,7 @@ protected:
 	/*!
 	 * number of shifted bits of the output to re-create the original constant
 	 */
-	int output_shift;
+	std::map<int, int> output_shift;
 	/*!
 	 * if we found a solution, yet
 	 */
@@ -223,8 +291,26 @@ protected:
 	 * the number of CPU threads the backend is allowed to use
 	 */
 	int threads;
+	/*!
+	 * also write the corresponding cnf files for all solving attempts
+	 * e.g. 521_2.cnf for C = 521 and #adders = 2
+	 */
+	bool write_cnf = false;
+	/*!
+	 * whether we are performing all computation in 2's complement
+	 * i.e. at least one coefficient is negative
+	 */
+	bool calc_twos_complement;
 
 private:
+	/*!
+	 * store all cnf clauses for cnf file generation
+	 */
+	std::stringstream cnf_clauses;
+	/*!
+	 * creates a .cnf file for the current SAT problem
+	 */
+	void create_cnf_file();
 	/*!
 	 * get solution from backend and store result in containers below
 	 */
@@ -300,6 +386,7 @@ private:
 	void create_xor_output_variables(int idx);
 	void create_adder_internal_variables(int idx);
 	void create_output_value_variables(int idx);
+	void create_mcm_output_variables(int idx);
 
 	////////////////////////////////
 	//// CREATE ALL CONSTRAINTS ////
@@ -313,6 +400,7 @@ private:
 	void create_negate_select_constraints(int idx);
 	void create_xor_constraints(int idx);
 	void create_adder_constraints(int idx);
+	void create_mcm_output_constraints();
 
 	///////////////////////////////////
 	//// INDICES FOR ALL VARIABLES ////
@@ -377,6 +465,10 @@ private:
 	 * !!! node idx = 0 is the input node with constant value 0
 	 */
 	std::map<std::pair<int, int>, int> output_value_variables;
+	/*!
+	 * <node idx, mcm constant> -> variable idx
+	 */
+	std::map<std::pair<int, int>, int> mcm_output_variables;
 	/*!
 	 * a variable that is equal to a constant zero (needed for shifter)
 	 * variable idx

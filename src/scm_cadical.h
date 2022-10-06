@@ -30,16 +30,22 @@ class scm_cadical : public scm {
 #define CADICAL_UNSAT 20
 
 public:
-	scm_cadical(int C, int timeout, bool quiet, int word_size);
+	scm_cadical(const std::vector<int> &C, int timeout, bool quiet, int word_size);
 
 protected:
 	std::pair<bool, bool> check() override;
 	void reset_backend() override;
 	int get_result_value(int var_idx) override;
 
+	void create_signed_shift_overflow_protection(int sel, int s_a, int a) override;
+	void create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) override;
+	void create_or(std::vector<int> &x) override;
+	void create_1x1_implication(int a, int b) override;
+	void create_1x1_negated_implication(int a, int b) override;
 	void create_1x1_equivalence(int x, int y) override;
 	void create_2x1_mux(int a, int b, int s, int y) override;
 	void create_2x1_mux_shift_disallowed(int a, int b, int s, int y) override;
+	void create_2x1_mux_zero_const(int a, int s, int y) override;
 	void create_2x1_xor(int a, int b, int y) override;
 	void create_add_sum(int a, int b, int c_i, int s) override;
 	void create_add_carry(int a, int b, int c_i, int c_o) override;

@@ -18,7 +18,7 @@
 
 int main(int argc, char** argv) {
 	std::unique_ptr<scm> solver;
-	int C = 42;
+	std::vector<int> C;
 	int timeout = 300;
 	bool quiet = true;
 	int word_size = 0; // means "calculate necessary word size automatically"
@@ -38,11 +38,15 @@ int main(int argc, char** argv) {
 	if (argc > 1) {
 		std::string s(argv[1]);
 		try {
-			C = std::stoi(s);
+			std::stringstream c_str(s);
+			std::string buff;
+			while(std::getline(c_str, buff, ':')) {
+				C.emplace_back(std::stoi(buff));
+			}
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to integer" << std::endl;
+			err_msg << "failed to convert " << s << " to integer(s)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -84,7 +88,11 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
-	std::cout << "Starting OSCM for C = " << C << " and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
+	std::cout << "Starting OSCM for constant" << (C.size()>1?"s\n":" ");
+	for (auto &c : C) {
+		std::cout << (C.size()>1?"  ":"") << c << std::endl;
+	}
+	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL

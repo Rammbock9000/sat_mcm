@@ -7,29 +7,59 @@
 #include <stdexcept>
 #include <cmath>
 #include <chrono>
-#include <cstdint>
+#include <fstream>
 
-scm::scm(int C, int timeout, bool quiet, int word_size, int threads)
-	:	C(C), timeout(timeout), output_shift(0), quiet(quiet), word_size(word_size), threads(threads) {
+scm::scm(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads)
+	:	C(C), timeout(timeout), quiet(quiet), word_size(word_size), threads(threads) {
 	// make it even and count shift
-	while ((this->C & 1) == 0) {
-		this->C = this->C >> 1;
-		this->output_shift++;
+	this->calc_twos_complement = false;
+	for (auto &c : this->C) {
+		if (c == 0) continue;
+		//if (c < 0) this->calc_twos_complement = true;
+		if (c < 0) c = -c;
+		while ((c & 1) == 0) {
+			c = c / 2; // do not use shift operation because it is not uniquely defined for negative numbers
+		}
 	}
-	// set word sizes
-	if (this->word_size == -1) {
-		this->word_size = this->ceil_log2(this->C);
+	// set word sizes & track unique constants
+	this->word_size = 1;
+	std::set<int> non_one_unique_constants;
+	for (auto &c : this->C) {
+		if (c != 1 and c != 0) non_one_unique_constants.insert(c);
+		auto w = this->ceil_log2(std::abs(c))+1;
+		if (w > this->word_size) this->word_size = w;
 	}
-	else if (this->word_size == 0) {
-		this->word_size = this->ceil_log2(this->C)+1;
+	this->max_shift = this->word_size-1;
+	if (this->calc_twos_complement) {
+		// account for sign bit
+		this->word_size++;
 	}
-	this->max_shift = this->word_size;
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
+	this->num_adders = (int)non_one_unique_constants.size()-1;
+	std::cout << "min num adders = " << this->num_adders+1 << std::endl;
+	// set constants vector
+	this->C.clear();
+	for (auto &c : non_one_unique_constants) {
+		this->C.emplace_back(c);
+	}
 }
 
 void scm::solve() {
-	if (!this->quiet) std::cout << "trying to solve SCM problem for constant " << this->C << " with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
-	if (this->C == 1) {
+	if (!this->quiet) {
+		std::cout << "trying to solve SCM problem for following constants: ";
+		for (auto &c : this->C) {
+			std::cout << "  " << c << std::endl;
+		}
+		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
+	}
+	bool trivial = true;
+	for (auto &c : this->C) {
+		if (c != 1) {
+			trivial = false;
+			break;
+		}
+	}
+	if (trivial) {
 		this->found_solution = true;
 		this->ran_into_timeout = false;
 		this->output_values[0] = 1;
@@ -38,6 +68,8 @@ void scm::solve() {
 	while (!this->found_solution) {
 		auto start_time = std::chrono::steady_clock::now();
 		++this->num_adders;
+		if (!this->quiet) std::cout << "    resetting backend now" << std::endl;
+		this->reset_backend();
 		if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << std::endl;
 		this->construct_problem();
 		if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
@@ -59,20 +91,23 @@ void scm::solve() {
 }
 
 void scm::reset_backend() {
-	throw std::runtime_error("reset_backend is impossible in base class");
+	this->constraint_counter = 0;
+	this->variable_counter = 0;
+	//throw std::runtime_error("reset_backend is impossible in base class");
 }
 
 void scm::construct_problem() {
-	if (!this->quiet) std::cout << "    resetting backend now" << std::endl;
-	this->reset_backend();
 	if (!this->quiet) std::cout << "    creating variables now" << std::endl;
 	this->create_variables();
 	if (!this->quiet) std::cout << "    creating constraints now" << std::endl;
 	this->create_constraints();
+	if (this->write_cnf) {
+		if (!this->quiet) std::cout << "    creating cnf file now" << std::endl;
+		this->create_cnf_file();
+	}
 }
 
 void scm::create_variables() {
-	this->variable_counter = 0;
 	if (!this->quiet) std::cout << "      creating constant zero variables" << std::endl;
 	this->create_constant_zero_variable();
 	if (!this->quiet) std::cout << "      creating input node variables" << std::endl;
@@ -103,11 +138,14 @@ void scm::create_variables() {
 		this->create_adder_internal_variables(i);
 		if (!this->quiet) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
+		if (this->C.size() != 1) {
+			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
+			this->create_mcm_output_variables(i);
+		}
 	}
 }
 
 void scm::create_constraints() {
-	this->constraint_counter = 0;
 	if (!this->quiet) std::cout << "      create_input_output_constraints" << std::endl;
 	this->create_input_output_constraints();
 	for (int i=1; i<=this->num_adders; i++) {
@@ -139,10 +177,10 @@ void scm::create_input_node_variables() {
 }
 
 void scm::create_constant_zero_variable() {
-	this->constant_zero_variable = ++this->variable_counter;
-	this->create_new_variable(this->variable_counter);
-	this->force_bit(this->constant_zero_variable, 0);
-	this->constraint_counter++;
+	//this->constant_zero_variable = ++this->variable_counter;
+	//this->create_new_variable(this->variable_counter);
+	//this->force_bit(this->constant_zero_variable, 0);
+	//this->constraint_counter++;
 }
 
 void scm::create_input_select_mux_variables(int idx) {
@@ -273,40 +311,159 @@ void scm::create_new_variable(int idx) {
 	(void) idx; // just do nothing -> should be overloaded by backend if a variable must be explicitly created
 }
 
-void scm::create_2x1_mux(int a, int b, int s, int o) {
-	throw std::runtime_error("create_2x1_mux is impossible in base class");
+void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
+	// todo: implement
 }
 
-void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int o) {
-	throw std::runtime_error("create_2x1_mux_shift_disallowed is impossible in base class");
+void scm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) {
+	// todo: implement
+}
+
+void scm::create_or(std::vector<int> &x) {
+	// todo: implement
+}
+
+void scm::create_1x1_negated_implication(int a, int b) {
+	// todo: implement
+}
+
+void scm::create_1x1_implication(int a, int b) {
+	// todo: implement
 }
 
 void scm::create_1x1_equivalence(int x, int y) {
-	throw std::runtime_error("create_1x1_equivalence is impossible in base class");
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << -x << " " << y << std::endl;
+	// 2)
+	this->cnf_clauses << x << " " << -y << std::endl;
+}
+
+void scm::create_2x1_mux(int a, int b, int s, int y) {
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << -a << " " << s << " " << y << std::endl;
+	// 2)
+	this->cnf_clauses << -b << " " << -s << " " << y << std::endl;
+	// 3)
+	this->cnf_clauses << b << " " << -s << " " << -y << std::endl;
+	// 4)
+	this->cnf_clauses << a << " " << s << " " << -y << std::endl;
+	// 5)
+	this->cnf_clauses << -a << " " << -b << " " << y << std::endl;
+	// 6)
+	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
+}
+
+void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << -a << " " << y << std::endl;
+	// 2)
+	this->cnf_clauses << -b << " " << -s << " " << y << std::endl;
+	// 3)
+	this->cnf_clauses << b << " " << -s << " " << -y << std::endl;
+	// 4)
+	this->cnf_clauses << a << " " << s << " " << -y << std::endl;
+	// 5)
+	this->cnf_clauses << -a << " " << -s << std::endl;
+	// 6)
+	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
+}
+
+void scm::create_2x1_mux_zero_const(int a, int s, int y) {
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << -s << " " << -y << std::endl;
+	// 2)
+	this->cnf_clauses << a << " " << -y << std::endl;
+	// 3)
+	this->cnf_clauses << -a << " " << s << " " << y << std::endl;
 }
 
 void scm::create_2x1_xor(int a, int b, int y) {
-	throw std::runtime_error("create_2x1_xor is impossible in base class");
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
+	// 2)
+	this->cnf_clauses << a << " " << -b << " " << y << std::endl;
+	// 3)
+	this->cnf_clauses << -a << " " << b << " " << y << std::endl;
+	// 4)
+	this->cnf_clauses << -a << " " << -b << " " << -y << std::endl;
 }
 
 void scm::create_add_sum(int a, int b, int c_i, int s) {
-	throw std::runtime_error("create_add_sum is impossible in base class");
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << a << " " << -b << " " << c_i << " " << s << std::endl;
+	// 2)
+	this->cnf_clauses << -a << " " << b << " " << c_i << " " << s << std::endl;
+	// 3)
+	this->cnf_clauses << a << " " << b << " " << c_i << " " << -s << std::endl;
+	// 4)
+	this->cnf_clauses << -a << " " << -b << " " << c_i << " " << -s << std::endl;
+	// 5)
+	this->cnf_clauses << a << " " << -b << " " << -c_i << " " << -s << std::endl;
+	// 6)
+	this->cnf_clauses << -a << " " << b << " " << -c_i << " " << -s << std::endl;
+	// 7)
+	this->cnf_clauses << a << " " << b << " " << -c_i << " " << s << std::endl;
+	// 8)
+	this->cnf_clauses << -a << " " << -b << " " << -c_i << " " << s << std::endl;
 }
 
 void scm::create_add_carry(int a, int b, int c_i, int c_o) {
-	throw std::runtime_error("create_add_carry is impossible in base class");
+	if (!this->write_cnf) return;
+	// 1)
+	this->cnf_clauses << -a << " " << -b << " " << c_o << std::endl;
+	// 2)
+	this->cnf_clauses << a << " " << c_i << " " << -c_o << std::endl;
+	// 3)
+	this->cnf_clauses << b << " " << c_i << " " << -c_o << std::endl;
+	// 4)
+	this->cnf_clauses << a << " " << b << " " << -c_o << std::endl;
+	// 5)
+	this->cnf_clauses << -b << " " << -c_i << " " << c_o << std::endl;
+	// 6)
+	this->cnf_clauses << -a << " " << -c_i << " " << c_o << std::endl;
 }
 
 void scm::force_bit(int x, int val) {
-	throw std::runtime_error("force_bit is impossible in base class");
+	if (!this->write_cnf) return;
+	if (val == 1)
+		this->cnf_clauses << x << std::endl;
+	else
+		this->cnf_clauses << -x << std::endl;
 }
 
 void scm::forbid_number(const std::vector<int> &x, int num) {
-	throw std::runtime_error("forbid_number is impossible in base class");
+	if (!this->write_cnf) return;
+	auto num_bits = (int)x.size();
+	for (int i=0; i<num_bits; i++) {
+		auto bit = (num >> i) & 1;
+		if (bit == 1) {
+			this->cnf_clauses << -x[i] << " ";
+		}
+		else {
+			this->cnf_clauses << x[i] << " ";
+		}
+	}
+	this->cnf_clauses << std::endl;
 }
 
 void scm::force_number(const std::vector<int> &x, int num) {
-	throw std::runtime_error("force_number is impossible in base class");
+	if (!this->write_cnf) return;
+	auto num_bits = (int)x.size();
+	for (int i=0; i<num_bits; i++) {
+		auto bit = (num >> i) & 1;
+		if (bit == 1) {
+			this->cnf_clauses << x[i] << std::endl;
+		}
+		else {
+			this->cnf_clauses << -x[i] << std::endl;
+		}
+	}
 }
 
 std::pair<bool, bool> scm::check() {
@@ -327,7 +484,14 @@ void scm::create_input_output_constraints() {
 	// force input to 1 and output to C
 	this->force_number(input_bits, 1);
 	this->constraint_counter += this->word_size;
-	this->force_number(output_bits, this->C);
+	if (this->C.size() == 1) {
+		// SCM
+		this->force_number(output_bits, this->C[0]);
+	}
+	else {
+		// MCM
+		this->create_mcm_output_constraints();
+	}
 	this->constraint_counter += this->word_size;
 }
 
@@ -362,11 +526,12 @@ void scm::create_input_select_constraints(int idx) {
 						if (zero_input_node_idx == one_input_node_idx) {
 							// both inputs are equal -> mux output == mux input (select line does not matter...)
 							this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+							this->constraint_counter += 2;
 						}
 						else {
 							this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
+							this->constraint_counter += 6;
 						}
-						this->constraint_counter++;
 					}
 				}
 				else {
@@ -382,7 +547,7 @@ void scm::create_input_select_constraints(int idx) {
 						auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w});
 						auto one_input_var_idx = this->input_select_mux_variables.at({idx, dir, one_input_mux_idx, w});
 						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
-						this->constraint_counter++;
+						this->constraint_counter += 6;
 					}
 				}
 				// increment current mux idx
@@ -402,6 +567,7 @@ void scm::create_shift_constraints(int idx) {
 			auto w_prev = w - shift_width;
 			auto connect_zero_const = w_prev < 0;
 			int zero_input_var_idx;
+			int zero_input_sign_bit_idx;
 			int one_input_var_idx;
 			auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w});
 			if (stage == 0) {
@@ -409,6 +575,7 @@ void scm::create_shift_constraints(int idx) {
 				if (idx == 1) {
 					// shifter input is the output of the input node with idx = 0
 					zero_input_var_idx = this->output_value_variables.at({0, w});
+					zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
 					if (connect_zero_const) {
 						one_input_var_idx = this->constant_zero_variable;
 					}
@@ -419,6 +586,7 @@ void scm::create_shift_constraints(int idx) {
 				else {
 					// shifter input is the left shift-select-mux
 					zero_input_var_idx = this->shift_select_output_variables.at({idx, scm::left, w});
+					zero_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
 					if (connect_zero_const) {
 						one_input_var_idx = this->constant_zero_variable;
 					}
@@ -430,6 +598,7 @@ void scm::create_shift_constraints(int idx) {
 			else {
 				// connect output of previous stage
 				zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w});
+				zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
 				if (connect_zero_const) {
 					one_input_var_idx = this->constant_zero_variable;
 				}
@@ -438,12 +607,57 @@ void scm::create_shift_constraints(int idx) {
 				}
 			}
 			if (w >= first_disallowed_shift_bit) {
-				this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+				if (this->calc_twos_complement) {
+					if (connect_zero_const) {
+						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 3;
+					}
+					else {
+						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 6;
+					}
+					if (w < this->word_size-1) {
+						// these clauses are not needed for sign bit
+						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, zero_input_var_idx);
+						this->constraint_counter += 2;
+					}
+				}
+				else {
+					if (connect_zero_const) {
+						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
+						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
+						this->constraint_counter += 4;
+					}
+					else {
+						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 6;
+					}
+				}
 			}
 			else {
-				this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+				if (connect_zero_const) {
+					this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
+					this->constraint_counter += 3;
+				}
+				else {
+					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+					this->constraint_counter += 6;
+				}
 			}
-			this->constraint_counter++;
+		}
+		// sign bits before and after shifting must be identical if calculating in 2's complement
+		if (this->calc_twos_complement) {
+			int shift_input_sign_bit_idx;
+			int shift_output_sign_bit_idx = this->shift_output_variables.at({idx, this->word_size-1});
+			if (idx == 1) {
+				shift_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
+			}
+			else {
+				shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
+			}
+			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
+			this->constraint_counter += 2;
 		}
 	}
 }
@@ -459,12 +673,12 @@ void scm::create_shift_select_constraints(int idx) {
 			if (dir == scm::left) {
 				// left mux has left input in b input and right input in a input
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var, mux_output_var_idx);
-				this->constraint_counter++;
+				this->constraint_counter += 6;
 			}
 			else {
 				// right mux has left input in '0' input and right input in '1' input
 				this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var, mux_output_var_idx);
-				this->constraint_counter++;
+				this->constraint_counter += 6;
 			}
 		}
 	}
@@ -487,11 +701,11 @@ void scm::create_negate_select_constraints(int idx) {
 			auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w});
 			if (dir == scm::left) {
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var_idx, mux_output_var_idx);
-				this->constraint_counter++;
+				this->constraint_counter += 6;
 			}
 			else {
 				this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var_idx, mux_output_var_idx);
-				this->constraint_counter++;
+				this->constraint_counter += 6;
 			}
 		}
 	}
@@ -503,7 +717,7 @@ void scm::create_xor_constraints(int idx) {
 		auto input_var_idx = this->negate_select_output_variables.at({idx, scm::right, w});
 		auto output_var_idx = this->xor_output_variables.at({idx, w});
 		this->create_2x1_xor(negate_var_idx, input_var_idx, output_var_idx);
-		this->constraint_counter++;
+		this->constraint_counter += 4;
 	}
 }
 
@@ -523,15 +737,21 @@ void scm::create_adder_constraints(int idx) {
 		int b = this->xor_output_variables.at({idx, w});
 		int s = this->output_value_variables.at({idx, w});
 		this->create_add_sum(a, b, c_i, s);
-		this->constraint_counter++;
+		this->constraint_counter += 8;
 		// build carry
 		int c_o = this->adder_internal_variables.at({idx, w});
 		this->create_add_carry(a, b, c_i, c_o);
-		this->constraint_counter++;
+		this->constraint_counter += 6;
 	}
 	// disallow overflows
-	this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
-	this->constraint_counter++;
+	if (this->calc_twos_complement) {
+		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->xor_output_variables.at({idx, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
+		this->constraint_counter += 2;
+	}
+	else {
+		this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
+		this->constraint_counter += 2;
+	}
 }
 
 void scm::create_input_select_limitation_constraints(int idx) {
@@ -593,11 +813,14 @@ void scm::get_solution_from_backend() {
 
 void scm::print_solution() {
 	if (this->found_solution) {
-		std::cout << "Solution for C = " << (this->C << this->output_shift) << " (= " << this->C << " * 2^" << this->output_shift << ")" << std::endl;
+		std::cout << "Solution for constants" << std::endl;
+		for (int i=0; i<this->C.size(); i++) {
+			std::cout << "  C = " << this->C[i] << std::endl;
+		}
 		std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
-		std::cout << "  node #0 = " << this->output_values[0] << std::endl;
+		std::cout << "  node #0 = " << sign_extend(this->output_values[0], this->word_size) << std::endl;
 		for (auto idx = 1; idx <= this->num_adders; idx++) {
-			std::cout << "  node #" << idx << " = " << this->output_values[idx] << std::endl;
+			std::cout << "  node #" << idx << " = " << sign_extend((int64_t)this->output_values[idx], this->word_size) << std::endl;
 			std::cout << "    left input: node " << this->input_select[{idx, scm::left}] << std::endl;
 			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
 			std::cout << "    shift input select: " << this->shift_input_select[idx] << (this->shift_input_select[idx]==1?" (left)":" (right)") << std::endl;
@@ -613,7 +836,10 @@ void scm::print_solution() {
 		}
 	}
 	else {
-		std::cout << "Failed to find solution for C = " << (this->C << this->output_shift) << " (= " << this->C << " * 2^" << this->output_shift << ")" << std::endl;
+		for (int i=0; i<this->C.size(); i++) {
+			std::cout << "Failed to find solution for constants" << std::endl;
+			std::cout << "  C = " << this->C[i] << std::endl;
+		}
 	}
 }
 
@@ -817,4 +1043,57 @@ bool scm::solution_is_valid() {
 		}
 	}
 	return valid;
+}
+
+void scm::create_cnf_file() {
+	std::ofstream f;
+	std::stringstream constants;
+	for (int i=0; i<this->C.size(); i++) {
+		if (i != 0) constants << " ";
+		constants << this->C[i];
+	}
+	std::string filename = constants.str() + "_" + std::to_string(this->num_adders) + ".cnf";
+	f.open(filename.c_str());
+	f << "p cnf " << this->variable_counter << " " << this->constraint_counter << std::endl;
+	f << this->cnf_clauses.str();
+	f.close();
+}
+
+void scm::create_mcm_output_constraints() {
+	for (auto &c : this->C) {
+		std::vector<int> or_me;
+		for (int idx = 1; idx <= this->num_adders; idx++) {
+			or_me.emplace_back(this->mcm_output_variables[{idx, c}]);
+			for (int w = 0; w < this->word_size; w++) {
+				if (((c >> w) & 1) == 1) {
+					this->create_1x1_implication(this->mcm_output_variables[{idx, c}], this->output_value_variables[{idx, w}]);
+				}
+				else {
+					this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c}], this->output_value_variables[{idx, w}]);
+				}
+			}
+		}
+		this->create_or(or_me);
+	}
+}
+
+void scm::create_mcm_output_variables(int idx) {
+	for (auto &c : this->C) {
+		this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+	}
+}
+
+int64_t scm::sign_extend(int64_t x, int w) {
+	auto sign_bit = (x >> (w-1)) & 1;
+	if (sign_bit == 0) return x; // x >= 0 -> no conversion needed
+	auto mask = (1 << w) - 1;
+	mask = ~mask;
+	x = x | mask;
+	/*
+	for (int i = 63; i >= w; i++) {
+		x = x | (1 << i);
+	}
+	 */
+	return x;
 }
