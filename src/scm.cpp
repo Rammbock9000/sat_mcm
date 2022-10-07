@@ -627,8 +627,12 @@ void scm::create_shift_constraints(int idx) {
 						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
 						this->constraint_counter += 6;
 					}
-					if (w < this->word_size-1) {
-						// these clauses are not needed for sign bit
+					if (w == this->word_size-1) {
+						// these clauses are different for the sign bit
+						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, one_input_var_idx);
+						this->constraint_counter += 2;
+					}
+					else {
 						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, zero_input_var_idx);
 						this->constraint_counter += 2;
 					}
@@ -1170,16 +1174,8 @@ std::string scm::get_adder_graph_description() {
 		int right_stage = stage.at(right_idx);
 		int current_stage = std::max(left_stage, right_stage)+1;
 		stage[idx] = current_stage;
-		// check if it's an output
-		bool is_output_node = false;
-		for (auto &c : this->C) {
-			if (c == this->output_values.at(idx)) {
-				is_output_node = true;
-				break;
-			}
-		}
 		// basic node info
-		s << "{'" << (is_output_node?"O":"A") << "',[" << this->output_values.at(idx) << "]," << current_stage;
+		s << "{'A',[" << this->output_values.at(idx) << "]," << current_stage;
 		// left input
 		s << ",[" << left_input << "]," << left_stage << "," << left_shift;
 		// right input
