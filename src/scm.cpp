@@ -792,7 +792,7 @@ void scm::get_solution_from_backend() {
 		for (int w = 0; w < this->word_size; w++) {
 			this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w})) << w);
 		}
-		this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
+		if (this->calc_twos_complement) this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
 		if (idx > 0) {
 			if (idx > 1) {
 				// input_select
@@ -824,9 +824,9 @@ void scm::print_solution() {
 			std::cout << "  C = " << this->C[i] << std::endl;
 		}
 		std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
-		std::cout << "  node #0 = " << sign_extend(this->output_values[0], this->word_size) << std::endl;
+		std::cout << "  node #0 = " << (this->calc_twos_complement?sign_extend(this->output_values[0], this->word_size):this->output_values[0]) << std::endl;
 		for (auto idx = 1; idx <= this->num_adders; idx++) {
-			std::cout << "  node #" << idx << " = " << sign_extend((int64_t)this->output_values[idx], this->word_size) << std::endl;
+			std::cout << "  node #" << idx << " = " << (this->calc_twos_complement?sign_extend((int64_t)this->output_values[idx], this->word_size):this->output_values[idx]) << std::endl;
 			std::cout << "    left input: node " << this->input_select[{idx, scm::left}] << std::endl;
 			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
 			std::cout << "    shift input select: " << this->shift_input_select[idx] << (this->shift_input_select[idx]==1?" (left)":" (right)") << std::endl;
@@ -836,7 +836,7 @@ void scm::print_solution() {
 		}
 		if (this->solution_is_valid()) {
 			std::cout << "Solution is verified :-)" << std::endl;
-			std::cout << "Adder graph: " << this->get_adder_graph_description() << std::endl;
+			std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 		}
 		else {
 			throw std::runtime_error("Solution is invalid (found bug) :-(");
