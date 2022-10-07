@@ -39,6 +39,11 @@ public:
 	 * @return sign extended x
 	 */
 	static int64_t sign_extend(int64_t x, int w);
+	/*!
+	 * visit 'https://gitlab.com/kumm/pagsuite' for info
+	 * @return a string that uniquely describes the resulting adder graph
+	 */
+	std::string get_adder_graph_description();
 
 protected:
 	/*!

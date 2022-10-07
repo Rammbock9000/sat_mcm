@@ -9,14 +9,19 @@
 #include <chrono>
 #include <fstream>
 
+#define ALLOW_NEGATIVE_NUMBERS 0
+
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads)
 	:	C(C), timeout(timeout), quiet(quiet), word_size(word_size), threads(threads) {
 	// make it even and count shift
 	this->calc_twos_complement = false;
 	for (auto &c : this->C) {
 		if (c == 0) continue;
-		//if (c < 0) this->calc_twos_complement = true;
+#if ALLOW_NEGATIVE_NUMBERS // 1: enable calculation in twos_complement, 0: only calculate with positive numbers
+		if (c < 0) this->calc_twos_complement = true;
+#else
 		if (c < 0) c = -c;
+#endif
 		while ((c & 1) == 0) {
 			c = c / 2; // do not use shift operation because it is not uniquely defined for negative numbers
 		}
@@ -745,8 +750,8 @@ void scm::create_adder_constraints(int idx) {
 	}
 	// disallow overflows
 	if (this->calc_twos_complement) {
-		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->xor_output_variables.at({idx, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
-		this->constraint_counter += 2;
+		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, scm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
+		this->constraint_counter += 4;
 	}
 	else {
 		this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
@@ -787,6 +792,7 @@ void scm::get_solution_from_backend() {
 		for (int w = 0; w < this->word_size; w++) {
 			this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w})) << w);
 		}
+		this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
 		if (idx > 0) {
 			if (idx > 1) {
 				// input_select
@@ -830,6 +836,7 @@ void scm::print_solution() {
 		}
 		if (this->solution_is_valid()) {
 			std::cout << "Solution is verified :-)" << std::endl;
+			std::cout << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 		}
 		else {
 			throw std::runtime_error("Solution is invalid (found bug) :-(");
@@ -917,6 +924,8 @@ bool scm::solution_is_valid() {
 					actual_shift_mux_output[dir] += (this->get_result_value(this->shift_select_output_variables[{idx, dir, w}]) << w);
 				}
 			}
+			if (this->calc_twos_complement) actual_shift_mux_output[scm::left] = sign_extend(actual_shift_mux_output[scm::left], this->word_size);
+			if (this->calc_twos_complement) actual_shift_mux_output[scm::right] = sign_extend(actual_shift_mux_output[scm::right], this->word_size);
 			if (!this->quiet) {
 				std::cout << "node #" << idx << " left shift input select mux output" << std::endl;
 				std::cout << "  select = " << this->get_result_value(this->input_shift_select_variables[idx]) << std::endl;
@@ -944,10 +953,12 @@ bool scm::solution_is_valid() {
 		}
 		// verify shifter output
 		int64_t expected_shift_output = (((int64_t)shift_mux_output_l) << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
+		if (this->calc_twos_complement) expected_shift_output = sign_extend(expected_shift_output, this->word_size);
 		int64_t actual_shift_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w}]) << w);
 		}
+		if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " shift output" << std::endl;
 			std::cout << "  input value = " << shift_mux_output_l << std::endl;
@@ -975,6 +986,8 @@ bool scm::solution_is_valid() {
 				actual_negate_mux_output[dir] += (this->get_result_value(this->negate_select_output_variables[{idx, dir, w}]) << w);
 			}
 		}
+		if (this->calc_twos_complement) actual_negate_mux_output[scm::left] = sign_extend(actual_negate_mux_output[scm::left], this->word_size);
+		if (this->calc_twos_complement) actual_negate_mux_output[scm::right] = sign_extend(actual_negate_mux_output[scm::right], this->word_size);
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " left negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
@@ -1002,10 +1015,12 @@ bool scm::solution_is_valid() {
 		// verify xor output
 		int64_t sub = this->get_result_value(this->input_negate_value_variables[idx]);
 		int64_t expected_xor_output = sub==1?(~negate_mux_output_r) & ((((int64_t)1) << this->word_size) - 1):negate_mux_output_r;
+		if (this->calc_twos_complement) expected_xor_output = sign_extend(expected_xor_output, this->word_size);
 		int64_t actual_xor_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_xor_output += (this->get_result_value(this->xor_output_variables[{idx, w}]) << w);
 		}
+		if (this->calc_twos_complement) actual_xor_output = sign_extend(actual_xor_output, this->word_size);
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " xor output" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
@@ -1022,10 +1037,12 @@ bool scm::solution_is_valid() {
 		}
 		// verify node/adder output
 		int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (negate_mux_output_l + negate_mux_output_r);
+		if (this->calc_twos_complement) expected_adder_output = sign_extend(expected_adder_output, this->word_size);
 		int64_t actual_adder_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			actual_adder_output += (this->get_result_value(this->output_value_variables[{idx, w}]) << w);
 		}
+		if (this->calc_twos_complement) actual_adder_output = sign_extend(actual_adder_output, this->word_size);
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " output value" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
@@ -1040,6 +1057,7 @@ bool scm::solution_is_valid() {
 			std::cout << "  right input value = " << actual_xor_output << std::endl;
 			std::cout << "  expected output value = " << expected_adder_output << std::endl;
 			std::cout << "  actual output value = " << actual_adder_output << std::endl;
+			valid = false;
 		}
 	}
 	return valid;
@@ -1090,10 +1108,69 @@ int64_t scm::sign_extend(int64_t x, int w) {
 	auto mask = (1 << w) - 1;
 	mask = ~mask;
 	x = x | mask;
-	/*
-	for (int i = 63; i >= w; i++) {
-		x = x | (1 << i);
-	}
-	 */
 	return x;
+}
+
+std::string scm::get_adder_graph_description() {
+	std::stringstream s;
+	if (!this->found_solution) return s.str();
+	s << "{";
+	std::map<int, int> stage;
+	stage[0] = 0;
+	for (int idx = 1; idx <= this->num_adders; idx++) {
+		// insert comma if needed
+		if (idx > 1) s << ",";
+		// get left and right inputs and their shift
+		int left_idx;
+		int right_idx;
+		int left_input;
+		int right_input;
+		int left_shift;
+		int right_shift;
+		if (this->shift_input_select.at(idx) == 1) {
+			// do not swap inputs
+			left_idx = this->input_select.at({idx, scm::left});
+			right_idx = this->input_select.at({idx, scm::right});
+		}
+		else {
+			// swap inputs
+			left_idx = this->input_select.at({idx, scm::right});
+			right_idx = this->input_select.at({idx, scm::left});
+		}
+		left_input = this->output_values.at(left_idx);
+		right_input = this->output_values.at(right_idx);
+		left_shift = this->shift_value.at(idx);
+		right_shift = 0;
+		// add/sub?
+		if (this->negate_select.at(idx) == 0) {
+			// swap again for subtract
+			int idx_cpy = left_idx;
+			int input_cpy = left_input;
+			int shift_cpy = left_shift;
+			left_idx = right_idx;
+			left_input = right_input;
+			left_shift = right_shift;
+			right_idx = idx_cpy;
+			right_input = input_cpy;
+			right_shift = shift_cpy;
+		}
+		if (this->subtract.at(idx) == 1) {
+			right_input *= -1;
+		}
+		// calc stage
+		int left_stage = stage.at(left_idx);
+		int right_stage = stage.at(right_idx);
+		int current_stage = std::max(left_stage, right_stage)+1;
+		stage[idx] = current_stage;
+		// basic node info
+		s << "{'A',[" << this->output_values.at(idx) << "]," << current_stage;
+		// left input
+		s << ",[" << left_input << "]," << left_stage << "," << left_shift;
+		// right input
+		s << ",[" << right_input << "]," << right_stage << "," << right_shift;
+		// close bracket
+		s << "}";
+	}
+	s << "}";
+	return s.str();
 }
