@@ -1162,8 +1162,16 @@ std::string scm::get_adder_graph_description() {
 		int right_stage = stage.at(right_idx);
 		int current_stage = std::max(left_stage, right_stage)+1;
 		stage[idx] = current_stage;
+		// check if it's an output
+		bool is_output_node = false;
+		for (auto &c : this->C) {
+			if (c == this->output_values.at(idx)) {
+				is_output_node = true;
+				break;
+			}
+		}
 		// basic node info
-		s << "{'A',[" << this->output_values.at(idx) << "]," << current_stage;
+		s << "{'" << (is_output_node?"O":"A") << "',[" << this->output_values.at(idx) << "]," << current_stage;
 		// left input
 		s << ",[" << left_input << "]," << left_stage << "," << left_shift;
 		// right input
