@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
 	std::vector<int> C;
 	int timeout = 300;
 	bool quiet = true;
-	int word_size = 0; // means "calculate necessary word size automatically"
+	bool allow_negative_numbers = false;
 	std::string solver_name = "no_solver";
 	int threads = 1;
 #ifdef USE_Z3
@@ -90,6 +90,17 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+	if (argc > 6) {
+		std::string s(argv[6]);
+		try {
+			allow_negative_numbers = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
 	std::cout << "Starting OSCM for constant" << (C.size()>1?"s\n":" ");
 	for (auto &c : C) {
 		std::cout << (C.size()>1?"  ":"") << c << std::endl;
@@ -98,14 +109,14 @@ int main(int argc, char** argv) {
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL
-		solver = std::make_unique<scm_cadical>(C, timeout, quiet, word_size);
+		solver = std::make_unique<scm_cadical>(C, timeout, quiet, allow_negative_numbers);
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
 #endif
 	}
 	else if (solver_name == "z3") {
 #ifdef USE_Z3
-		solver = std::make_unique<scm_z3>(C, timeout, quiet, word_size, threads);
+		solver = std::make_unique<scm_z3>(C, timeout, quiet, threads, allow_negative_numbers);
 #else
 		throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif
@@ -114,7 +125,7 @@ int main(int argc, char** argv) {
 		throw std::runtime_error("unknown solver name '"+solver_name+"'");
 	solver->solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
-	std::cout << "Finished solving after " << elapsed_time << " seconds" << std::endl;
+	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;
 	solver->print_solution();
 	return 0;
 }

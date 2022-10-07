@@ -6,8 +6,8 @@
 
 #ifdef USE_Z3
 
-scm_z3::scm_z3(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads)
-	:	scm(C, timeout, quiet, word_size, threads), solver(this->context) {}
+scm_z3::scm_z3(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers)
+	:	scm(C, timeout, quiet, threads, allow_negative_numbers), solver(this->context) {}
 
 std::pair<bool, bool> scm_z3::check() {
 	if (this->timeout > 0) {

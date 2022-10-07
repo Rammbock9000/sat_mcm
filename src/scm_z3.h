@@ -17,7 +17,7 @@
 
 class scm_z3 : public scm {
 public:
-	scm_z3(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads);
+	scm_z3(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers);
 
 protected:
 	std::pair<bool, bool> check() override;

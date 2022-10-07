@@ -30,7 +30,7 @@ class scm_cadical : public scm {
 #define CADICAL_UNSAT 20
 
 public:
-	scm_cadical(const std::vector<int> &C, int timeout, bool quiet, int word_size);
+	scm_cadical(const std::vector<int> &C, int timeout, bool quiet, bool allow_negative_numbers);
 
 protected:
 	std::pair<bool, bool> check() override;

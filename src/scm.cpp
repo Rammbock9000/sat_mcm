@@ -9,19 +9,25 @@
 #include <chrono>
 #include <fstream>
 
-#define ALLOW_NEGATIVE_NUMBERS 0
-
-scm::scm(const std::vector<int> &C, int timeout, bool quiet, int word_size, int threads)
-	:	C(C), timeout(timeout), quiet(quiet), word_size(word_size), threads(threads) {
+scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers)
+	:	C(C), timeout(timeout), quiet(quiet), threads(threads) {
 	// make it even and count shift
 	this->calc_twos_complement = false;
 	for (auto &c : this->C) {
+		// ignore 0
 		if (c == 0) continue;
-#if ALLOW_NEGATIVE_NUMBERS // 1: enable calculation in twos_complement, 0: only calculate with positive numbers
-		if (c < 0) this->calc_twos_complement = true;
-#else
-		if (c < 0) c = -c;
-#endif
+		// handle negative numbers
+		if (allow_negative_numbers) {
+			if (c < 0) {
+				this->calc_twos_complement = true;
+			}
+		}
+		else {
+			if (c < 0) {
+				c = -c;
+			}
+		}
+		// right shift until odd
 		while ((c & 1) == 0) {
 			c = c / 2; // do not use shift operation because it is not uniquely defined for negative numbers
 		}
@@ -869,18 +875,20 @@ bool scm::solution_is_valid() {
 			input_node_idx_r = this->input_select[{idx, scm::right}];
 			actual_input_value_l = this->input_select_mux_output[{idx, scm::left}];
 			actual_input_value_r = this->input_select_mux_output[{idx, scm::right}];
+			if (this->calc_twos_complement) actual_input_value_l = sign_extend(actual_input_value_l, this->word_size);
+			if (this->calc_twos_complement) actual_input_value_r = sign_extend(actual_input_value_r, this->word_size);
 		}
 		int64_t left_input_value = this->output_values[input_node_idx_l];
 		int64_t right_input_value = this->output_values[input_node_idx_r];
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " left input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_l << std::endl;
-			std::cout << "  value = " << this->input_select_mux_output[{idx, scm::left}] << std::endl;
+			std::cout << "  value = " << actual_input_value_l << std::endl;
 		}
 		if (left_input_value != actual_input_value_l) {
 			std::cout << "node #" << idx << " has invalid left input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_l << std::endl;
-			std::cout << "  expected value " << left_input_value << " but got " << this->input_select_mux_output[{idx, scm::left}] << std::endl;
+			std::cout << "  expected value " << left_input_value << " but got " << actual_input_value_l << std::endl;
 			auto num_muxs = (1 << this->ceil_log2(idx))-1;
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int64_t mux_output = 0;
@@ -894,12 +902,12 @@ bool scm::solution_is_valid() {
 		if (!this->quiet) {
 			std::cout << "node #" << idx << " right input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_r << std::endl;
-			std::cout << "  value = " << this->input_select_mux_output[{idx, scm::right}] << std::endl;
+			std::cout << "  value = " << actual_input_value_r << std::endl;
 		}
 		if (right_input_value != actual_input_value_r) {
 			std::cout << "node #" << idx << " has invalid right input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_r << std::endl;
-			std::cout << "  expected value " << right_input_value << " but got " << this->input_select_mux_output[{idx, scm::right}] << std::endl;
+			std::cout << "  expected value " << right_input_value << " but got " << actual_input_value_r << std::endl;
 			int64_t num_muxs = (1 << this->ceil_log2(idx))-1;
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int64_t mux_output = 0;
