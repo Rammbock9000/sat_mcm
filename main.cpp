@@ -24,6 +24,7 @@ int main(int argc, char** argv) {
 	bool allow_negative_numbers = false;
 	std::string solver_name = "no_solver";
 	int threads = 1;
+	bool also_minimize_full_adders = false;
 #ifdef USE_Z3
 	solver_name = "z3";
 #endif
@@ -93,6 +94,17 @@ int main(int argc, char** argv) {
 	if (argc > 6) {
 		std::string s(argv[6]);
 		try {
+			also_minimize_full_adders = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
+	if (argc > 7) {
+		std::string s(argv[7]);
+		try {
 			allow_negative_numbers = (bool)std::stoi(s);
 		}
 		catch (...) {
@@ -123,6 +135,7 @@ int main(int argc, char** argv) {
 	}
 	else
 		throw std::runtime_error("unknown solver name '"+solver_name+"'");
+	if (also_minimize_full_adders) solver->also_minimize_full_adders();
 	solver->solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;

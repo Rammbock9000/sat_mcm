@@ -276,6 +276,19 @@ int scm_cadical::get_result_value(int var_idx) {
 	return this->solver->val(var_idx) > 0 ? 1 : 0;
 }
 
+void scm_cadical::create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate) {
+	scm::create_arbitrary_clause(a, negate);
+	for (int i=0; i<a.size(); i++) {
+		if (negate.at(i)) {
+			this->solver->add(-a.at(i));
+		}
+		else {
+			this->solver->add(a.at(i));
+		}
+	}
+	this->solver->add(0);
+}
+
 void scm_cadical::create_1x1_implication(int a, int b) {
 	scm::create_1x1_implication(a, b);
 	this->solver->add(-a);
@@ -337,6 +350,28 @@ void scm_cadical::create_signed_shift_overflow_protection(int sel, int s_a, int 
 	this->solver->add(-sel);
 	this->solver->add(s_a);
 	this->solver->add(-a);
+	this->solver->add(0);
+}
+
+void scm_cadical::create_1xN_implication(int a, const std::vector<int> &b) {
+	scm::create_1xN_implication(a, b);
+	// 1)
+	this->solver->add(-a);
+	for (auto &i : b) {
+		this->solver->add(i);
+	}
+	this->solver->add(0);
+}
+
+void scm_cadical::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
+	scm::create_MxN_implication(a, b);
+	// 1)
+	for (auto &i : a) {
+		this->solver->add(-i);
+	}
+	for (auto &i : b) {
+		this->solver->add(i);
+	}
 	this->solver->add(0);
 }
 

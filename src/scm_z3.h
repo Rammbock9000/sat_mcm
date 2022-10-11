@@ -25,10 +25,13 @@ protected:
 	int get_result_value(int var_idx) override;
 	void create_new_variable(int idx) override;
 
+	void create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate) override;
 	void create_signed_shift_overflow_protection(int sel, int s_a, int a) override;
 	void create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) override;
 	void create_or(std::vector<int> &x) override;
 	void create_1x1_implication(int a, int b) override;
+	void create_1xN_implication(int a, const std::vector<int> &b) override;
+	void create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) override;
 	void create_1x1_negated_implication(int a, int b) override;
 	void create_1x1_equivalence(int x, int y) override;
 	void create_2x1_mux(int a, int b, int s, int y) override;

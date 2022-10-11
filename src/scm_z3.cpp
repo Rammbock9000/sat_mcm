@@ -221,4 +221,54 @@ void scm_z3::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
 	this->solver.add((not this->variables.at(sel)) or (this->variables.at(s_a)) or (not this->variables.at(a)));
 }
 
+void scm_z3::create_1xN_implication(int a, const std::vector<int> &b) {
+	scm::create_1xN_implication(a, b);
+	// 1)
+	z3::expr e = not this->variables.at(a);
+	for (auto &i : b) {
+		e = e or this->variables.at(i);
+	}
+	this->solver.add(e);
+}
+
+void scm_z3::create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate) {
+	scm::create_arbitrary_clause(a, negate);
+	z3::expr e(this->context);
+	if (negate.at(0)) {
+		e = not this->variables.at(a.at(0));
+	}
+	else {
+		e = this->variables.at(a.at(0));
+	}
+	for (int i=1; i<a.size(); i++) {
+		if (negate.at(i)) {
+			e = e or (not this->variables.at(a.at(i)));
+		}
+		else {
+			e = e or this->variables.at(a.at(i));
+		}
+	}
+	this->solver.add(e);
+}
+
+void scm_z3::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
+	scm::create_MxN_implication(a, b);
+	// 1)
+	z3::expr e(this->context);
+	bool init = false;
+	for (auto &i : a) {
+		if (!init) {
+			init = true;
+			e = not this->variables.at(i);
+		}
+		else {
+			e = e or (not this->variables.at(i));
+		}
+	}
+	for (auto &i : b) {
+		e = e or this->variables.at(i);
+	}
+	this->solver.add(e);
+}
+
 #endif //USE_Z3

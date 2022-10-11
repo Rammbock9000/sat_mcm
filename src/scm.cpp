@@ -8,6 +8,7 @@
 #include <cmath>
 #include <chrono>
 #include <fstream>
+#include <algorithm>
 
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers)
 	:	C(C), timeout(timeout), quiet(quiet), threads(threads) {
@@ -16,6 +17,8 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 	for (auto &c : this->C) {
 		// ignore 0
 		if (c == 0) continue;
+		auto original_number = c;
+		int shifted_bits = 0;
 		// handle negative numbers
 		if (allow_negative_numbers) {
 			if (c < 0) {
@@ -30,7 +33,9 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 		// right shift until odd
 		while ((c & 1) == 0) {
 			c = c / 2; // do not use shift operation because it is not uniquely defined for negative numbers
+			shifted_bits++;
 		}
+		this->requested_constants[original_number] = {c, shifted_bits};
 	}
 	// set word sizes & track unique constants
 	this->word_size = 1;
@@ -46,12 +51,41 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 		this->word_size++;
 	}
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
-	this->num_adders = (int)non_one_unique_constants.size()-1;
+	//this->num_adders = (int)non_one_unique_constants.size()-1;
 	std::cout << "min num adders = " << this->num_adders+1 << std::endl;
 	// set constants vector
 	this->C.clear();
 	for (auto &c : non_one_unique_constants) {
 		this->C.emplace_back(c);
+	}
+}
+
+void scm::optimization_loop() {
+	auto start_time = std::chrono::steady_clock::now();
+	if (!this->quiet) std::cout << "  resetting backend now" << std::endl;
+	this->reset_backend();
+	if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << (this->max_full_adders>=0?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
+	this->construct_problem();
+	if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
+	auto [a, b] = this->check();
+	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
+	this->found_solution = a;
+	this->ran_into_timeout = b;
+	if (this->found_solution) {
+		std::cout << "  found solution for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
+		this->get_solution_from_backend();
+		if (this->solution_is_valid()) {
+			std::cout << "Solution is verified :-)" << std::endl;
+		}
+		else {
+			throw std::runtime_error("Solution is invalid (found bug) :-(");
+		}
+	}
+	else if (this->ran_into_timeout) {
+		std::cout << "  ran into timeout for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
+	}
+	else {
+		std::cout << "  problem for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders>=0?"":"keep trying :-)") << std::endl;
 	}
 }
 
@@ -77,28 +111,68 @@ void scm::solve() {
 		return;
 	}
 	while (!this->found_solution) {
-		auto start_time = std::chrono::steady_clock::now();
 		++this->num_adders;
-		if (!this->quiet) std::cout << "    resetting backend now" << std::endl;
-		this->reset_backend();
-		if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << std::endl;
-		this->construct_problem();
-		if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
-		auto [a, b] = this->check();
-		auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
-		this->found_solution = a;
-		this->ran_into_timeout = b;
-		if (this->found_solution) {
-			std::cout << "  found solution for #adders = " << this->num_adders << " after " << elapsed_time << " seconds 8-)" << std::endl;
-			this->get_solution_from_backend();
+		this->optimization_loop();
+	}
+	// check if we can even optimize the number of full adders and return if not
+	if (this->num_adders == this->C.size() or !this->minimize_full_adders) return;
+	while (this->found_solution) {
+		// count current # of full adders
+		// except for the last node because its output always has a constant number of full adders
+		int current_full_adders = 0;
+		for (int idx = 1; idx <= this->num_adders; idx++) {
+			if (this->output_values.at(idx) == 0) {
+				// more adders allocated than necessary
+				continue;
+			}
+			int FAs_for_this_node = (int)std::ceil(std::log2(this->output_values.at(idx)));
+			int shifter_input_non_zero_LSBs = 0;
+			int shifter_input = 1;
+			if (idx > 1 and this->shift_input_select.at(idx) == 1) {
+				// left input
+				shifter_input = this->input_select_mux_output.at({idx, scm::left});
+			}
+			else if (idx > 1 and this->shift_input_select.at(idx) == 0) {
+				// right input
+				shifter_input = this->input_select_mux_output.at({idx, scm::right});
+			}
+			while ((shifter_input & 1) == 0) {
+				shifter_input = shifter_input >> 1;
+				shifter_input_non_zero_LSBs++;
+			}
+			if (this->subtract.at(idx) == 0) {
+				// for additions, we do not need to use a full adder for the shifted LSBs
+				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
+			}
+			else if (this->negate_select.at(idx) == 1) {
+				// for subtractions, we do not need to use a full adder
+				// for the shifted LSBs if the non-shifted input gets subtracted
+				// except for the LSB where we need a HA to account for the carry-in
+				// the remaining shifted bits can be handled by the carry chain alone
+				FAs_for_this_node -= (this->shift_value.at(idx) - 1 + shifter_input_non_zero_LSBs);
+			}
+			std::cout << "FAs for node " << idx << " = " << FAs_for_this_node << std::endl;
+			current_full_adders += FAs_for_this_node;
 		}
-		else if (this->ran_into_timeout) {
-			std::cout << "  ran into timeout for #adders = " << this->num_adders << " after " << elapsed_time << " seconds :-(" << std::endl;
+		if (this->max_full_adders < 0) {
+			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
+		}
+		else if (current_full_adders > this->max_full_adders) {
+			this->print_solution();
+			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
 		}
 		else {
-			std::cout << "  problem for #adders = " << this->num_adders << " is proven to be infeasible after " << elapsed_time << " seconds... keep trying :-)" << std::endl;
+			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
 		}
+		this->max_full_adders = current_full_adders - 1;
+		if (this->max_full_adders < 0) {
+			return;
+		}
+		this->optimization_loop();
 	}
+	this->found_solution = true;
 }
 
 void scm::reset_backend() {
@@ -153,6 +227,10 @@ void scm::create_variables() {
 			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
+		if (this->max_full_adders > 0 and i <= this->num_adders) {
+			if (!this->quiet) std::cout << "        create_full_adder_alloc_variables" << std::endl;
+			this->create_full_adder_alloc_variables(i);
+		}
 	}
 }
 
@@ -177,6 +255,12 @@ void scm::create_constraints() {
 		this->create_xor_constraints(i);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i);
+		if (this->max_full_adders >= 0 and i <= this->num_adders) {
+			if (!this->quiet) std::cout << "        create_full_adder_allocation_constraints" << std::endl;
+			this->create_full_adder_allocation_constraints(i);
+			if (!this->quiet) std::cout << "        create_full_adder_overlap_constraints" << std::endl;
+			this->create_full_adder_overlap_constraints(i);
+		}
 	}
 }
 
@@ -320,6 +404,18 @@ int scm::floor_log2(int n) {
 
 void scm::create_new_variable(int idx) {
 	(void) idx; // just do nothing -> should be overloaded by backend if a variable must be explicitly created
+}
+
+void scm::create_1xN_implication(int a, const std::vector<int> &b) {
+	// todo: implement
+}
+
+void scm::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
+	// todo: implement
+}
+
+void scm::create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate) {
+	// todo: implement
 }
 
 void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
@@ -513,23 +609,17 @@ void scm::create_input_select_constraints(int idx) {
 	if (!this->quiet) std::cout << "creating input select constraints for node #" << idx << std::endl;
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir : this->input_directions) {
-		if (!this->quiet) std::cout << "  dir = " << (dir==scm::left?"left":"right") << std::endl;
 		int mux_idx = 0;
 		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
-			if (!this->quiet) std::cout << "    mux stage = " << mux_stage << std::endl;
 			auto num_muxs_per_stage = (1 << mux_stage);
 			auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage
 			for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
-				if (!this->quiet) std::cout << "      mux idx in stage = " << mux_idx_in_stage << std::endl;
-				if (!this->quiet) std::cout << "      mux idx = " << mux_idx << std::endl;
 				if (mux_stage == select_word_size-1) {
 					// connect with another node output
 					auto zero_input_node_idx = 2 * mux_idx_in_stage;
 					auto one_input_node_idx = zero_input_node_idx + 1;
 					if (zero_input_node_idx >= idx) zero_input_node_idx = idx-1;
 					if (one_input_node_idx >= idx) one_input_node_idx = idx-1;
-					if (!this->quiet) std::cout << "        zero input node idx = " << zero_input_node_idx << std::endl;
-					if (!this->quiet) std::cout << "        one input node idx = " << one_input_node_idx << std::endl;
 					for (int w = 0; w < this->word_size; w++) {
 						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
 						auto zero_input_var_idx = this->output_value_variables.at({zero_input_node_idx, w});
@@ -551,8 +641,6 @@ void scm::create_input_select_constraints(int idx) {
 					auto zero_mux_idx_in_next_stage = 2 * mux_idx_in_stage;
 					auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
 					auto one_input_mux_idx = zero_input_mux_idx + 1;
-					if (!this->quiet) std::cout << "        zero input mux idx = " << zero_input_mux_idx << std::endl;
-					if (!this->quiet) std::cout << "        one input mux idx = " << one_input_mux_idx << std::endl;
 					for (int w = 0; w < this->word_size; w++) {
 						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
 						auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w});
@@ -563,7 +651,6 @@ void scm::create_input_select_constraints(int idx) {
 				}
 				// increment current mux idx
 				mux_idx++;
-				if (!this->quiet) std::cout << std::endl;
 			}
 		}
 	}
@@ -769,6 +856,81 @@ void scm::create_adder_constraints(int idx) {
 	}
 }
 
+void scm::create_full_adder_allocation_constraints(int idx) {
+	for (int x = 0; x < this->word_size; x++) { // global FA alloc for bit x
+		bool lowest_bit = x == 0;
+		int container_size = this->max_full_adders + (lowest_bit ? 2 : 3 );
+		std::vector<int> vars(container_size);
+		std::vector<bool> negate(container_size, false);
+		for (int y = 0; y < this->max_full_adders; y++) { // global FA alloc index y
+			vars[y] = this->full_adder_alloc_variables.at({idx, x, y});
+		}
+		for (int w_1 = x; w_1 < this->word_size; w_1++) {
+			if (lowest_bit) {
+				vars.resize(container_size);
+				negate.resize(container_size);
+			}
+			// for a - (b << s)
+			// subtract bit
+			vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
+			negate[this->max_full_adders] = true;
+			// output value bit
+			vars[this->max_full_adders+1] = this->output_value_variables.at({idx, w_1});
+			negate[this->max_full_adders+1] = true;
+			if (!lowest_bit) {
+				// negate select bit
+				vars[this->max_full_adders+2] = this->input_negate_select_variables.at(idx);
+				negate[this->max_full_adders+2] = false;
+			}
+			// add to solver
+			this->constraint_counter++;
+			this->create_arbitrary_clause(vars, negate);
+			// for a + (b << s) and (a << s) - b
+			for (int w_2 = 0; w_2 <= x; w_2++) {
+				if (lowest_bit) {
+					vars.resize(container_size+1);
+					negate.resize(container_size+1);
+				}
+				// subtract bit
+				vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
+				negate[this->max_full_adders] = false;
+				// output value bit
+				vars[this->max_full_adders+1] = this->output_value_variables.at({idx, w_1});
+				negate[this->max_full_adders+1] = true;
+				// shifted value bit
+				vars[this->max_full_adders+2] = this->shift_output_variables.at({idx, w_2});
+				negate[this->max_full_adders+2] = true;
+				// add to solver
+				this->constraint_counter++;
+				this->create_arbitrary_clause(vars, negate);
+				if (!lowest_bit) {
+					// swap subtract with select bit
+					vars[this->max_full_adders] = this->input_negate_select_variables.at(idx);
+					negate[this->max_full_adders] = true;
+					// add to solver
+					this->constraint_counter++;
+					this->create_arbitrary_clause(vars, negate);
+				}
+			}
+		}
+	}
+}
+
+void scm::create_full_adder_overlap_constraints(int idx_1) {
+	if (this->max_full_adders <= 0) return;
+	for (int w_1 = 0; w_1 < this->word_size; w_1++) {
+		for (int idx_2 = idx_1; idx_2 <= this->num_adders; idx_2++) {
+			for (int w_2 = 0; w_2 < this->word_size; w_2++) {
+				if (idx_1 == idx_2 and w_1 == w_2) continue; // no overlap with itself
+				for (int x = 0; x < this->max_full_adders; x++) {
+					this->create_1x1_negated_implication(this->full_adder_alloc_variables.at({idx_1, w_1, x}), this->full_adder_alloc_variables.at({idx_2, w_2, x}));
+					this->constraint_counter++;
+				}
+			}
+		}
+	}
+}
+
 void scm::create_input_select_limitation_constraints(int idx) {
 	auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
@@ -797,6 +959,15 @@ void scm::create_shift_limitation_constraints(int idx) {
 }
 
 void scm::get_solution_from_backend() {
+	// clear containers
+	this->input_select.clear();
+	this->input_select_mux_output.clear();
+	this->shift_input_select.clear();
+	this->shift_value.clear();
+	this->negate_select.clear();
+	this->subtract.clear();
+	this->output_values.clear();
+	// get solution
 	for (int idx = 0; idx <= this->num_adders; idx++) {
 		// output_values
 		for (int w = 0; w < this->word_size; w++) {
@@ -844,13 +1015,7 @@ void scm::print_solution() {
 			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (non-shifted)":" (shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
 		}
-		if (this->solution_is_valid()) {
-			std::cout << "Solution is verified :-)" << std::endl;
-			std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
-		}
-		else {
-			throw std::runtime_error("Solution is invalid (found bug) :-(");
-		}
+		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 	}
 	else {
 		for (int i=0; i<this->C.size(); i++) {
@@ -1114,6 +1279,15 @@ void scm::create_mcm_output_variables(int idx) {
 	}
 }
 
+void scm::create_full_adder_alloc_variables(int idx) {
+	for (int w = 0; w < this->word_size; w++) {
+		for (int x = 0; x < this->max_full_adders; x++) {
+			this->full_adder_alloc_variables[{idx, w, x}] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
+	}
+}
+
 int64_t scm::sign_extend(int64_t x, int w) {
 	auto sign_bit = (x >> (w-1)) & 1;
 	if (sign_bit == 0) return x; // x >= 0 -> no conversion needed
@@ -1185,4 +1359,13 @@ std::string scm::get_adder_graph_description() {
 	}
 	s << "}";
 	return s.str();
+}
+
+void scm::set_min_add(int new_min_add) {
+	this->num_adders = std::max(this->num_adders, new_min_add-1);
+	this->num_adders = std::max(this->num_adders, 0);
+}
+
+void scm::also_minimize_full_adders() {
+	this->minimize_full_adders = true;
 }

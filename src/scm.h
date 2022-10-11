@@ -25,6 +25,15 @@ public:
 	 */
 	scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers);
 	/*!
+	 * define the minimum number of needed adders to help the algorithm converge faster
+	 * @param new_min_add value
+	 */
+	void set_min_add(int new_min_add);
+	/*!
+	 * also minimize full adders for the optimal number of adder nodes during this->solve()
+	 */
+	void also_minimize_full_adders();
+	/*!
 	 * solve the problem
 	 */
 	void solve();
@@ -72,6 +81,13 @@ protected:
 	//// create clauses for the following circuits ////
 	///////////////////////////////////////////////////
 	/*!
+	 * create an arbitrary clause:
+	 * negate a_i if negate[i] = true
+	 * @param a variable indices
+	 * @param negate
+	 */
+	virtual void create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate);
+	/*!
 	 * disallow shifting bits that are not equal to the sign bit
 	 * clauses are:
 	 *   1) -sel -s_a  a
@@ -118,6 +134,20 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1x1_negated_implication(int a, int b);
+	/*!
+	 * force a -> (b_0 or b_1 or ...)
+	 *   1) -a  b_0  b_1 ...
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_1xN_implication(int a, const std::vector<int> &b);
+	/*!
+	 * force (a_0 and a_1 and ...) -> (b_0 or b_1 or ...)
+	 *   1) -a_0 -a_1 ...  b_0  b_1 ...
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b);
 	/*!
 	 * force y = x
 	 * clauses are:
@@ -273,9 +303,11 @@ protected:
 	 */
 	int num_adders = 0;
 	/*!
-	 * number of shifted bits of the output to re-create the original constant
+	 * keep track how to get the requested constants from the computed nodes (relevant if constants are negative or even)
+	 * requested constant -> < adder node output, number of shifted bits >
+	 * e.g. "18 -> < 9, 1 >" because 18 is computed from 9 left-shifted by 1 bit
 	 */
-	std::map<int, int> output_shift;
+	std::map<int, std::pair<int, int>> requested_constants;
 	/*!
 	 * if we found a solution, yet
 	 */
@@ -306,8 +338,17 @@ protected:
 	 * i.e. at least one coefficient is negative
 	 */
 	bool calc_twos_complement;
+	/*!
+	 * whether we also minimize the number of full adders for the minimum number of adders
+	 */
+	bool minimize_full_adders = false;
 
 private:
+	/*!
+	 * limit on the number of full adders used
+	 * -1 = no limit
+	 */
+	int max_full_adders = -1;
 	/*!
 	 * store all cnf clauses for cnf file generation
 	 */
@@ -366,6 +407,10 @@ private:
 	 */
 	void construct_problem();
 	/*!
+	 * optimize #adders or #full_adders within this loop
+	 */
+	void optimization_loop();
+	/*!
 	 * cache values for ceil(log2(n))
 	 */
 	std::map<int, int> ceil_log2_cache;
@@ -392,6 +437,7 @@ private:
 	void create_adder_internal_variables(int idx);
 	void create_output_value_variables(int idx);
 	void create_mcm_output_variables(int idx);
+	void create_full_adder_alloc_variables(int idx);
 
 	////////////////////////////////
 	//// CREATE ALL CONSTRAINTS ////
@@ -405,6 +451,8 @@ private:
 	void create_negate_select_constraints(int idx);
 	void create_xor_constraints(int idx);
 	void create_adder_constraints(int idx);
+	void create_full_adder_allocation_constraints(int idx);
+	void create_full_adder_overlap_constraints(int idx_1);
 	void create_mcm_output_constraints();
 
 	///////////////////////////////////
@@ -471,9 +519,13 @@ private:
 	 */
 	std::map<std::pair<int, int>, int> output_value_variables;
 	/*!
-	 * <node idx, mcm constant> -> variable idx
+	 * < node idx, mcm constant > -> variable idx
 	 */
 	std::map<std::pair<int, int>, int> mcm_output_variables;
+	/*!
+	 * < node idx, bit, full adder idx > -> variable idx
+	 */
+	std::map<std::tuple<int, int, int>, int> full_adder_alloc_variables;
 	/*!
 	 * a variable that is equal to a constant zero (needed for shifter)
 	 * variable idx
