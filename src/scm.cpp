@@ -221,6 +221,12 @@ void scm::create_variables() {
 		this->create_xor_output_variables(i);
 		if (!this->quiet) std::cout << "        create_adder_internal_variables" << std::endl;
 		this->create_adder_internal_variables(i);
+		if (this->enable_node_output_shift) {
+			if (!this->quiet) std::cout << "        create_post_adder_input_shift_value_variables" << std::endl;
+			this->create_post_adder_input_shift_value_variables(i);
+			if (!this->quiet) std::cout << "        create_post_adder_shift_variables" << std::endl;
+			this->create_post_adder_shift_variables(i);
+		}
 		if (!this->quiet) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
 		if (this->C.size() != 1) {
@@ -255,6 +261,12 @@ void scm::create_constraints() {
 		this->create_xor_constraints(i);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i);
+		if (this->enable_node_output_shift) {
+			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
+			this->create_post_adder_shift_limitation_constraints(i);
+			if (!this->quiet) std::cout << "        create_post_adder_shift_constraints" << std::endl;
+			this->create_post_adder_shift_constraints(i);
+		}
 		if (this->max_full_adders >= 0 and i <= this->num_adders) {
 			if (!this->quiet) std::cout << "        create_full_adder_allocation_constraints" << std::endl;
 			this->create_full_adder_allocation_constraints(i);
@@ -338,6 +350,25 @@ void scm::create_shift_internal_variables(int idx) {
 	}
 }
 
+void scm::create_post_adder_input_shift_value_variables(int idx) {
+	for (int w = 0; w < this->shift_word_size; w++) {
+		this->input_post_adder_shift_value_variables[{idx, w}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+	}
+}
+
+void scm::create_post_adder_shift_variables(int idx) {
+	for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
+		for (int w = 0; w < this->word_size; w++) {
+			this->post_adder_shift_internal_mux_output_variables[{idx, mux_stage, w}] = ++this->variable_counter;
+			if (mux_stage == this->shift_word_size-1) {
+				this->post_adder_shift_output_variables[{idx, w}] = this->variable_counter;
+			}
+			this->create_new_variable(this->variable_counter);
+		}
+	}
+}
+
 void scm::create_input_negate_select_variable(int idx) {
 	this->input_negate_select_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
@@ -368,13 +399,19 @@ void scm::create_adder_internal_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
 		this->adder_internal_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
+		this->adder_output_value_variables[{idx, w}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
 	}
 }
 
 void scm::create_output_value_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
-		this->output_value_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
+		if (this->enable_node_output_shift) {
+			this->output_value_variables[{idx, w}] = this->post_adder_shift_output_variables.at({idx, w});
+		}
+		else {
+			this->output_value_variables[{idx, w}] = this->adder_output_value_variables.at({idx, w});
+		}
 	}
 }
 
@@ -764,6 +801,97 @@ void scm::create_shift_constraints(int idx) {
 	}
 }
 
+void scm::create_post_adder_shift_constraints(int idx) {
+	for (auto stage = 0; stage < this->shift_word_size; stage++) {
+		auto shift_width = (1 << stage);
+		//auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
+		auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
+		auto last_disallowed_shift_bit = shift_width-1;
+		for (auto w = 0; w < this->word_size; w++) {
+			auto w_prev = w + shift_width;
+			auto connect_zero_const = w_prev >= this->word_size;
+			int zero_input_var_idx;
+			int zero_input_sign_bit_idx;
+			int one_input_var_idx;
+			//auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w});
+			auto mux_output_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage, w});
+			if (stage == 0) {
+				// connect shifter inputs
+				// shifter input is the adder output
+				zero_input_var_idx = this->adder_output_value_variables.at({idx, w});
+				zero_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
+				if (connect_zero_const) {
+					one_input_var_idx = this->constant_zero_variable;
+				}
+				else {
+					one_input_var_idx = this->adder_output_value_variables.at({idx, w_prev});
+				}
+			}
+			else {
+				// connect output of previous stage
+				//zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w});
+				zero_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w});
+				//zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
+				zero_input_sign_bit_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
+				if (connect_zero_const) {
+					one_input_var_idx = this->constant_zero_variable;
+				}
+				else {
+					//one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
+					one_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
+				}
+			}
+			if (w <= last_disallowed_shift_bit) {
+				// shifting out 1s is not allowed in these places
+				if (connect_zero_const) {
+					if (this->calc_twos_complement) {
+						// connect the sign bit instead of a constant zero
+						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 6;
+					}
+					else {
+						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
+						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
+						this->constraint_counter += 4;
+					}
+				}
+				else {
+					this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+					this->constraint_counter += 6;
+				}
+			}
+			else {
+				// we can shift bits around however we like
+				if (connect_zero_const) {
+					if (this->calc_twos_complement) {
+						// connect the sign bit instead of a constant zero
+						this->create_2x1_mux(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 6;
+					}
+					else {
+						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
+						this->constraint_counter += 3;
+					}
+				}
+				else {
+					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
+					this->constraint_counter += 6;
+				}
+			}
+		}
+		// sign bits before and after shifting must be identical if calculating in 2's complement
+		if (this->calc_twos_complement) {
+			//int shift_output_sign_bit_idx = this->shift_output_variables.at({idx, this->word_size-1});
+			int shift_output_sign_bit_idx = this->post_adder_shift_output_variables.at({idx, this->word_size-1});
+			//int shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
+			int shift_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
+			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
+			this->constraint_counter += 2;
+		}
+	}
+}
+
 void scm::create_shift_select_constraints(int idx) {
 	if (idx == 1) return; // this node doesn't need shift input muxs
 	auto select_var = this->input_shift_select_variables.at(idx);
@@ -837,7 +965,8 @@ void scm::create_adder_constraints(int idx) {
 		// build sum
 		int a = this->negate_select_output_variables.at({idx, scm::left, w});
 		int b = this->xor_output_variables.at({idx, w});
-		int s = this->output_value_variables.at({idx, w});
+		//int s = this->output_value_variables.at({idx, w});
+		int s = this->adder_output_value_variables.at({idx, w});
 		this->create_add_sum(a, b, c_i, s);
 		this->constraint_counter += 8;
 		// build carry
@@ -958,6 +1087,19 @@ void scm::create_shift_limitation_constraints(int idx) {
 	}
 }
 
+void scm::create_post_adder_shift_limitation_constraints(int idx) {
+	int max_representable_shift = (1 << this->shift_word_size) - 1;
+	std::vector<int> x(this->shift_word_size);
+	for (int w = 0; w < this->shift_word_size; w++) {
+		//x[w] = this->input_shift_value_variables.at({idx, w});
+		x[w] = this->input_post_adder_shift_value_variables.at({idx, w});
+	}
+	for (int forbidden_number = max_representable_shift; forbidden_number > this->max_shift; forbidden_number--) {
+		this->forbid_number(x, forbidden_number);
+		this->constraint_counter++;
+	}
+}
+
 void scm::get_solution_from_backend() {
 	// clear containers
 	this->input_select.clear();
@@ -966,6 +1108,7 @@ void scm::get_solution_from_backend() {
 	this->shift_value.clear();
 	this->negate_select.clear();
 	this->subtract.clear();
+	this->post_adder_shift_value.clear();
 	this->output_values.clear();
 	// get solution
 	for (int idx = 0; idx <= this->num_adders; idx++) {
@@ -994,6 +1137,12 @@ void scm::get_solution_from_backend() {
 			this->negate_select[idx] = this->get_result_value(this->input_negate_select_variables[idx]);
 			// subtract
 			this->subtract[idx] = this->get_result_value(this->input_negate_value_variables[idx]);
+			// output shift
+			if (this->enable_node_output_shift) {
+				for (auto w = 0; w < this->shift_word_size; w++) {
+					this->post_adder_shift_value[idx] += (this->get_result_value(this->input_post_adder_shift_value_variables[{idx, w}]) << w);
+				}
+			}
 		}
 	}
 }
@@ -1014,6 +1163,9 @@ void scm::print_solution() {
 			std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
 			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (non-shifted)":" (shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
+			if (this->enable_node_output_shift) {
+				std::cout << "    post adder right shift value: " << this->post_adder_shift_value[idx] << std::endl;
+			}
 		}
 		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 	}
@@ -1212,29 +1364,53 @@ bool scm::solution_is_valid() {
 			std::cout << "  expected output value = " << expected_xor_output << std::endl;
 			valid = false;
 		}
-		// verify node/adder output
+		// verify adder output
 		int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (negate_mux_output_l + negate_mux_output_r);
 		if (this->calc_twos_complement) expected_adder_output = sign_extend(expected_adder_output, this->word_size);
 		int64_t actual_adder_output = 0;
 		for (int w = 0; w < this->word_size; w++) {
-			actual_adder_output += (this->get_result_value(this->output_value_variables[{idx, w}]) << w);
+			actual_adder_output += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 		}
 		if (this->calc_twos_complement) actual_adder_output = sign_extend(actual_adder_output, this->word_size);
 		if (!this->quiet) {
-			std::cout << "node #" << idx << " output value" << std::endl;
+			std::cout << "node #" << idx << " adder output value" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
 			std::cout << "  left input value = " << negate_mux_output_l << std::endl;
 			std::cout << "  right input value = " << actual_xor_output << std::endl;
 			std::cout << "  actual output value = " << actual_adder_output << std::endl;
 		}
 		if (expected_adder_output != actual_adder_output) {
-			std::cout << "node #" << idx << " has invalid output value" << std::endl;
+			std::cout << "node #" << idx << " has invalid adder output value" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
 			std::cout << "  left input value = " << negate_mux_output_l << std::endl;
 			std::cout << "  right input value = " << actual_xor_output << std::endl;
 			std::cout << "  expected output value = " << expected_adder_output << std::endl;
 			std::cout << "  actual output value = " << actual_adder_output << std::endl;
 			valid = false;
+		}
+		if (this->enable_node_output_shift) {
+			// verify post adder shift output
+			int64_t expected_post_adder_shift_output = actual_adder_output >> this->post_adder_shift_value.at(idx);
+			if (this->calc_twos_complement) expected_post_adder_shift_output = sign_extend(expected_post_adder_shift_output, this->word_size);
+			int64_t actual_post_adder_shift_output = 0;
+			for (int w = 0; w < this->word_size; w++) {
+				actual_post_adder_shift_output += (this->get_result_value(this->post_adder_shift_output_variables[{idx, w}]) << w);
+			}
+			if (this->calc_twos_complement) actual_post_adder_shift_output = sign_extend(actual_post_adder_shift_output, this->word_size);
+			if (!this->quiet) {
+				std::cout << "node #" << idx << " post adder shift output value" << std::endl;
+				std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
+				std::cout << "  input value = " << actual_adder_output << std::endl;
+				std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
+			}
+			if (expected_post_adder_shift_output != actual_post_adder_shift_output)  {
+				std::cout << "node #" << idx << " has invalid post adder shift output value" << std::endl;
+				std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
+				std::cout << "  input value = " << actual_adder_output << std::endl;
+				std::cout << "  expected output value = " << expected_post_adder_shift_output << std::endl;
+				std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
+				valid = false;
+			}
 		}
 	}
 	return valid;
@@ -1350,6 +1526,9 @@ std::string scm::get_adder_graph_description() {
 		stage[idx] = current_stage;
 		// basic node info
 		s << "{'A',[" << this->output_values.at(idx) << "]," << current_stage;
+		if (this->enable_node_output_shift) {
+			s << "," << this->post_adder_shift_value.at(idx);
+		}
 		// left input
 		s << ",[" << left_input << "]," << left_stage << "," << left_shift;
 		// right input
@@ -1368,4 +1547,8 @@ void scm::set_min_add(int new_min_add) {
 
 void scm::also_minimize_full_adders() {
 	this->minimize_full_adders = true;
+}
+
+void scm::allow_node_output_shift() {
+	this->enable_node_output_shift = true;
 }

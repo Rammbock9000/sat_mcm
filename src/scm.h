@@ -34,6 +34,11 @@ public:
 	 */
 	void also_minimize_full_adders();
 	/*!
+	 * also allow a shift at each node's output during this->solve()
+	 * this reduces the number of needed adders in very few corner cases by 1 at the cost of an increased runtime
+	 */
+	void allow_node_output_shift();
+	/*!
 	 * solve the problem
 	 */
 	void solve();
@@ -342,6 +347,10 @@ protected:
 	 * whether we also minimize the number of full adders for the minimum number of adders
 	 */
 	bool minimize_full_adders = false;
+	/*!
+	 * whether we also allow a shift at each node's output
+	 */
+	bool enable_node_output_shift = false;
 
 private:
 	/*!
@@ -393,6 +402,10 @@ private:
 	/*!
 	 * node idx -> int value
 	 */
+	std::map<int, int> post_adder_shift_value;
+	/*!
+	 * node idx -> int value
+	 */
 	std::map<int, int> output_values;
 	/*!
 	 * create backend solver variables and keep track of their indices
@@ -435,6 +448,8 @@ private:
 	void create_input_negate_value_variable(int idx);
 	void create_xor_output_variables(int idx);
 	void create_adder_internal_variables(int idx);
+	void create_post_adder_input_shift_value_variables(int idx);
+	void create_post_adder_shift_variables(int idx);
 	void create_output_value_variables(int idx);
 	void create_mcm_output_variables(int idx);
 	void create_full_adder_alloc_variables(int idx);
@@ -451,6 +466,8 @@ private:
 	void create_negate_select_constraints(int idx);
 	void create_xor_constraints(int idx);
 	void create_adder_constraints(int idx);
+	void create_post_adder_shift_limitation_constraints(int idx);
+	void create_post_adder_shift_constraints(int idx);
 	void create_full_adder_allocation_constraints(int idx);
 	void create_full_adder_overlap_constraints(int idx_1);
 	void create_mcm_output_constraints();
@@ -513,6 +530,24 @@ private:
 	 * < node idx, bit > -> variable idx
 	 */
 	std::map<std::pair<int, int>, int> adder_internal_variables;
+	/*!
+	 * < node idx, bit > -> variable idx
+	 * !!! node idx = 0 is the input node with constant value 0
+	 */
+	std::map<std::pair<int, int>, int> adder_output_value_variables;
+	/*!
+	 * < node idx, bit > -> variable idx
+	 */
+	std::map<std::pair<int, int>, int> input_post_adder_shift_value_variables;
+	/*!
+	 * < node idx, mux stage, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int, int>, int> post_adder_shift_internal_mux_output_variables;
+	/*!
+	 * < node idx, bit > -> variable idx
+	 * !!! identical to the last MUX stage of shift_internal_mux_output_variables
+	 */
+	std::map<std::pair<int, int>, int> post_adder_shift_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0

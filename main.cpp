@@ -25,6 +25,7 @@ int main(int argc, char** argv) {
 	std::string solver_name = "no_solver";
 	int threads = 1;
 	bool also_minimize_full_adders = false;
+	bool allow_node_output_shift = false;
 #ifdef USE_Z3
 	solver_name = "z3";
 #endif
@@ -32,10 +33,8 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satscm like this: ./satscm <constant(s)> <solver_name> <timeout> <threads> <quiet>" << std::endl;
+		std::cout << "Please call satscm like this: ./satscm <constant(s)> <solver_name> <timeout> <threads> <quiet> <also minimize full adders> <allow post adder right shfits>" << std::endl;
 		std::cout << "If specifying multiple constants (for MCM instead of SCM), make sure to give them as a colon-separated list (duplicates, negative numbers and even numbers are getting pre-processed)" << std::endl;
-		std::cout << "  e.g. './satscm 14709 z3 300 2 1' for constant 14709 with 300 sec time budget, 2 allowed CPU threads and without debug outputs using the Z3 backend" << std::endl;
-		std::cout << "  e.g. './satscm 1:3:11:3:22 cadical 42 1 0' for constants 1, 3, 11, 3 and 22 (which gets transformed to constants 3 and 11) with 42 sec time budget, 1 allowed CPU thread and with debug outputs using the CaDiCaL backend" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -105,6 +104,17 @@ int main(int argc, char** argv) {
 	if (argc > 7) {
 		std::string s(argv[7]);
 		try {
+			allow_node_output_shift = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
+	if (argc > 8) {
+		std::string s(argv[8]);
+		try {
 			allow_negative_numbers = (bool)std::stoi(s);
 		}
 		catch (...) {
@@ -136,6 +146,7 @@ int main(int argc, char** argv) {
 	else
 		throw std::runtime_error("unknown solver name '"+solver_name+"'");
 	if (also_minimize_full_adders) solver->also_minimize_full_adders();
+	if (allow_node_output_shift) solver->allow_node_output_shift();
 	solver->solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;
