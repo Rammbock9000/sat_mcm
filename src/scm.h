@@ -402,6 +402,10 @@ private:
 	/*!
 	 * node idx -> int value
 	 */
+	std::map<int, int> add_result_values;
+	/*!
+	 * node idx -> int value
+	 */
 	std::map<int, int> post_adder_shift_value;
 	/*!
 	 * node idx -> int value

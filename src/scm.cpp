@@ -115,7 +115,8 @@ void scm::solve() {
 		this->optimization_loop();
 	}
 	// check if we can even optimize the number of full adders and return if not
-	if (this->num_adders == this->C.size() or !this->minimize_full_adders) return;
+	//if (this->num_adders == this->C.size() or !this->minimize_full_adders) return;
+	if (!this->minimize_full_adders) return;
 	while (this->found_solution) {
 		// count current # of full adders
 		// except for the last node because its output always has a constant number of full adders
@@ -125,7 +126,7 @@ void scm::solve() {
 				// more adders allocated than necessary
 				continue;
 			}
-			int FAs_for_this_node = (int)std::ceil(std::log2(this->output_values.at(idx)));
+			int FAs_for_this_node = (int)std::ceil(std::log2(this->add_result_values.at(idx)));
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
 			if (idx > 1 and this->shift_input_select.at(idx) == 1) {
@@ -144,13 +145,15 @@ void scm::solve() {
 				// for additions, we do not need to use a full adder for the shifted LSBs
 				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
 			}
+			/*
 			else if (this->negate_select.at(idx) == 1) {
 				// for subtractions, we do not need to use a full adder
 				// for the shifted LSBs if the non-shifted input gets subtracted
 				// except for the LSB where we need a HA to account for the carry-in
 				// the remaining shifted bits can be handled by the carry chain alone
-				FAs_for_this_node -= (this->shift_value.at(idx) - 1 + shifter_input_non_zero_LSBs);
+				FAs_for_this_node -= ((this->shift_value.at(idx) == 0 ? 0 : this->shift_value.at(idx) - 1) + shifter_input_non_zero_LSBs);
 			}
+			 */
 			std::cout << "FAs for node " << idx << " = " << FAs_for_this_node << std::endl;
 			current_full_adders += FAs_for_this_node;
 		}
@@ -988,43 +991,45 @@ void scm::create_adder_constraints(int idx) {
 void scm::create_full_adder_allocation_constraints(int idx) {
 	for (int x = 0; x < this->word_size; x++) { // global FA alloc for bit x
 		bool lowest_bit = x == 0;
-		int container_size = this->max_full_adders + (lowest_bit ? 2 : 3 );
+		int container_size = this->max_full_adders + 2;// + (lowest_bit ? 2 : 3 );
 		std::vector<int> vars(container_size);
 		std::vector<bool> negate(container_size, false);
 		for (int y = 0; y < this->max_full_adders; y++) { // global FA alloc index y
 			vars[y] = this->full_adder_alloc_variables.at({idx, x, y});
 		}
 		for (int w_1 = x; w_1 < this->word_size; w_1++) {
-			if (lowest_bit) {
+			//if (lowest_bit) {
 				vars.resize(container_size);
 				negate.resize(container_size);
-			}
+			//}
 			// for a - (b << s)
 			// subtract bit
 			vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
 			negate[this->max_full_adders] = true;
-			// output value bit
-			vars[this->max_full_adders+1] = this->output_value_variables.at({idx, w_1});
+			// adder output value bit
+			vars[this->max_full_adders+1] = this->adder_output_value_variables.at({idx, w_1});
 			negate[this->max_full_adders+1] = true;
+			/*
 			if (!lowest_bit) {
 				// negate select bit
 				vars[this->max_full_adders+2] = this->input_negate_select_variables.at(idx);
 				negate[this->max_full_adders+2] = false;
 			}
+			 */
 			// add to solver
 			this->constraint_counter++;
 			this->create_arbitrary_clause(vars, negate);
-			// for a + (b << s) and (a << s) - b
+			// for a + (b << s) /* and (a << s) - b */
 			for (int w_2 = 0; w_2 <= x; w_2++) {
-				if (lowest_bit) {
+				//if (lowest_bit) {
 					vars.resize(container_size+1);
 					negate.resize(container_size+1);
-				}
+				//}
 				// subtract bit
 				vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
 				negate[this->max_full_adders] = false;
-				// output value bit
-				vars[this->max_full_adders+1] = this->output_value_variables.at({idx, w_1});
+				// adder output value bit
+				vars[this->max_full_adders+1] = this->adder_output_value_variables.at({idx, w_1});
 				negate[this->max_full_adders+1] = true;
 				// shifted value bit
 				vars[this->max_full_adders+2] = this->shift_output_variables.at({idx, w_2});
@@ -1032,6 +1037,7 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 				// add to solver
 				this->constraint_counter++;
 				this->create_arbitrary_clause(vars, negate);
+				/*
 				if (!lowest_bit) {
 					// swap subtract with select bit
 					vars[this->max_full_adders] = this->input_negate_select_variables.at(idx);
@@ -1040,6 +1046,7 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 					this->constraint_counter++;
 					this->create_arbitrary_clause(vars, negate);
 				}
+				 */
 			}
 		}
 	}
@@ -1109,6 +1116,7 @@ void scm::get_solution_from_backend() {
 	this->negate_select.clear();
 	this->subtract.clear();
 	this->post_adder_shift_value.clear();
+	this->add_result_values.clear();
 	this->output_values.clear();
 	// get solution
 	for (int idx = 0; idx <= this->num_adders; idx++) {
@@ -1142,6 +1150,10 @@ void scm::get_solution_from_backend() {
 				for (auto w = 0; w < this->shift_word_size; w++) {
 					this->post_adder_shift_value[idx] += (this->get_result_value(this->input_post_adder_shift_value_variables[{idx, w}]) << w);
 				}
+			}
+			// add result
+			for (auto w = 0; w < this->word_size; w++) {
+				this->add_result_values[idx] += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 			}
 		}
 	}
