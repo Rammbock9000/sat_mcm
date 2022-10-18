@@ -51,7 +51,7 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 		this->word_size++;
 	}
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
-	//this->num_adders = (int)non_one_unique_constants.size()-1;
+	this->num_adders = (int)non_one_unique_constants.size()-1;
 	std::cout << "min num adders = " << this->num_adders+1 << std::endl;
 	// set constants vector
 	this->C.clear();
@@ -114,8 +114,7 @@ void scm::solve() {
 		++this->num_adders;
 		this->optimization_loop();
 	}
-	// check if we can even optimize the number of full adders and return if not
-	//if (this->num_adders == this->C.size() or !this->minimize_full_adders) return;
+	// check if we should even optimize the number of full adders and return if not
 	if (!this->minimize_full_adders) return;
 	while (this->found_solution) {
 		// count current # of full adders
