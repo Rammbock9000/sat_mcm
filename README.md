@@ -1,7 +1,7 @@
 Installation instructions
 
 This project is set up to be extendable to various SAT backends.
-Only CaDiCaL is currently supported.
+CaDiCaL and Z3 are currently supported.
 
 0) Go to the repository directory via
 
