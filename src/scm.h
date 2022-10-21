@@ -439,7 +439,6 @@ private:
 	//// CREATE ALL VARIABLES ////
 	//////////////////////////////
 	void create_input_node_variables(); // idx = 0 is the input node that has a constant value 0 as output
-	void create_constant_zero_variable();
 	void create_input_select_mux_variables(int idx);
 	void create_input_select_selection_variables(int idx);
 	void create_input_shift_select_variable(int idx);
@@ -564,11 +563,6 @@ private:
 	 * < node idx, bit, full adder idx > -> variable idx
 	 */
 	std::map<std::tuple<int, int, int>, int> full_adder_alloc_variables;
-	/*!
-	 * a variable that is equal to a constant zero (needed for shifter)
-	 * variable idx
-	 */
-	int constant_zero_variable = -1;
 };
 
 

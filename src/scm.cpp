@@ -195,8 +195,6 @@ void scm::construct_problem() {
 }
 
 void scm::create_variables() {
-	if (!this->quiet) std::cout << "      creating constant zero variables" << std::endl;
-	this->create_constant_zero_variable();
 	if (!this->quiet) std::cout << "      creating input node variables" << std::endl;
 	this->create_input_node_variables();
 	for (int i=1; i<=this->num_adders; i++) {
@@ -283,13 +281,6 @@ void scm::create_input_node_variables() {
 		this->output_value_variables[{0, i}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 	}
-}
-
-void scm::create_constant_zero_variable() {
-	//this->constant_zero_variable = ++this->variable_counter;
-	//this->create_new_variable(this->variable_counter);
-	//this->force_bit(this->constant_zero_variable, 0);
-	//this->constraint_counter++;
 }
 
 void scm::create_input_select_mux_variables(int idx) {
@@ -735,10 +726,7 @@ void scm::create_shift_constraints(int idx) {
 					// shifter input is the output of the input node with idx = 0
 					zero_input_var_idx = this->output_value_variables.at({0, w});
 					zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
-					if (connect_zero_const) {
-						one_input_var_idx = this->constant_zero_variable;
-					}
-					else {
+					if (!connect_zero_const) {
 						one_input_var_idx = this->output_value_variables.at({0, w_prev});
 					}
 				}
@@ -746,10 +734,7 @@ void scm::create_shift_constraints(int idx) {
 					// shifter input is the left shift-select-mux
 					zero_input_var_idx = this->shift_select_output_variables.at({idx, scm::left, w});
 					zero_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
-					if (connect_zero_const) {
-						one_input_var_idx = this->constant_zero_variable;
-					}
-					else {
+					if (!connect_zero_const) {
 						one_input_var_idx = this->shift_select_output_variables.at({idx, scm::left, w_prev});
 					}
 				}
@@ -758,10 +743,7 @@ void scm::create_shift_constraints(int idx) {
 				// connect output of previous stage
 				zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w});
 				zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
-				if (connect_zero_const) {
-					one_input_var_idx = this->constant_zero_variable;
-				}
-				else {
+				if (!connect_zero_const) {
 					one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
 				}
 			}
@@ -844,10 +826,7 @@ void scm::create_post_adder_shift_constraints(int idx) {
 				// shifter input is the adder output
 				zero_input_var_idx = this->adder_output_value_variables.at({idx, w});
 				zero_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
-				if (connect_zero_const) {
-					one_input_var_idx = this->constant_zero_variable;
-				}
-				else {
+				if (!connect_zero_const) {
 					one_input_var_idx = this->adder_output_value_variables.at({idx, w_prev});
 				}
 			}
@@ -857,11 +836,7 @@ void scm::create_post_adder_shift_constraints(int idx) {
 				zero_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w});
 				//zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
 				zero_input_sign_bit_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
-				if (connect_zero_const) {
-					one_input_var_idx = this->constant_zero_variable;
-				}
-				else {
-					//one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
+				if (!connect_zero_const) {
 					one_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
 				}
 			}
