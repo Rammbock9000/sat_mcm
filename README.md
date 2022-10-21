@@ -1,7 +1,7 @@
 Installation instructions
 
 This project is set up to be extendable to various SAT backends.
-CaDiCaL and Z3 are currently supported.
+CaDiCaL, Glucose-Syrup and Z3 are currently supported.
 
 0) Go to the repository directory via
 
@@ -32,8 +32,8 @@ make
 
 e.g.
 
-./satscm 1:3:11:3:22 cadical 42 1 0 1
-to start the program for constants 1, 3, 11, 3 and 22 (preprocessed to 3 and 11) with 42 seconds timeout, 1 CPU thread allowed and with debug messages using CaDiCaL as backend solver and optimizing the full adder count for the optimal number of adders.
+./satscm 1:3:11:3:22 syrup 42 9 0 1
+to start the program for constants 1, 3, 11, 3 and 22 (preprocessed to 3 and 11) with 42 seconds timeout, 9 CPU thread allowed and with debug messages using Glucose-Syrup as backend solver and optimizing the full adder count for the optimal number of adders.
 
 Note that CaDiCaL only supports single-thread solving.
 Once a solution is found, sat_scm prints a description of the resulting SCM circuit on the console.
