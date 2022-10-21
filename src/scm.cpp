@@ -445,169 +445,191 @@ void scm::create_new_variable(int idx) {
 	(void) idx; // just do nothing -> should be overloaded by backend if a variable must be explicitly created
 }
 
-void scm::create_1xN_implication(int a, const std::vector<int> &b) {
-	// todo: implement
-}
-
-void scm::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
-	// todo: implement
-}
-
-void scm::create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate) {
-	// todo: implement
-}
-
-void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
-	// todo: implement
-}
-
-void scm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) {
-	// todo: implement
-}
-
-void scm::create_or(std::vector<int> &x) {
-	// todo: implement
-}
-
-void scm::create_1x1_negated_implication(int a, int b) {
-	// todo: implement
-}
-
-void scm::create_1x1_implication(int a, int b) {
-	// todo: implement
-}
-
-void scm::create_1x1_equivalence(int x, int y) {
+void scm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
+	this->constraint_counter++;
 	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << -x << " " << y << std::endl;
-	// 2)
-	this->cnf_clauses << x << " " << -y << std::endl;
-}
-
-void scm::create_2x1_mux(int a, int b, int s, int y) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << -a << " " << s << " " << y << std::endl;
-	// 2)
-	this->cnf_clauses << -b << " " << -s << " " << y << std::endl;
-	// 3)
-	this->cnf_clauses << b << " " << -s << " " << -y << std::endl;
-	// 4)
-	this->cnf_clauses << a << " " << s << " " << -y << std::endl;
-	// 5)
-	this->cnf_clauses << -a << " " << -b << " " << y << std::endl;
-	// 6)
-	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
-}
-
-void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << -a << " " << y << std::endl;
-	// 2)
-	this->cnf_clauses << -b << " " << -s << " " << y << std::endl;
-	// 3)
-	this->cnf_clauses << b << " " << -s << " " << -y << std::endl;
-	// 4)
-	this->cnf_clauses << a << " " << s << " " << -y << std::endl;
-	// 5)
-	this->cnf_clauses << -a << " " << -s << std::endl;
-	// 6)
-	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
-}
-
-void scm::create_2x1_mux_zero_const(int a, int s, int y) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << -s << " " << -y << std::endl;
-	// 2)
-	this->cnf_clauses << a << " " << -y << std::endl;
-	// 3)
-	this->cnf_clauses << -a << " " << s << " " << y << std::endl;
-}
-
-void scm::create_2x1_xor(int a, int b, int y) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << a << " " << b << " " << -y << std::endl;
-	// 2)
-	this->cnf_clauses << a << " " << -b << " " << y << std::endl;
-	// 3)
-	this->cnf_clauses << -a << " " << b << " " << y << std::endl;
-	// 4)
-	this->cnf_clauses << -a << " " << -b << " " << -y << std::endl;
-}
-
-void scm::create_add_sum(int a, int b, int c_i, int s) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << a << " " << -b << " " << c_i << " " << s << std::endl;
-	// 2)
-	this->cnf_clauses << -a << " " << b << " " << c_i << " " << s << std::endl;
-	// 3)
-	this->cnf_clauses << a << " " << b << " " << c_i << " " << -s << std::endl;
-	// 4)
-	this->cnf_clauses << -a << " " << -b << " " << c_i << " " << -s << std::endl;
-	// 5)
-	this->cnf_clauses << a << " " << -b << " " << -c_i << " " << -s << std::endl;
-	// 6)
-	this->cnf_clauses << -a << " " << b << " " << -c_i << " " << -s << std::endl;
-	// 7)
-	this->cnf_clauses << a << " " << b << " " << -c_i << " " << s << std::endl;
-	// 8)
-	this->cnf_clauses << -a << " " << -b << " " << -c_i << " " << s << std::endl;
-}
-
-void scm::create_add_carry(int a, int b, int c_i, int c_o) {
-	if (!this->write_cnf) return;
-	// 1)
-	this->cnf_clauses << -a << " " << -b << " " << c_o << std::endl;
-	// 2)
-	this->cnf_clauses << a << " " << c_i << " " << -c_o << std::endl;
-	// 3)
-	this->cnf_clauses << b << " " << c_i << " " << -c_o << std::endl;
-	// 4)
-	this->cnf_clauses << a << " " << b << " " << -c_o << std::endl;
-	// 5)
-	this->cnf_clauses << -b << " " << -c_i << " " << c_o << std::endl;
-	// 6)
-	this->cnf_clauses << -a << " " << -c_i << " " << c_o << std::endl;
-}
-
-void scm::force_bit(int x, int val) {
-	if (!this->write_cnf) return;
-	if (val == 1)
-		this->cnf_clauses << x << std::endl;
-	else
-		this->cnf_clauses << -x << std::endl;
-}
-
-void scm::forbid_number(const std::vector<int> &x, int num) {
-	if (!this->write_cnf) return;
-	auto num_bits = (int)x.size();
-	for (int i=0; i<num_bits; i++) {
-		auto bit = (num >> i) & 1;
-		if (bit == 1) {
-			this->cnf_clauses << -x[i] << " ";
-		}
-		else {
-			this->cnf_clauses << x[i] << " ";
-		}
+	for (const auto &it : a) {
+		this->cnf_clauses << (it.second?-it.first:it.first) << " ";
 	}
 	this->cnf_clauses << std::endl;
 }
 
-void scm::force_number(const std::vector<int> &x, int num) {
-	if (!this->write_cnf) return;
+void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
+	// 1)
+	this->create_arbitrary_clause({{sel, true}, {s_a, true}, {a, false}});
+	// 2)
+	this->create_arbitrary_clause({{sel, true}, {s_a, false}, {a, true}});
+}
+
+void scm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) {
+	// 1)
+	this->create_arbitrary_clause({{sub, false}, {s_a, false}, {s_b, false}, {s_y, true}});
+	// 2)
+	this->create_arbitrary_clause({{sub, false}, {s_a, true}, {s_b, true}, {s_y, false}});
+	// 3)
+	this->create_arbitrary_clause({{sub, true}, {s_a, false}, {s_b, true}, {s_y, true}});
+	// 4)
+	this->create_arbitrary_clause({{sub, true}, {s_a, true}, {s_b, false}, {s_y, false}});
+}
+
+void scm::create_or(std::vector<int> &x) {
+	std::vector<std::pair<int, bool>> v(x.size());
+	for (auto i=0; i<x.size(); i++) {
+		auto &val = x[i];
+		if (val > 0) v[i] = {val, false};
+		else v[i] = {-val, true};
+	}
+	this->create_arbitrary_clause(v);
+}
+
+void scm::create_1x1_implication(int a, int b) {
+	this->create_arbitrary_clause({{a, true}, {b, false}});
+}
+
+void scm::create_1x1_negated_implication(int a, int b) {
+	this->create_arbitrary_clause({{a, true}, {b, true}});
+}
+
+void scm::create_1xN_implication(int a, const std::vector<int> &b) {
+	std::vector<std::pair<int, bool>> v(b.size()+1);
+	for (auto i=0; i<b.size(); i++) {
+		v[i] = {b[i], false};
+	}
+	v[b.size()] = {a, true};
+	this->create_arbitrary_clause(v);
+}
+
+void scm::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
+	std::vector<std::pair<int, bool>> v(b.size()+a.size());
+	for (auto i=0; i<a.size(); i++) {
+		v[i] = {a[i], true};
+	}
+	for (auto i=0; i<b.size(); i++) {
+		v[i+a.size()] = {b[i], false};
+	}
+	this->create_arbitrary_clause(v);
+}
+
+void scm::create_1x1_equivalence(int x, int y) {
+	// 1)
+	this->create_arbitrary_clause({{x, true}, {y, false}});
+	// 2)
+	this->create_arbitrary_clause({{x, false}, {y, true}});
+}
+
+void scm::create_2x1_mux(int a, int b, int s, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, true}, {s, false}, {y, false}});
+	// 2)
+	this->create_arbitrary_clause({{b, true}, {s, true}, {y, false}});
+	// 3)
+	this->create_arbitrary_clause({{b, false}, {s, true}, {y, true}});
+	// 4)
+	this->create_arbitrary_clause({{a, false}, {s, false}, {y, true}});
+	// 5)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {y, false}});
+	// 6)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
+}
+
+void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, true}, {y, false}});
+	// 2)
+	this->create_arbitrary_clause({{b, true}, {s, true}, {y, false}});
+	// 3)
+	this->create_arbitrary_clause({{b, false}, {s, true}, {y, true}});
+	// 4)
+	this->create_arbitrary_clause({{a, false}, {s, false}, {y, true}});
+	// 5)
+	this->create_arbitrary_clause({{a, true}, {s, true}});
+	// 6)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
+}
+
+void scm::create_2x1_mux_zero_const(int a, int s, int y) {
+	// 1)
+	this->create_arbitrary_clause({{s, true}, {y, true}});
+	// 2)
+	this->create_arbitrary_clause({{a, false}, {y, true}});
+	// 3)
+	this->create_arbitrary_clause({{a, true}, {s, false}, {y, false}});
+}
+
+void scm::create_2x1_xor(int a, int b, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
+	// 2)
+	this->create_arbitrary_clause({{a, false}, {b, true}, {y, false}});
+	// 3)
+	this->create_arbitrary_clause({{a, true}, {b, false}, {y, false}});
+	// 4)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {y, true}});
+}
+
+void scm::create_add_sum(int a, int b, int c_i, int s) {
+	// 1)
+	this->create_arbitrary_clause({{a, false}, {b, true}, {c_i, false}, {s, false}});
+	// 2)
+	this->create_arbitrary_clause({{a, true}, {b, false}, {c_i, false}, {s, false}});
+	// 3)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {c_i, false}, {s, true}});
+	// 4)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {c_i, false}, {s, true}});
+	// 5)
+	this->create_arbitrary_clause({{a, false}, {b, true}, {c_i, true}, {s, true}});
+	// 6)
+	this->create_arbitrary_clause({{a, true}, {b, false}, {c_i, true}, {s, true}});
+	// 7)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {c_i, true}, {s, false}});
+	// 8)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {c_i, true}, {s, false}});
+}
+
+void scm::create_add_carry(int a, int b, int c_i, int c_o) {
+	// 1)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {c_o, false}});
+	// 2)
+	this->create_arbitrary_clause({{a, false}, {c_i, false}, {c_o, true}});
+	// 3)
+	this->create_arbitrary_clause({{b, false}, {c_i, false}, {c_o, true}});
+	//this->solver.add((this->variables.at(b)) or (this->variables.at(c_i)) or (not this->variables.at(c_o)));
+	// 4)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {c_o, true}});
+	// 5)
+	this->create_arbitrary_clause({{b, true}, {c_i, true}, {c_o, false}});
+	// 6)
+	this->create_arbitrary_clause({{a, true}, {c_i, true}, {c_o, false}});
+}
+
+void scm::force_bit(int x, int val) {
+	this->create_arbitrary_clause({{x, val != 1}});
+}
+
+void scm::forbid_number(const std::vector<int> &x, int val) {
 	auto num_bits = (int)x.size();
+	std::vector<std::pair<int, bool>> v(num_bits);
 	for (int i=0; i<num_bits; i++) {
-		auto bit = (num >> i) & 1;
+		auto bit = (val >> i) & 1;
 		if (bit == 1) {
-			this->cnf_clauses << x[i] << std::endl;
+			v[i] = {x[i], true};
 		}
 		else {
-			this->cnf_clauses << -x[i] << std::endl;
+			v[i] = {x[i], false};
+		}
+	}
+	this->create_arbitrary_clause(v);
+}
+
+void scm::force_number(const std::vector<int> &x, int val) {
+	auto num_bits = (int)x.size();
+	for (int i=0; i<num_bits; i++) {
+		auto bit = (val >> i) & 1;
+		if (bit == 1) {
+			this->create_arbitrary_clause({{x[i], false}});
+		}
+		else {
+			this->create_arbitrary_clause({{x[i], true}});
 		}
 	}
 }
@@ -991,23 +1013,20 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 	for (int x = 0; x < this->word_size; x++) { // global FA alloc for bit x
 		bool lowest_bit = x == 0;
 		int container_size = this->max_full_adders + 2;// + (lowest_bit ? 2 : 3 );
-		std::vector<int> vars(container_size);
-		std::vector<bool> negate(container_size, false);
+		std::vector<std::pair<int, bool>> vars(container_size);
+		//std::vector<bool> negate(container_size, false);
 		for (int y = 0; y < this->max_full_adders; y++) { // global FA alloc index y
-			vars[y] = this->full_adder_alloc_variables.at({idx, x, y});
+			vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
 		}
 		for (int w_1 = x; w_1 < this->word_size; w_1++) {
 			//if (lowest_bit) {
 				vars.resize(container_size);
-				negate.resize(container_size);
 			//}
 			// for a - (b << s)
 			// subtract bit
-			vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
-			negate[this->max_full_adders] = true;
+			vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
 			// adder output value bit
-			vars[this->max_full_adders+1] = this->adder_output_value_variables.at({idx, w_1});
-			negate[this->max_full_adders+1] = true;
+			vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
 			/*
 			if (!lowest_bit) {
 				// negate select bit
@@ -1017,25 +1036,21 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 			 */
 			// add to solver
 			this->constraint_counter++;
-			this->create_arbitrary_clause(vars, negate);
+			this->create_arbitrary_clause(vars);
 			// for a + (b << s) /* and (a << s) - b */
 			for (int w_2 = 0; w_2 <= x; w_2++) {
 				//if (lowest_bit) {
 					vars.resize(container_size+1);
-					negate.resize(container_size+1);
 				//}
 				// subtract bit
-				vars[this->max_full_adders] = this->input_negate_value_variables.at(idx);
-				negate[this->max_full_adders] = false;
+				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
 				// adder output value bit
-				vars[this->max_full_adders+1] = this->adder_output_value_variables.at({idx, w_1});
-				negate[this->max_full_adders+1] = true;
+				vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
 				// shifted value bit
-				vars[this->max_full_adders+2] = this->shift_output_variables.at({idx, w_2});
-				negate[this->max_full_adders+2] = true;
+				vars[this->max_full_adders+2] = {this->shift_output_variables.at({idx, w_2}), true};
 				// add to solver
 				this->constraint_counter++;
-				this->create_arbitrary_clause(vars, negate);
+				this->create_arbitrary_clause(vars);
 				/*
 				if (!lowest_bit) {
 					// swap subtract with select bit

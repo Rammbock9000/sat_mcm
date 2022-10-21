@@ -81,17 +81,16 @@ protected:
 	 * @param idx variable index (=name)
 	 */
 	virtual void create_new_variable(int idx);
+	/*!
+	 * helper function to create an arbitrary clause:
+	 * @param a < variable idx, negate >
+	 *   -> negate the variable if negate == true
+	 */
+	virtual void create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a);
 
 	///////////////////////////////////////////////////
 	//// create clauses for the following circuits ////
 	///////////////////////////////////////////////////
-	/*!
-	 * create an arbitrary clause:
-	 * negate a_i if negate[i] = true
-	 * @param a variable indices
-	 * @param negate
-	 */
-	virtual void create_arbitrary_clause(const std::vector<int> &a, const std::vector<bool> &negate);
 	/*!
 	 * disallow shifting bits that are not equal to the sign bit
 	 * clauses are:
@@ -259,13 +258,13 @@ protected:
 	 * @param x vector that contains all bits
 	 * @param num
 	 */
-	virtual void forbid_number(const std::vector<int> &x, int num);
+	virtual void forbid_number(const std::vector<int> &x, int val);
 	/*!
 	 * force x == num
 	 * @param x vector that contains all bits
 	 * @param num
 	 */
-	virtual void force_number(const std::vector<int> &x, int num);
+	virtual void force_number(const std::vector<int> &x, int val);
 
 	/*!
 	 * @param n

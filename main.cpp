@@ -16,6 +16,10 @@
 #include <scm_z3.h>
 #endif
 
+#ifdef USE_SYRUP
+#include <scm_syrup.h>
+#endif
+
 int main(int argc, char** argv) {
 	std::unique_ptr<scm> solver;
 	std::vector<int> C;
@@ -28,6 +32,9 @@ int main(int argc, char** argv) {
 	bool allow_node_output_shift = false;
 #ifdef USE_Z3
 	solver_name = "z3";
+#endif
+#ifdef USE_SYRUP
+	solver_name = "syrup";
 #endif
 #ifdef USE_CADICAL
 	solver_name = "cadical";
@@ -125,7 +132,7 @@ int main(int argc, char** argv) {
 	}
 	std::cout << "Starting OSCM for constant" << (C.size()>1?"s\n":" ");
 	for (auto &c : C) {
-		std::cout << (C.size()>1?"  ":"") << c << std::endl;
+		std::cout << (C.size()>1?"  ":"") << c << (C.size()>1?"\n":" ");
 	}
 	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
@@ -134,6 +141,13 @@ int main(int argc, char** argv) {
 		solver = std::make_unique<scm_cadical>(C, timeout, quiet, allow_negative_numbers);
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
+#endif
+	}
+	else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
+#ifdef USE_SYRUP
+		solver = std::make_unique<scm_syrup>(C, timeout, quiet, threads, allow_negative_numbers);
+#else
+		throw std::runtime_error("Link Glucose-Syrup lib to use syrup backend");
 #endif
 	}
 	else if (solver_name == "z3") {

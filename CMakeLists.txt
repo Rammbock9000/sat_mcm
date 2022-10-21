@@ -46,6 +46,27 @@ ELSE (CADICAL_LIB AND CADICAL_H)
     message(STATUS "Could not find CaDiCaL (${CADICAL_LIB} and ${CADICAL_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
 ENDIF (CADICAL_LIB AND CADICAL_H)
 
+# find pthread lib for Glucose Syrup
+find_library(PTHREAD_LIB
+        NAMES libpthread.so libpthread.a libpthread.dylib
+        DOC "pthread lib used by Glucose Syrup"
+)
+
+# find Glucose Syrup
+find_library(SYRUP_LIB
+        NAMES libsyrup.so libsyrup.a libsyrup.dylib
+        DOC "Directory of the Glucose Syrup library")
+FIND_PATH(SYRUP_H
+        NAMES core/Solver.h
+        DOC "Path to main Glucose Syrup header file Solver.h"
+        )
+IF (SYRUP_LIB AND SYRUP_H AND PTHREAD_LIB)
+    message(STATUS "Found Glucose Syrup: ${SYRUP_LIB} and ${SYRUP_H} and ${PTHREAD_LIB}")
+    add_definitions(-DUSE_SYRUP)
+ELSE (SYRUP_LIB AND SYRUP_H AND PTHREAD_LIB)
+    message(STATUS "Could not find Glucose Syrup (${SYRUP_LIB} and ${SYRUP_H} and ${PTHREAD_LIB}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
+ENDIF (SYRUP_LIB AND SYRUP_H AND PTHREAD_LIB)
+
 # set C++ standard
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
@@ -60,6 +81,7 @@ file(GLOB SOURCES
         # derived classes
         src/scm_cadical.cpp
         src/scm_z3.cpp
+        src/scm_syrup.cpp
      )
 
 # add executable
@@ -76,6 +98,9 @@ ENDIF(Z3_H)
 if(CADICAL_H)
     include_directories(${CADICAL_H})
 ENDIF(CADICAL_H)
+if(SYRUP_H)
+    include_directories(${SYRUP_H})
+ENDIF(SYRUP_H)
 
 # link libraries
 if(SCALP_LIB)
@@ -87,6 +112,12 @@ ENDIF(Z3_LIB)
 if(CADICAL_LIB)
     target_link_libraries(satscm ${CADICAL_LIB})
 ENDIF(CADICAL_LIB)
+if(PTHREAD_LIB)
+    target_link_libraries(satscm ${PTHREAD_LIB})
+ENDIF(PTHREAD_LIB)
+if(SYRUP_LIB)
+    target_link_libraries(satscm ${SYRUP_LIB})
+ENDIF(SYRUP_LIB)
 
 # install
 install(FILES ${HEADERS}
