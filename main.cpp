@@ -177,5 +177,8 @@ int main(int argc, char** argv) {
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;
 	solver->print_solution();
+	auto [a,b] = solver->solution_is_optimal();
+	std::cerr << "#Add optimal = " << a << std::endl;
+	std::cerr << "#FAs optimal = " << b << std::endl;
 	return 0;
 }

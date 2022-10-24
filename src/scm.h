@@ -58,6 +58,12 @@ public:
 	 * @return a string that uniquely describes the resulting adder graph
 	 */
 	std::string get_adder_graph_description();
+	/*!
+	 * @return whether the computed solution is optimal
+	 *   -> pair.first: optimal w.r.t. number of add operations
+	 *   -> pair.second: optimal w.r.t. full adder count (low level costs)
+	 */
+	std::pair<int, int> solution_is_optimal();
 
 protected:
 	/*!
@@ -320,6 +326,14 @@ protected:
 	 * if we ran into a timeout during solving
 	 */
 	bool ran_into_timeout = false;
+	/*!
+	 * the solution has the optimal number of adders
+	 */
+	bool num_add_opt = false;
+	/*!
+	 * the solution has the optimal number of full adders
+	 */
+	bool num_FA_opt = false;
 	/*!
 	 * solver timeout
 	 */

@@ -85,6 +85,8 @@ void scm::optimization_loop() {
 }
 
 void scm::solve() {
+	this->num_FA_opt = true;
+	this->num_add_opt = true;
 	if (!this->quiet) {
 		std::cout << "trying to solve SCM problem for following constants: ";
 		for (auto &c : this->C) {
@@ -108,9 +110,16 @@ void scm::solve() {
 	while (!this->found_solution) {
 		++this->num_adders;
 		this->optimization_loop();
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_add_opt = false;
+		}
 	}
 	// check if we should even optimize the number of full adders and return if not
-	if (!this->minimize_full_adders) return;
+	if (!this->minimize_full_adders) {
+		this->num_FA_opt = false; // don't know if solution is optimal w.r.t. full adders
+		return;
+	}
 	while (this->found_solution) {
 		// count current # of full adders
 		// except for the last node because its output always has a constant number of full adders
@@ -170,6 +179,10 @@ void scm::solve() {
 			return;
 		}
 		this->optimization_loop();
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_FA_opt = false;
+		}
 	}
 	this->found_solution = true;
 }
@@ -1555,4 +1568,8 @@ void scm::also_minimize_full_adders() {
 
 void scm::allow_node_output_shift() {
 	this->enable_node_output_shift = true;
+}
+
+std::pair<int, int> scm::solution_is_optimal() {
+	return {this->num_add_opt, this->num_FA_opt};
 }
