@@ -13,19 +13,14 @@
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
-	this->calc_twos_complement = false;
+	this->calc_twos_complement = allow_negative_numbers;
 	for (auto &c : this->C) {
 		// ignore 0
 		if (c == 0) continue;
 		auto original_number = c;
 		int shifted_bits = 0;
-		// handle negative numbers
-		if (allow_negative_numbers) {
-			if (c < 0) {
-				this->calc_twos_complement = true;
-			}
-		}
-		else {
+		// handle negative numbers if only positive fundamentals are allowed
+		if (!allow_negative_numbers) {
 			if (c < 0) {
 				c = -c;
 			}
@@ -125,7 +120,8 @@ void scm::solve() {
 				// more adders allocated than necessary
 				continue;
 			}
-			int FAs_for_this_node = (int)std::ceil(std::log2(this->add_result_values.at(idx)));
+			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
+			std::cout << "FAs for node " << idx << " = " << FAs_for_this_node << " = ceil(log2(" << this->add_result_values.at(idx) << ")) without accounting for shift" << std::endl;
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
 			if (idx > 1 and this->shift_input_select.at(idx) == 1) {
@@ -951,38 +947,95 @@ void scm::create_adder_constraints(int idx) {
 }
 
 void scm::create_full_adder_allocation_constraints(int idx) {
-	for (int x = 0; x < this->word_size; x++) { // global FA alloc for bit x
-		int container_size = this->max_full_adders + 3;// + (lowest_bit ? 2 : 3 );
-		std::vector<std::pair<int, bool>> vars(container_size);
-		//std::vector<bool> negate(container_size, false);
-		for (int y = 0; y < this->max_full_adders; y++) { // global FA alloc index y
-			vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
-		}
-		for (int w_1 = x; w_1 < this->word_size; w_1++) {
-			// for (a << s) - b
-			// subtract bit
-			vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
-			// adder output value bit
-			vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
-			// negate select bit
-			vars[this->max_full_adders+2] = {this->input_negate_select_variables.at(idx), true};
-			// add to solver
-			this->create_arbitrary_clause(vars);
-			// for a + (b << s) and a - (b << s)
-			for (int w_2 = 0; w_2 <= x; w_2++) {
+	// define global FA alloc for each bit with index x
+	if (this->calc_twos_complement) {
+		// negative fundamentals are allowed
+		for (int x = 0; x < this->word_size-1; x++) {
+			int container_size = this->max_full_adders + 4;
+			std::vector<std::pair<int, bool>> vars(container_size);
+			// y: global FA alloc index
+			for (int y = 0; y < this->max_full_adders; y++) {
+				vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
+			}
+			for (int w_1 = x; w_1 < this->word_size-1; w_1++) {
+				// for (a << s) - b
 				// subtract bit
-				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
+				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
+				// negate select bit
+				vars[this->max_full_adders + 1] = {this->input_negate_select_variables.at(idx), true};
+				// adder output value bit = 1 and adder output value sign bit = 0
+				vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
+				vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
+				// add to solver
+				this->create_arbitrary_clause(vars);
+				// adder output value bit = 0 and adder output value sign bit = 1
+				vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), false};
+				vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
+				// add to solver
+				this->create_arbitrary_clause(vars);
+				// for a + (b << s) and a - (b << s)
+				for (int w_2 = 0; w_2 <= x; w_2++) {
+					// subtract bit
+					vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
+					// shifted value bit
+					vars[this->max_full_adders + 1] = {this->shift_output_variables.at({idx, w_2}), true};
+					// adder output value bit = 1 and adder output value sign bit = 0
+					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
+					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+					// adder output value bit = 0 and adder output value sign bit = 1
+					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), false};
+					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+					// swap subtract with select bit
+					vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+					// adder output value bit = 1 and adder output value sign bit = 0
+					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
+					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+				}
+			}
+		}
+	}
+	else {
+		// only positive fundamentals are allowed
+		for (int x = 0; x < this->word_size; x++) {
+			int container_size = this->max_full_adders + 3;
+			std::vector<std::pair<int, bool>> vars(container_size);
+			// y: global FA alloc index
+			for (int y = 0; y < this->max_full_adders; y++) {
+				vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
+			}
+			for (int w_1 = x; w_1 < this->word_size; w_1++) {
+				// for (a << s) - b
+				// subtract bit
+				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
 				// adder output value bit
 				vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
-				// shifted value bit
-				vars[this->max_full_adders+2] = {this->shift_output_variables.at({idx, w_2}), true};
+				// negate select bit
+				vars[this->max_full_adders+2] = {this->input_negate_select_variables.at(idx), true};
 				// add to solver
 				this->create_arbitrary_clause(vars);
-
-				// swap subtract with select bit
-				vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
-				// add to solver
-				this->create_arbitrary_clause(vars);
+				// for a + (b << s) and a - (b << s)
+				for (int w_2 = 0; w_2 <= x; w_2++) {
+					// subtract bit
+					vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
+					// adder output value bit
+					vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
+					// shifted value bit
+					vars[this->max_full_adders+2] = {this->shift_output_variables.at({idx, w_2}), true};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+					// swap subtract with select bit
+					vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
+					// add to solver
+					this->create_arbitrary_clause(vars);
+				}
 			}
 		}
 	}
@@ -990,9 +1043,10 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 
 void scm::create_full_adder_overlap_constraints(int idx_1) {
 	if (this->max_full_adders <= 0) return;
-	for (int w_1 = 0; w_1 < this->word_size; w_1++) {
+	auto w_lim = (this->calc_twos_complement?this->word_size-1:this->word_size);
+	for (int w_1 = 0; w_1 < w_lim; w_1++) {
 		for (int idx_2 = idx_1; idx_2 <= this->num_adders; idx_2++) {
-			for (int w_2 = 0; w_2 < this->word_size; w_2++) {
+			for (int w_2 = 0; w_2 < w_lim; w_2++) {
 				if (idx_1 == idx_2 and w_1 == w_2) continue; // no overlap with itself
 				for (int x = 0; x < this->max_full_adders; x++) {
 					this->create_1x1_negated_implication(this->full_adder_alloc_variables.at({idx_1, w_1, x}), this->full_adder_alloc_variables.at({idx_2, w_2, x}));
@@ -1086,6 +1140,7 @@ void scm::get_solution_from_backend() {
 			for (auto w = 0; w < this->word_size; w++) {
 				this->add_result_values[idx] += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 			}
+			if (this->calc_twos_complement) this->add_result_values[idx] = sign_extend(this->add_result_values[idx], this->word_size);
 		}
 	}
 }
@@ -1405,7 +1460,8 @@ void scm::create_mcm_output_variables(int idx) {
 }
 
 void scm::create_full_adder_alloc_variables(int idx) {
-	for (int w = 0; w < this->word_size; w++) {
+	auto w_lim = (this->calc_twos_complement?this->word_size-1:this->word_size);
+	for (int w = 0; w < w_lim; w++) {
 		for (int x = 0; x < this->max_full_adders; x++) {
 			this->full_adder_alloc_variables[{idx, w, x}] = ++this->variable_counter;
 			this->create_new_variable(this->variable_counter);
