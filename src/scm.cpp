@@ -121,7 +121,6 @@ void scm::solve() {
 				continue;
 			}
 			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
-			std::cout << "FAs for node " << idx << " = " << FAs_for_this_node << " = ceil(log2(" << this->add_result_values.at(idx) << ")) without accounting for shift" << std::endl;
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
 			if (idx > 1 and this->shift_input_select.at(idx) == 1) {
