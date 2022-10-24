@@ -140,8 +140,10 @@ void scm::solve() {
 				shifter_input = shifter_input >> 1;
 				shifter_input_non_zero_LSBs++;
 			}
-			if (this->subtract.at(idx) == 0) {
-				// for additions, we do not need to use a full adder for the shifted LSBs
+			if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
+				// we do not need to use a full adder for the shifted LSBs
+				//   for a + b
+				//   and a - (b << s)
 				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
 			}
 			/*
@@ -986,37 +988,25 @@ void scm::create_adder_constraints(int idx) {
 
 void scm::create_full_adder_allocation_constraints(int idx) {
 	for (int x = 0; x < this->word_size; x++) { // global FA alloc for bit x
-		bool lowest_bit = x == 0;
-		int container_size = this->max_full_adders + 2;// + (lowest_bit ? 2 : 3 );
+		int container_size = this->max_full_adders + 3;// + (lowest_bit ? 2 : 3 );
 		std::vector<std::pair<int, bool>> vars(container_size);
 		//std::vector<bool> negate(container_size, false);
 		for (int y = 0; y < this->max_full_adders; y++) { // global FA alloc index y
 			vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
 		}
 		for (int w_1 = x; w_1 < this->word_size; w_1++) {
-			//if (lowest_bit) {
-				vars.resize(container_size);
-			//}
-			// for a - (b << s)
+			// for (a << s) - b
 			// subtract bit
 			vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
 			// adder output value bit
 			vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
-			/*
-			if (!lowest_bit) {
-				// negate select bit
-				vars[this->max_full_adders+2] = this->input_negate_select_variables.at(idx);
-				negate[this->max_full_adders+2] = false;
-			}
-			 */
+			// negate select bit
+			vars[this->max_full_adders+2] = {this->input_negate_select_variables.at(idx), true};
 			// add to solver
 			this->constraint_counter++;
 			this->create_arbitrary_clause(vars);
-			// for a + (b << s) /* and (a << s) - b */
+			// for a + (b << s) and a - (b << s)
 			for (int w_2 = 0; w_2 <= x; w_2++) {
-				//if (lowest_bit) {
-					vars.resize(container_size+1);
-				//}
 				// subtract bit
 				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
 				// adder output value bit
@@ -1026,16 +1016,12 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 				// add to solver
 				this->constraint_counter++;
 				this->create_arbitrary_clause(vars);
-				/*
-				if (!lowest_bit) {
-					// swap subtract with select bit
-					vars[this->max_full_adders] = this->input_negate_select_variables.at(idx);
-					negate[this->max_full_adders] = true;
-					// add to solver
-					this->constraint_counter++;
-					this->create_arbitrary_clause(vars, negate);
-				}
-				 */
+
+				// swap subtract with select bit
+				vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
+				// add to solver
+				this->constraint_counter++;
+				this->create_arbitrary_clause(vars);
 			}
 		}
 	}
