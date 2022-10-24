@@ -8,8 +8,8 @@
 
 #include <iostream>
 
-scm_cadical::scm_cadical(const std::vector<int> &C, int timeout, bool quiet, bool allow_negative_numbers)
-	: scm(C, timeout, quiet, 1, allow_negative_numbers) {}
+scm_cadical::scm_cadical(const std::vector<int> &C, int timeout, bool quiet, bool allow_negative_numbers, bool write_cnf)
+	: scm(C, timeout, quiet, 1, allow_negative_numbers, write_cnf) {}
 
 void scm_cadical::reset_backend() {
 	scm::reset_backend();

@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
 	int threads = 1;
 	bool also_minimize_full_adders = false;
 	bool allow_node_output_shift = false;
+	bool write_cnf = false;
 #ifdef USE_Z3
 	solver_name = "z3";
 #endif
@@ -130,6 +131,17 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+	if (argc > 9) {
+		std::string s(argv[9]);
+		try {
+			write_cnf = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
 	std::cout << "Starting OSCM for constant" << (C.size()>1?"s\n":" ");
 	for (auto &c : C) {
 		std::cout << (C.size()>1?"  ":"") << c << (C.size()>1?"\n":" ");
@@ -138,21 +150,21 @@ int main(int argc, char** argv) {
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL
-		solver = std::make_unique<scm_cadical>(C, timeout, quiet, allow_negative_numbers);
+		solver = std::make_unique<scm_cadical>(C, timeout, quiet, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
 #endif
 	}
 	else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
 #ifdef USE_SYRUP
-		solver = std::make_unique<scm_syrup>(C, timeout, quiet, threads, allow_negative_numbers);
+		solver = std::make_unique<scm_syrup>(C, timeout, quiet, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Glucose-Syrup lib to use syrup backend");
 #endif
 	}
 	else if (solver_name == "z3") {
 #ifdef USE_Z3
-		solver = std::make_unique<scm_z3>(C, timeout, quiet, threads, allow_negative_numbers);
+		solver = std::make_unique<scm_z3>(C, timeout, quiet, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif

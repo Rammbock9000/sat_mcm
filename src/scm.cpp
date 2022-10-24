@@ -10,8 +10,8 @@
 #include <fstream>
 #include <algorithm>
 
-scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers)
-	:	C(C), timeout(timeout), quiet(quiet), threads(threads) {
+scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
+	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
 	this->calc_twos_complement = false;
 	for (auto &c : this->C) {
@@ -182,7 +182,7 @@ void scm::solve() {
 void scm::reset_backend() {
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
-	//throw std::runtime_error("reset_backend is impossible in base class");
+	this->cnf_clauses.str("");
 }
 
 void scm::construct_problem() {
@@ -444,7 +444,7 @@ void scm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
 	for (const auto &it : a) {
 		this->cnf_clauses << (it.second?-it.first:it.first) << " ";
 	}
-	this->cnf_clauses << std::endl;
+	this->cnf_clauses << " 0" << std::endl;
 }
 
 void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
@@ -586,7 +586,6 @@ void scm::create_add_carry(int a, int b, int c_i, int c_o) {
 	this->create_arbitrary_clause({{a, false}, {c_i, false}, {c_o, true}});
 	// 3)
 	this->create_arbitrary_clause({{b, false}, {c_i, false}, {c_o, true}});
-	//this->solver.add((this->variables.at(b)) or (this->variables.at(c_i)) or (not this->variables.at(c_o)));
 	// 4)
 	this->create_arbitrary_clause({{a, false}, {b, false}, {c_o, true}});
 	// 5)
@@ -644,7 +643,6 @@ void scm::create_input_output_constraints() {
 	}
 	// force input to 1 and output to C
 	this->force_number(input_bits, 1);
-	this->constraint_counter += this->word_size;
 	if (this->C.size() == 1) {
 		// SCM
 		this->force_number(output_bits, this->C[0]);
@@ -653,7 +651,6 @@ void scm::create_input_output_constraints() {
 		// MCM
 		this->create_mcm_output_constraints();
 	}
-	this->constraint_counter += this->word_size;
 }
 
 void scm::create_input_select_constraints(int idx) {
@@ -681,11 +678,9 @@ void scm::create_input_select_constraints(int idx) {
 						if (zero_input_node_idx == one_input_node_idx) {
 							// both inputs are equal -> mux output == mux input (select line does not matter...)
 							this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
-							this->constraint_counter += 2;
 						}
 						else {
 							this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
-							this->constraint_counter += 6;
 						}
 					}
 				}
@@ -700,7 +695,6 @@ void scm::create_input_select_constraints(int idx) {
 						auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w});
 						auto one_input_var_idx = this->input_select_mux_variables.at({idx, dir, one_input_mux_idx, w});
 						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
-						this->constraint_counter += 6;
 					}
 				}
 				// increment current mux idx
@@ -753,20 +747,16 @@ void scm::create_shift_constraints(int idx) {
 				if (this->calc_twos_complement) {
 					if (connect_zero_const) {
 						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 3;
 					}
 					else {
 						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 6;
 					}
 					if (w == this->word_size-1) {
 						// these clauses are different for the sign bit
 						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, one_input_var_idx);
-						this->constraint_counter += 2;
 					}
 					else {
 						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, zero_input_var_idx);
-						this->constraint_counter += 2;
 					}
 				}
 				else {
@@ -774,22 +764,18 @@ void scm::create_shift_constraints(int idx) {
 						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
 						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
 						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
-						this->constraint_counter += 4;
 					}
 					else {
 						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 6;
 					}
 				}
 			}
 			else {
 				if (connect_zero_const) {
 					this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					this->constraint_counter += 3;
 				}
 				else {
 					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					this->constraint_counter += 6;
 				}
 			}
 		}
@@ -804,7 +790,6 @@ void scm::create_shift_constraints(int idx) {
 				shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
 			}
 			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
-			this->constraint_counter += 2;
 		}
 	}
 }
@@ -812,7 +797,6 @@ void scm::create_shift_constraints(int idx) {
 void scm::create_post_adder_shift_constraints(int idx) {
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
-		//auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
 		auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
 		auto last_disallowed_shift_bit = shift_width-1;
 		for (auto w = 0; w < this->word_size; w++) {
@@ -821,7 +805,6 @@ void scm::create_post_adder_shift_constraints(int idx) {
 			int zero_input_var_idx;
 			int zero_input_sign_bit_idx;
 			int one_input_var_idx;
-			//auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w});
 			auto mux_output_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage, w});
 			if (stage == 0) {
 				// connect shifter inputs
@@ -834,9 +817,7 @@ void scm::create_post_adder_shift_constraints(int idx) {
 			}
 			else {
 				// connect output of previous stage
-				//zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w});
 				zero_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w});
-				//zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
 				zero_input_sign_bit_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
 				if (!connect_zero_const) {
 					one_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
@@ -848,18 +829,15 @@ void scm::create_post_adder_shift_constraints(int idx) {
 					if (this->calc_twos_complement) {
 						// connect the sign bit instead of a constant zero
 						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 6;
 					}
 					else {
 						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
 						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
 						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
-						this->constraint_counter += 4;
 					}
 				}
 				else {
 					this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					this->constraint_counter += 6;
 				}
 			}
 			else {
@@ -868,16 +846,13 @@ void scm::create_post_adder_shift_constraints(int idx) {
 					if (this->calc_twos_complement) {
 						// connect the sign bit instead of a constant zero
 						this->create_2x1_mux(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 6;
 					}
 					else {
 						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-						this->constraint_counter += 3;
 					}
 				}
 				else {
 					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					this->constraint_counter += 6;
 				}
 			}
 		}
@@ -888,7 +863,6 @@ void scm::create_post_adder_shift_constraints(int idx) {
 			//int shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
 			int shift_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
 			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
-			this->constraint_counter += 2;
 		}
 	}
 }
@@ -904,12 +878,10 @@ void scm::create_shift_select_constraints(int idx) {
 			if (dir == scm::left) {
 				// left mux has left input in b input and right input in a input
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var, mux_output_var_idx);
-				this->constraint_counter += 6;
 			}
 			else {
 				// right mux has left input in '0' input and right input in '1' input
 				this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var, mux_output_var_idx);
-				this->constraint_counter += 6;
 			}
 		}
 	}
@@ -932,11 +904,9 @@ void scm::create_negate_select_constraints(int idx) {
 			auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w});
 			if (dir == scm::left) {
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var_idx, mux_output_var_idx);
-				this->constraint_counter += 6;
 			}
 			else {
 				this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var_idx, mux_output_var_idx);
-				this->constraint_counter += 6;
 			}
 		}
 	}
@@ -948,7 +918,6 @@ void scm::create_xor_constraints(int idx) {
 		auto input_var_idx = this->negate_select_output_variables.at({idx, scm::right, w});
 		auto output_var_idx = this->xor_output_variables.at({idx, w});
 		this->create_2x1_xor(negate_var_idx, input_var_idx, output_var_idx);
-		this->constraint_counter += 4;
 	}
 }
 
@@ -966,23 +935,18 @@ void scm::create_adder_constraints(int idx) {
 		// build sum
 		int a = this->negate_select_output_variables.at({idx, scm::left, w});
 		int b = this->xor_output_variables.at({idx, w});
-		//int s = this->output_value_variables.at({idx, w});
 		int s = this->adder_output_value_variables.at({idx, w});
 		this->create_add_sum(a, b, c_i, s);
-		this->constraint_counter += 8;
 		// build carry
 		int c_o = this->adder_internal_variables.at({idx, w});
 		this->create_add_carry(a, b, c_i, c_o);
-		this->constraint_counter += 6;
 	}
 	// disallow overflows
 	if (this->calc_twos_complement) {
 		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, scm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
-		this->constraint_counter += 4;
 	}
 	else {
 		this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
-		this->constraint_counter += 2;
 	}
 }
 
@@ -1003,7 +967,6 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 			// negate select bit
 			vars[this->max_full_adders+2] = {this->input_negate_select_variables.at(idx), true};
 			// add to solver
-			this->constraint_counter++;
 			this->create_arbitrary_clause(vars);
 			// for a + (b << s) and a - (b << s)
 			for (int w_2 = 0; w_2 <= x; w_2++) {
@@ -1014,13 +977,11 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 				// shifted value bit
 				vars[this->max_full_adders+2] = {this->shift_output_variables.at({idx, w_2}), true};
 				// add to solver
-				this->constraint_counter++;
 				this->create_arbitrary_clause(vars);
 
 				// swap subtract with select bit
 				vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
 				// add to solver
-				this->constraint_counter++;
 				this->create_arbitrary_clause(vars);
 			}
 		}
@@ -1035,7 +996,6 @@ void scm::create_full_adder_overlap_constraints(int idx_1) {
 				if (idx_1 == idx_2 and w_1 == w_2) continue; // no overlap with itself
 				for (int x = 0; x < this->max_full_adders; x++) {
 					this->create_1x1_negated_implication(this->full_adder_alloc_variables.at({idx_1, w_1, x}), this->full_adder_alloc_variables.at({idx_2, w_2, x}));
-					this->constraint_counter++;
 				}
 			}
 		}
@@ -1052,7 +1012,6 @@ void scm::create_input_select_limitation_constraints(int idx) {
 		}
 		for (int forbidden_number = max_representable_input_select; forbidden_number >= idx; forbidden_number--) {
 			this->forbid_number(x, forbidden_number);
-			this->constraint_counter++;
 		}
 	}
 }
@@ -1065,7 +1024,6 @@ void scm::create_shift_limitation_constraints(int idx) {
 	}
 	for (int forbidden_number = max_representable_shift; forbidden_number > this->max_shift; forbidden_number--) {
 		this->forbid_number(x, forbidden_number);
-		this->constraint_counter++;
 	}
 }
 
@@ -1073,12 +1031,10 @@ void scm::create_post_adder_shift_limitation_constraints(int idx) {
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
-		//x[w] = this->input_shift_value_variables.at({idx, w});
 		x[w] = this->input_post_adder_shift_value_variables.at({idx, w});
 	}
 	for (int forbidden_number = max_representable_shift; forbidden_number > this->max_shift; forbidden_number--) {
 		this->forbid_number(x, forbidden_number);
-		this->constraint_counter++;
 	}
 }
 
@@ -1137,8 +1093,8 @@ void scm::get_solution_from_backend() {
 void scm::print_solution() {
 	if (this->found_solution) {
 		std::cout << "Solution for constants" << std::endl;
-		for (int i=0; i<this->C.size(); i++) {
-			std::cout << "  C = " << this->C[i] << std::endl;
+		for (auto &c : this->C) {
+			std::cout << "  C = " << c << std::endl;
 		}
 		std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
 		std::cout << "  node #0 = " << (this->calc_twos_complement?sign_extend(this->output_values[0], this->word_size):this->output_values[0]) << std::endl;
@@ -1157,9 +1113,9 @@ void scm::print_solution() {
 		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 	}
 	else {
-		for (int i=0; i<this->C.size(); i++) {
+		for (auto &c : this->C) {
 			std::cout << "Failed to find solution for constants" << std::endl;
-			std::cout << "  C = " << this->C[i] << std::endl;
+			std::cout << "  C = " << c << std::endl;
 		}
 	}
 }
@@ -1407,10 +1363,16 @@ void scm::create_cnf_file() {
 	std::ofstream f;
 	std::stringstream constants;
 	for (int i=0; i<this->C.size(); i++) {
-		if (i != 0) constants << " ";
+		if (i != 0) constants << "_";
 		constants << this->C[i];
 	}
-	std::string filename = constants.str() + "_" + std::to_string(this->num_adders) + ".cnf";
+	std::string filename;
+	if (this->max_full_adders >= 0) {
+		filename = constants.str() + "-" + std::to_string(this->num_adders) + "-" + std::to_string(this->max_full_adders) + ".cnf";
+	}
+	else {
+		filename = constants.str() + "-" + std::to_string(this->num_adders) + ".cnf";
+	}
 	f.open(filename.c_str());
 	f << "p cnf " << this->variable_counter << " " << this->constraint_counter << std::endl;
 	f << this->cnf_clauses.str();

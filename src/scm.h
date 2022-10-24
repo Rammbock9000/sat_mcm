@@ -23,7 +23,7 @@ public:
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers);
+	scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf);
 	/*!
 	 * define the minimum number of needed adders to help the algorithm converge faster
 	 * @param new_min_add value
@@ -336,7 +336,7 @@ protected:
 	 * also write the corresponding cnf files for all solving attempts
 	 * e.g. 521_2.cnf for C = 521 and #adders = 2
 	 */
-	bool write_cnf = false;
+	bool write_cnf;
 	/*!
 	 * whether we are performing all computation in 2's complement
 	 * i.e. at least one coefficient is negative

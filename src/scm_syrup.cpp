@@ -9,8 +9,8 @@
 #include <cstdlib>
 #include <mtl/Vec.h>
 
-scm_syrup::scm_syrup(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers)
-	: scm(C, timeout, quiet, threads, allow_negative_numbers) {}
+scm_syrup::scm_syrup(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
+	: scm(C, timeout, quiet, threads, allow_negative_numbers, write_cnf) {}
 
 void *scm_syrup::timeout_thread(std::pair<int, pthread_t*>* p) {
 	sleep(p->first); // first argument: timeout
