@@ -39,6 +39,12 @@ public:
 	 */
 	void allow_node_output_shift();
 	/*!
+	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
+	 * depending on the implementation costs
+	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
+	 */
+	void ignore_sign(bool only_apply_to_negative_coefficients);
+	/*!
 	 * solve the problem
 	 */
 	void solve();
@@ -296,6 +302,18 @@ protected:
 	 * the constant by which we want to multiply
 	 */
 	std::vector<int> C;
+	/*!
+	 * store info whether or not the negative version of a coefficient was requested by the user
+	 */
+	std::map<int, bool> negative_coeff_requested;
+	/*!
+	 * store info whether the solver can decide to implement C or -C
+	 * this is only relevant when ...
+	 *   ... minimizing full adders
+	 *   ... the solver is allowed to use negative numbers
+	 *   ... doing MCM
+	 */
+	std::map<int, bool> sign_inversion_allowed;
 	/*!
 	 * word size of all operations
 	 */

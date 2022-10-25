@@ -19,11 +19,10 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 		if (c == 0) continue;
 		auto original_number = c;
 		int shifted_bits = 0;
-		// handle negative numbers if only positive fundamentals are allowed
-		if (!allow_negative_numbers) {
-			if (c < 0) {
-				c = -c;
-			}
+		// handle negative numbers
+		if (c < 0) {
+			c = -c;
+			this->negative_coeff_requested[c] = true;
 		}
 		// right shift until odd
 		while ((c & 1) == 0) {
@@ -239,7 +238,7 @@ void scm::create_variables() {
 		}
 		if (!this->quiet) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
-		if (this->C.size() != 1) {
+		if (this->C.size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0]])) {
 			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
@@ -651,7 +650,7 @@ void scm::create_input_output_constraints() {
 	}
 	// force input to 1 and output to C
 	this->force_number(input_bits, 1);
-	if (this->C.size() == 1) {
+	if (this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0]])) {
 		// SCM
 		this->force_number(output_bits, this->C[0]);
 	}
@@ -1460,6 +1459,20 @@ void scm::create_mcm_output_constraints() {
 				}
 			}
 		}
+		if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
+			// also allow the solver to choose -c instead of c if it's easier to implement
+			for (int idx = 1; idx <= this->num_adders; idx++) {
+				or_me.emplace_back(this->mcm_output_variables[{idx, -c}]);
+				for (int w = 0; w < this->word_size; w++) {
+					if ((((-c) >> w) & 1) == 1) {
+						this->create_1x1_implication(this->mcm_output_variables[{idx, -c}], this->output_value_variables[{idx, w}]);
+					}
+					else {
+						this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c}], this->output_value_variables[{idx, w}]);
+					}
+				}
+			}
+		}
 		this->create_or(or_me);
 	}
 }
@@ -1468,6 +1481,10 @@ void scm::create_mcm_output_variables(int idx) {
 	for (auto &c : this->C) {
 		this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
+		if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
+			this->mcm_output_variables[{idx, -c}] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
 	}
 }
 
@@ -1572,4 +1589,19 @@ void scm::allow_node_output_shift() {
 
 std::pair<int, int> scm::solution_is_optimal() {
 	return {this->num_add_opt, this->num_FA_opt};
+}
+
+void scm::ignore_sign(bool only_apply_to_negative_coefficients) {
+	for (auto &c : this->C) {
+		if (only_apply_to_negative_coefficients) {
+			// only allow sign inversion for negative coefficients
+			if (this->negative_coeff_requested[c]) {
+				this->sign_inversion_allowed[c] = true;
+			}
+		}
+		else {
+			// only the solver to choose sign for all coefficients
+			this->sign_inversion_allowed[c] = true;
+		}
+	}
 }
