@@ -10,6 +10,8 @@
 #include <fstream>
 #include <algorithm>
 
+#define INPUT_SELECT_MUX_OPT 1
+
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
@@ -131,6 +133,7 @@ void scm::solve() {
 			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
+#if SHIFT_SELECT_OLD
 			if (idx > 1 and this->shift_input_select.at(idx) == 1) {
 				// left input
 				shifter_input = this->input_select_mux_output.at({idx, scm::left});
@@ -139,6 +142,9 @@ void scm::solve() {
 				// right input
 				shifter_input = this->input_select_mux_output.at({idx, scm::right});
 			}
+#else
+			shifter_input = this->input_select_mux_output.at({idx, scm::left});
+#endif
 			while ((shifter_input & 1) == 0) {
 				shifter_input = shifter_input >> 1;
 				shifter_input_non_zero_LSBs++;
@@ -212,10 +218,12 @@ void scm::create_variables() {
 		this->create_input_select_mux_variables(i);
 		if (!this->quiet) std::cout << "        create_input_select_selection_variables" << std::endl;
 		this->create_input_select_selection_variables(i);
+#if SHIFT_SELECT_OLD
 		if (!this->quiet) std::cout << "        create_input_shift_select_variable" << std::endl;
 		this->create_input_shift_select_variable(i);
 		if (!this->quiet) std::cout << "        create_shift_select_output_variables" << std::endl;
 		this->create_shift_select_output_variables(i);
+#endif
 		if (!this->quiet) std::cout << "        create_input_shift_value_variables" << std::endl;
 		this->create_input_shift_value_variables(i);
 		if (!this->quiet) std::cout << "        create_shift_internal_variables" << std::endl;
@@ -260,8 +268,10 @@ void scm::create_constraints() {
 		this->create_input_select_limitation_constraints(i);
 		if (!this->quiet) std::cout << "        create_shift_limitation_constraints" << std::endl;
 		this->create_shift_limitation_constraints(i);
+#if SHIFT_SELECT_OLD
 		if (!this->quiet) std::cout << "        create_shift_select_constraints" << std::endl;
 		this->create_shift_select_constraints(i);
+#endif
 		if (!this->quiet) std::cout << "        create_shift_constraints" << std::endl;
 		this->create_shift_constraints(i);
 		if (!this->quiet) std::cout << "        create_negate_select_constraints" << std::endl;
@@ -293,14 +303,27 @@ void scm::create_input_node_variables() {
 }
 
 void scm::create_input_select_mux_variables(int idx) {
-	if (idx == 1) return;
+	if (idx < 2) return;
 	auto select_word_size = this->ceil_log2(idx);
+#if INPUT_SELECT_MUX_OPT
+	auto num_muxs = idx-1;
+#else
 	auto num_muxs = (1 << select_word_size) - 1;
+#endif
 	for (auto &dir : input_directions) {
 		for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 			for (int w = 0; w < this->word_size; w++) {
 				this->input_select_mux_variables[{idx, dir, mux_idx, w}] = ++this->variable_counter;
 				this->create_new_variable(this->variable_counter);
+#if INPUT_SELECT_MUX_OPT
+				if (mux_idx == num_muxs-1) {
+					this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
+				}
+#else
+				if (mux_idx == 0) {
+					this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
+				}
+#endif
 			}
 		}
 	}
@@ -317,6 +340,7 @@ void scm::create_input_select_selection_variables(int idx) {
 	}
 }
 
+#if SHIFT_SELECT_OLD
 void scm::create_input_shift_select_variable(int idx) {
 	if (idx == 1) return;
 	this->input_shift_select_variables[idx] = ++this->variable_counter;
@@ -332,6 +356,7 @@ void scm::create_shift_select_output_variables(int idx) {
 		}
 	}
 }
+#endif
 
 void scm::create_input_shift_value_variables(int idx) {
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -601,6 +626,21 @@ void scm::create_add_carry(int a, int b, int c_i, int c_o) {
 	this->create_arbitrary_clause({{a, true}, {c_i, true}, {c_o, false}});
 }
 
+void scm::create_add_redundant(int a, int b, int c_i, int s, int c_o) {
+	// 1)
+	this->create_arbitrary_clause({{a, false}, {s, true}, {c_o, true}});
+	// 2)
+	this->create_arbitrary_clause({{b, false}, {s, true}, {c_o, true}});
+	// 3)
+	this->create_arbitrary_clause({{c_i, false}, {s, true}, {c_o, true}});
+	// 4)
+	this->create_arbitrary_clause({{a, true}, {s, false}, {c_o, false}});
+	// 5)
+	this->create_arbitrary_clause({{b, true}, {s, false}, {c_o, false}});
+	// 6)
+	this->create_arbitrary_clause({{c_i, true}, {s, false}, {c_o, false}});
+}
+
 void scm::force_bit(int x, int val) {
 	this->create_arbitrary_clause({{x, val != 1}});
 }
@@ -662,12 +702,56 @@ void scm::create_input_output_constraints() {
 
 void scm::create_input_select_constraints(int idx) {
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
-	if (idx == 1) return;
+	if (idx < 2) return;
 	// create constraints for all muxs
 	if (!this->quiet) std::cout << "creating input select constraints for node #" << idx << std::endl;
 	auto select_word_size = this->ceil_log2(idx);
+	auto next_pow_two = (1 << select_word_size);
 	for (auto &dir : this->input_directions) {
 		int mux_idx = 0;
+		std::map<std::pair<int, int>, int> signal_variables;
+		for (int i=0; i<idx; i++) {
+			for (int w=0; w<this->word_size; w++) {
+				signal_variables[{i, w}] = this->output_value_variables.at({i, w});
+			}
+		}
+		std::map<std::pair<int, int>, int> next_signal_variables;
+		auto num_signals = idx;
+		auto next_num_signals = 0;
+#if INPUT_SELECT_MUX_OPT
+		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
+			auto num_muxs_per_stage = next_pow_two >> (mux_stage+1);
+			for (int mux_idx_per_stage = 0; mux_idx_per_stage < num_muxs_per_stage; mux_idx_per_stage++) {
+				if (num_signals >= 2*(mux_idx_per_stage+1)) {
+					// connect two signals from last stage to mux
+					auto select_signal = this->input_select_selection_variables.at({idx, dir, mux_stage});
+					for (int w = 0; w < this->word_size; w++) {
+						auto zero_input = signal_variables.at({2*mux_idx_per_stage, w});
+						auto one_input = signal_variables.at({2*mux_idx_per_stage+1, w});
+						auto mux_output = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
+						next_signal_variables[{mux_idx_per_stage, w}] = mux_output;
+						this->create_2x1_mux(zero_input, one_input, select_signal, mux_output);
+					}
+					next_num_signals++;
+					mux_idx++;
+				}
+				else if (num_signals == 2*(mux_idx_per_stage+1)-1) {
+					// only 1 signal left -> use it as an input to the next stage
+					for (int w = 0; w < this->word_size; w++) {
+						next_signal_variables[{mux_idx_per_stage, w}] = signal_variables.at({2*mux_idx_per_stage, w});
+					}
+					next_num_signals++;
+				}
+				else {
+					// handled all signals of this stage
+					break;
+				}
+			}
+			// update counter & container
+			num_signals = next_num_signals;
+			signal_variables = next_signal_variables;
+		}
+#else
 		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
 			auto num_muxs_per_stage = (1 << mux_stage);
 			auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage
@@ -708,6 +792,7 @@ void scm::create_input_select_constraints(int idx) {
 				mux_idx++;
 			}
 		}
+#endif
 	}
 }
 
@@ -734,12 +819,21 @@ void scm::create_shift_constraints(int idx) {
 					}
 				}
 				else {
+#if SHIFT_SELECT_OLD
 					// shifter input is the left shift-select-mux
 					zero_input_var_idx = this->shift_select_output_variables.at({idx, scm::left, w});
 					zero_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
 					if (!connect_zero_const) {
 						one_input_var_idx = this->shift_select_output_variables.at({idx, scm::left, w_prev});
 					}
+#else
+					// shifter input is the left input value
+					zero_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::left, w});
+					zero_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
+					if (!connect_zero_const) {
+						one_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::left, w_prev});
+					}
+#endif
 				}
 			}
 			else {
@@ -794,7 +888,11 @@ void scm::create_shift_constraints(int idx) {
 				shift_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
 			}
 			else {
+#if SHIFT_SELECT_OLD
 				shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
+#else
+				shift_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
+#endif
 			}
 			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
 		}
@@ -874,14 +972,15 @@ void scm::create_post_adder_shift_constraints(int idx) {
 	}
 }
 
+#if SHIFT_SELECT_OLD
 void scm::create_shift_select_constraints(int idx) {
 	if (idx == 1) return; // this node doesn't need shift input muxs
 	auto select_var = this->input_shift_select_variables.at(idx);
 	for (auto &dir : this->input_directions) {
 		for (auto w = 0; w < this->word_size; w++) {
 			auto mux_output_var_idx = this->shift_select_output_variables.at({idx, dir, w});
-			auto left_input_var_idx = this->input_select_mux_variables.at({idx, scm::left, 0, w});
-			auto right_input_var_idx = this->input_select_mux_variables.at({idx, scm::right, 0, w});
+			auto left_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::left, w});
+			auto right_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::right, w});
 			if (dir == scm::left) {
 				// left mux has left input in b input and right input in a input
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var, mux_output_var_idx);
@@ -893,6 +992,7 @@ void scm::create_shift_select_constraints(int idx) {
 		}
 	}
 }
+#endif
 
 void scm::create_negate_select_constraints(int idx) {
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
@@ -904,8 +1004,13 @@ void scm::create_negate_select_constraints(int idx) {
 			right_input_var_idx = this->output_value_variables.at({0, w});
 		}
 		else {
+#if SHIFT_SELECT_OLD
 			// right input is the output of the right shift select mux
 			right_input_var_idx = this->shift_select_output_variables.at({idx, scm::right, w});
+#else
+			// right input is the output of the right input select mux
+			right_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::right, w});
+#endif
 		}
 		for (auto &dir : this->input_directions) {
 			auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w});
@@ -947,6 +1052,9 @@ void scm::create_adder_constraints(int idx) {
 		// build carry
 		int c_o = this->adder_internal_variables.at({idx, w});
 		this->create_add_carry(a, b, c_i, c_o);
+		// build redundant clauses to increase strength of unit propagation
+		// note (nfiege): this doesn't bring any speedup
+		//this->create_add_redundant(a, b, c_i, s, c_o);
 	}
 	// disallow overflows
 	if (this->calc_twos_complement) {
@@ -1107,7 +1215,9 @@ void scm::get_solution_from_backend() {
 	// clear containers
 	this->input_select.clear();
 	this->input_select_mux_output.clear();
+#if SHIFT_SELECT_OLD
 	this->shift_input_select.clear();
+#endif
 	this->shift_value.clear();
 	this->negate_select.clear();
 	this->subtract.clear();
@@ -1130,8 +1240,10 @@ void scm::get_solution_from_backend() {
 						this->input_select[{idx, dir}] += (this->get_result_value(this->input_select_selection_variables[{idx, dir, w}]) << w);
 					}
 				}
+#if SHIFT_SELECT_OLD
 				// shift_input_select
 				this->shift_input_select[idx] = this->get_result_value(this->input_shift_select_variables[idx]);
+#endif
 			}
 			// shift_value
 			for (auto w = 0; w < this->shift_word_size; w++) {
@@ -1168,7 +1280,9 @@ void scm::print_solution() {
 			std::cout << "  node #" << idx << " = " << (this->calc_twos_complement?sign_extend((int64_t)this->output_values[idx], this->word_size):this->output_values[idx]) << std::endl;
 			std::cout << "    left input: node " << this->input_select[{idx, scm::left}] << std::endl;
 			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
+#if SHIFT_SELECT_OLD
 			std::cout << "    shift input select: " << this->shift_input_select[idx] << (this->shift_input_select[idx]==1?" (left)":" (right)") << std::endl;
+#endif
 			std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
 			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (non-shifted)":" (shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
@@ -1198,7 +1312,7 @@ bool scm::solution_is_valid() {
 			for (auto &dir : this->input_directions) {
 				for (auto w = 0; w < this->word_size; w++) {
 					this->input_select_mux_output[{idx, dir}] += (
-						this->get_result_value(this->input_select_mux_variables[{idx, dir, 0, w}]) << w);
+						this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w}]) << w);
 				}
 			}
 			input_node_idx_l = this->input_select[{idx, scm::left}];
@@ -1251,6 +1365,7 @@ bool scm::solution_is_valid() {
 		// verify shift mux outputs
 		int64_t shift_mux_output_l = left_input_value;
 		int64_t shift_mux_output_r = right_input_value;
+#if SHIFT_SELECT_OLD
 		if (idx > 1) {
 			if (this->get_result_value(this->input_shift_select_variables[idx]) == 0) {
 				shift_mux_output_l = right_input_value;
@@ -1289,6 +1404,7 @@ bool scm::solution_is_valid() {
 				valid = false;
 			}
 		}
+#endif
 		// verify shifter output
 		int64_t expected_shift_output = (((int64_t)shift_mux_output_l) << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
 		if (this->calc_twos_complement) expected_shift_output = sign_extend(expected_shift_output, this->word_size);
@@ -1523,6 +1639,7 @@ std::string scm::get_adder_graph_description() {
 		int right_input;
 		int left_shift;
 		int right_shift;
+#if SHIFT_SELECT_OLD
 		if (this->shift_input_select.at(idx) == 1) {
 			// do not swap inputs
 			left_idx = this->input_select.at({idx, scm::left});
@@ -1533,6 +1650,10 @@ std::string scm::get_adder_graph_description() {
 			left_idx = this->input_select.at({idx, scm::right});
 			right_idx = this->input_select.at({idx, scm::left});
 		}
+#else
+		left_idx = this->input_select.at({idx, scm::left});
+		right_idx = this->input_select.at({idx, scm::right});
+#endif
 		left_input = this->output_values.at(left_idx);
 		right_input = this->output_values.at(right_idx);
 		left_shift = this->shift_value.at(idx);
