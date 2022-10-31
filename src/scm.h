@@ -431,12 +431,6 @@ private:
 	 * < node idx, left/right > -> int value
 	 */
 	std::map<std::pair<int, input_direction>, int> input_select_mux_output;
-#if SHIFT_SELECT_OLD
-	/*!
-	 * node idx -> 1/0
-	 */
-	std::map<int, int> shift_input_select;
-#endif
 	/*!
 	 * node idx -> int value
 	 */
@@ -492,10 +486,6 @@ private:
 	void create_input_node_variables(); // idx = 0 is the input node that has a constant value 0 as output
 	void create_input_select_mux_variables(int idx);
 	void create_input_select_selection_variables(int idx);
-#if SHIFT_SELECT_OLD
-	void create_input_shift_select_variable(int idx);
-	void create_shift_select_output_variables(int idx);
-#endif
 	void create_input_shift_value_variables(int idx);
 	void create_shift_internal_variables(int idx);
 	void create_input_negate_select_variable(int idx);
@@ -516,9 +506,6 @@ private:
 	void create_input_select_constraints(int idx);
 	void create_input_select_limitation_constraints(int idx);
 	void create_shift_limitation_constraints(int idx);
-#if SHIFT_SELECT_OLD
-	void create_shift_select_constraints(int idx);
-#endif
 	void create_shift_constraints(int idx);
 	void create_negate_select_constraints(int idx);
 	void create_xor_constraints(int idx);
@@ -550,16 +537,6 @@ private:
 	 * < node idx, left/right, bit > -> variable idx
 	 */
 	std::map<std::tuple<int, input_direction, int>, int> input_value_variables;
-#if SHIFT_SELECT_OLD
-	/*!
-	 * node idx -> variable idx
-	 */
-	std::map<int, int> input_shift_select_variables;
-	/*!
-	 * < node idx, left/right, bit > -> variable idx
-	 */
-	std::map<std::tuple<int, input_direction, int>, int> shift_select_output_variables;
-#endif
 	/*!
 	 * < node idx, bit > -> variable idx
 	 */
