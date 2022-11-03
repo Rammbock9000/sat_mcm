@@ -12,7 +12,6 @@
 
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
 #define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
-#define FORCE_ODD 1 // force the solver to only compute odd fundamentals
 
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
@@ -254,10 +253,14 @@ void scm::create_constraints() {
 		this->create_xor_constraints(i);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i);
-#if FORCE_ODD
-		if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
-		this->create_odd_fundamentals_constraints(i);
-#endif
+		if (this->max_full_adders < 0 or this->enable_node_output_shift) {
+			// only force odd fundamentals for low level optimizations
+			// if node output shifts are enabled
+			// -> otherwise this might not guarantee optimality anymore?!
+			// -> investigate maybe?
+			if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
+			this->create_odd_fundamentals_constraints(i);
+		}
 		if (this->enable_node_output_shift) {
 			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
 			this->create_post_adder_shift_limitation_constraints(i);
