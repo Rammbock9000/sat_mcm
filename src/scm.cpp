@@ -11,6 +11,8 @@
 #include <algorithm>
 
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
+#define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
+#define FORCE_ODD 1 // force the solver to only compute odd fundamentals
 
 scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
@@ -252,6 +254,10 @@ void scm::create_constraints() {
 		this->create_xor_constraints(i);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i);
+#if FORCE_ODD
+		if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
+		this->create_odd_fundamentals_constraints(i);
+#endif
 		if (this->enable_node_output_shift) {
 			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
 			this->create_post_adder_shift_limitation_constraints(i);
@@ -378,10 +384,14 @@ void scm::create_xor_output_variables(int idx) {
 
 void scm::create_adder_internal_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
-		this->adder_internal_variables[{idx, w}] = ++this->variable_counter;
+		this->adder_carry_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 		this->adder_output_value_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
+#if FPGA_ADD
+		this->adder_XOR_internal_variables[{idx, w}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+#endif
 	}
 }
 
@@ -956,26 +966,37 @@ void scm::create_adder_constraints(int idx) {
 		}
 		else {
 			// carry input = carry output of last stage
-			c_i = this->adder_internal_variables.at({idx, w-1});
+			c_i = this->adder_carry_variables.at({idx, w - 1});
 		}
-		// build sum
+		// in/out variables
 		int a = this->negate_select_output_variables.at({idx, scm::left, w});
 		int b = this->xor_output_variables.at({idx, w});
 		int s = this->adder_output_value_variables.at({idx, w});
+		int c_o = this->adder_carry_variables.at({idx, w});
+#if FPGA_ADD
+		int xor_int = this->adder_XOR_internal_variables.at({idx, w});
+		// build first XOR
+		this->create_2x1_xor(a, b, xor_int);
+		// build second XOR
+		this->create_2x1_xor(xor_int, c_i, s);
+		// build MUX
+		this->create_2x1_mux(a, c_i, xor_int, c_o);
+#else
+		// build sum
 		this->create_add_sum(a, b, c_i, s);
 		// build carry
-		int c_o = this->adder_internal_variables.at({idx, w});
 		this->create_add_carry(a, b, c_i, c_o);
 		// build redundant clauses to increase strength of unit propagation
 		// note (nfiege): this doesn't bring any speedup
 		//this->create_add_redundant(a, b, c_i, s, c_o);
+#endif
 	}
 	// disallow overflows
 	if (this->calc_twos_complement) {
 		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, scm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
 	}
 	else {
-		this->create_1x1_equivalence(this->adder_internal_variables.at({idx, this->word_size-1}), this->input_negate_value_variables.at(idx));
+		this->create_1x1_equivalence(this->adder_carry_variables.at({idx, this->word_size - 1}), this->input_negate_value_variables.at(idx));
 	}
 }
 
@@ -1476,6 +1497,10 @@ void scm::create_full_adder_alloc_variables(int idx) {
 			this->create_new_variable(this->variable_counter);
 		}
 	}
+}
+
+void scm::create_odd_fundamentals_constraints(int idx) {
+	this->force_bit(this->output_value_variables.at({idx,0}), 1);
 }
 
 int64_t scm::sign_extend(int64_t x, int w) {

@@ -514,6 +514,7 @@ private:
 	void create_post_adder_shift_constraints(int idx);
 	void create_full_adder_allocation_constraints(int idx);
 	void create_full_adder_overlap_constraints(int idx_1);
+	void create_odd_fundamentals_constraints(int idx);
 	void create_mcm_output_constraints();
 
 	///////////////////////////////////
@@ -569,7 +570,12 @@ private:
 	/*!
 	 * < node idx, bit > -> variable idx
 	 */
-	std::map<std::pair<int, int>, int> adder_internal_variables;
+	std::map<std::pair<int, int>, int> adder_carry_variables;
+	/*!
+	 * < node idx, bit > -> variable idx
+	 * used for optimized adder clauses
+	 */
+	std::map<std::pair<int, int>, int> adder_XOR_internal_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0
