@@ -374,6 +374,10 @@ protected:
 	 */
 	int timeout;
 	/*!
+	 * timeout for FA minimization (duh!)
+	 */
+	int fa_minimization_timeout;
+	/*!
 	 * suppress debug outputs if quiet = true
 	 */
 	bool quiet;

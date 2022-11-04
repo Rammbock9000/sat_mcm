@@ -66,6 +66,7 @@ void scm::optimization_loop() {
 	if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
+	this->fa_minimization_timeout -= elapsed_time;
 	this->found_solution = a;
 	this->ran_into_timeout = b;
 	if (this->found_solution) {
@@ -110,6 +111,7 @@ void scm::solve() {
 		return;
 	}
 	while (!this->found_solution) {
+		this->fa_minimization_timeout = this->timeout;
 		++this->num_adders;
 		this->optimization_loop();
 		if (this->ran_into_timeout) {
@@ -123,6 +125,7 @@ void scm::solve() {
 		return;
 	}
 	while (this->found_solution) {
+		this->timeout = this->fa_minimization_timeout;
 		// count current # of full adders
 		// except for the last node because its output always has a constant number of full adders
 		int current_full_adders = 0;
