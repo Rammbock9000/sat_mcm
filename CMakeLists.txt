@@ -84,6 +84,9 @@ file(GLOB SOURCES
         src/scm_syrup.cpp
      )
 
+# compilation settings
+add_compile_options(-O3)
+
 # add executable
 add_executable(satscm ${SOURCES})
 

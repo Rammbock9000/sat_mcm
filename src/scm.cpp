@@ -256,11 +256,10 @@ void scm::create_constraints() {
 		this->create_xor_constraints(i);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i);
-		if (this->max_full_adders < 0 or this->enable_node_output_shift) {
-			// only force odd fundamentals for low level optimizations
-			// if node output shifts are enabled
-			// -> otherwise this might not guarantee optimality anymore?!
-			// -> investigate maybe?
+		if (this->max_full_adders < 0) {
+			// do not force odd fundamentals for low level optimizations
+			// because it actually slows the process down
+			// please tell me why!
 			if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
 			this->create_odd_fundamentals_constraints(i);
 		}
@@ -1010,7 +1009,8 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 	// define global FA alloc for each bit with index x
 	if (this->calc_twos_complement) {
 		// negative fundamentals are allowed
-		for (int x = 0; x < this->word_size-1; x++) {
+		// handle all but the MSB
+		for (int x = 0; x < this->word_size-2; x++) {
 			int container_size = this->max_full_adders + 4;
 			std::vector<std::pair<int, bool>> vars(container_size);
 			// y: global FA alloc index
@@ -1061,10 +1061,31 @@ void scm::create_full_adder_allocation_constraints(int idx) {
 				}
 			}
 		}
+		// handle MSB => a LUT is only needed if the result has a different sign than both inputs
+		int x = this->word_size-1;
+		int container_size = this->max_full_adders + 3;
+		std::vector<std::pair<int, bool>> vars(container_size);
+		// y: global FA alloc index
+		for (int y = 0; y < this->max_full_adders; y++) {
+			vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
+		}
+		// result >= 0 and both inputs are < 0
+		vars[this->max_full_adders] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
+		vars[this->max_full_adders+1] = {this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), false};
+		vars[this->max_full_adders+2] = {this->xor_output_variables.at({idx, this->word_size-1}), false};
+		// add to solver
+		this->create_arbitrary_clause(vars);
+		// result < 0 and both inputs are >= 0
+		vars[this->max_full_adders] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
+		vars[this->max_full_adders+1] = {this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), true};
+		vars[this->max_full_adders+2] = {this->xor_output_variables.at({idx, this->word_size-1}), true};
+		// add to solver
+		this->create_arbitrary_clause(vars);
 	}
 	else {
 		// only positive fundamentals are allowed
-		for (int x = 0; x < this->word_size; x++) {
+		// => the MSB never needs a LUT because it can be copied from one of the inputs
+		for (int x = 0; x < this->word_size-1; x++) {
 			int container_size = this->max_full_adders + 3;
 			std::vector<std::pair<int, bool>> vars(container_size);
 			// y: global FA alloc index
