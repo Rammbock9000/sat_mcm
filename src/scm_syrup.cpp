@@ -36,8 +36,9 @@ std::pair<bool, bool> scm_syrup::check() {
 	return {this->solved_instance, this->ran_into_timeout};
 }
 
-void scm_syrup::reset_backend() {
-	scm::reset_backend();
+void scm_syrup::reset_backend(bool incremental) {
+	scm::reset_backend(incremental);
+	if (incremental) return;
 	this->glucoseVariableCounter = 0;
 	this->solver = std::make_unique<Glucose::MultiSolvers>(this->threads);
 	if (this->quiet) this->solver->setVerbosity(0);

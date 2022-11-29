@@ -11,8 +11,9 @@
 scm_cadical::scm_cadical(const std::vector<int> &C, int timeout, bool quiet, bool allow_negative_numbers, bool write_cnf)
 	: scm(C, timeout, quiet, 1, allow_negative_numbers, write_cnf) {}
 
-void scm_cadical::reset_backend() {
-	scm::reset_backend();
+void scm_cadical::reset_backend(bool incremental) {
+	scm::reset_backend(incremental);
+	if (incremental) return;
 	// create new solver
 	this->solver = std::make_unique<CaDiCaL::Solver>();
 	// create and attach new terminator

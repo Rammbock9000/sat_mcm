@@ -21,8 +21,9 @@ std::pair<bool, bool> scm_z3::check() {
 	return {sat, to};
 }
 
-void scm_z3::reset_backend() {
-	scm::reset_backend();
+void scm_z3::reset_backend(bool incremental) {
+	scm::reset_backend(incremental);
+	if (incremental) return;
 	this->solver.reset();
 	this->variables.clear();
 	this->variables.emplace_back(this->context.bool_const("dummy")); // reset variables and add a dummy expression because indices start at 1

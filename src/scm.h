@@ -10,8 +10,10 @@
 #include <vector>
 #include <sstream>
 #include <cstdint>
+#include <limits>
 
 #define SHIFT_SELECT_OLD 0
+#define FULL_ADDERS_UNLIMITED std::numeric_limits<long int>::min()
 
 class scm {
 public:
@@ -88,7 +90,7 @@ protected:
 	/*!
 	 * reset the solver backend
 	 */
-	virtual void reset_backend();
+	virtual void reset_backend(bool incremental);
 
 	/*!
 	 * create new variable (if backend needs it)
@@ -105,6 +107,23 @@ protected:
 	///////////////////////////////////////////////////
 	//// create clauses for the following circuits ////
 	///////////////////////////////////////////////////
+	/*!
+	 * clauses for a full adder (i.e., 3:2 compressor)
+	 * @param a < variable, whether the bit should be negated at the adder input >
+	 * @param b < variable, whether the bit should be negated at the adder input >
+	 * @param c_i < variable, whether the bit should be negated at the adder input >
+	 * @param sum < variable, whether the bit should be negated at the adder output >
+	 * @param c_o < variable, whether the bit should be negated at the adder output >
+	 */
+	virtual void create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum, std::pair<int, bool> c_o={-1, false});
+	/*!
+	 * clauses for a half adder (i.e., 2:2 compressor, a full adder with c_i=0)
+	 * @param a < variable, whether the bit should be negated at the adder input >
+	 * @param b < variable, whether the bit should be negated at the adder input >
+	 * @param sum < variable, whether the bit should be negated at the adder output >
+	 * @param c_o < variable, whether the bit should be negated at the adder output >
+	 */
+	virtual void create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum, std::pair<int, bool> c_o={-1, false});
 	/*!
 	 * disallow shifting bits that are not equal to the sign bit
 	 * clauses are:
@@ -152,6 +171,14 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1x1_negated_implication(int a, int b);
+	/*!
+	 * force !a -> b
+	 * clauses are:
+	 *   1)  a   b
+	 * @param a
+	 * @param b
+	 */
+	virtual void create_1x1_reversed_negated_implication(int a, int b);
 	/*!
 	 * force a -> (b_0 or b_1 or ...)
 	 *   1) -a  b_0  b_1 ...
@@ -229,6 +256,51 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_xor(int a, int b, int y);
+	/*!
+	 * force y = not (a XOR b)
+	 * clauses are:
+	 *   1)  a  b  y
+	 *   2)  a -b -y
+	 *   3) -a  b -y
+	 *   4) -a -b  y
+	 * @param a
+	 * @param b
+	 * @param y
+	 */
+	virtual void create_2x1_equiv(int a, int b, int y);
+	/*!
+	 * force y = a OR b
+	 * clauses are:
+	 *   1)  a  b -y
+	 *   2) -a     y
+	 *   3)    -b  y
+	 * @param a
+	 * @param b
+	 * @param y
+	 */
+	virtual void create_2x1_or(int a, int b, int y);
+	/*!
+	 * force y = a AND b
+	 * clauses are:
+	 *   1) -a -b  y
+	 *   2)  a    -y
+	 *   3)     b -y
+	 * @param a
+	 * @param b
+	 * @param y
+	 */
+	virtual void create_2x1_and(int a, int b, int y);
+	/*!
+	 * force y = a AND (not b)
+	 * clauses are:
+	 *   1) -a  b  y
+	 *   2)  a    -y
+	 *   3)    -b -y
+	 * @param a
+	 * @param b
+	 * @param y
+	 */
+	virtual void create_2x1_and_b_inv(int a, int b, int y);
 	/*!
 	 * force s to be the sum output of a full adder
 	 * clauses are:
@@ -407,9 +479,9 @@ protected:
 private:
 	/*!
 	 * limit on the number of full adders used
-	 * -1 = no limit
+	 * FULL_ADDERS_UNLIMITED = no limit
 	 */
-	int max_full_adders = -1;
+	long int max_full_adders = FULL_ADDERS_UNLIMITED;
 	/*!
 	 * store all cnf clauses for cnf file generation
 	 */
@@ -460,21 +532,45 @@ private:
 	 */
 	std::map<int, int> output_values;
 	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> coeff_word_size_values;
+	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> can_cut_msb_values;
+	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> coeff_word_size_sum_values;
+	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> shift_gain_values;
+	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> shift_sum_values;
+	/*!
+	 *  int value
+	 */
+	int num_FAs_value;
+	/*!
 	 * create backend solver variables and keep track of their indices
 	 */
 	void create_variables();
 	/*!
 	 * create solver constraints
 	 */
-	void create_constraints();
+	void create_constraints(bool incremental);
 	/*!
 	 * construct the problem (everything needed for solving)
 	 */
-	void construct_problem();
+	void construct_problem(bool incremental);
 	/*!
 	 * optimize #adders or #full_adders within this loop
 	 */
-	void optimization_loop();
+	void optimization_loop(bool incremental = false);
 	/*!
 	 * cache values for ceil(log2(n))
 	 */
@@ -501,25 +597,40 @@ private:
 	void create_post_adder_shift_variables(int idx);
 	void create_output_value_variables(int idx);
 	void create_mcm_output_variables(int idx);
-	void create_full_adder_alloc_variables(int idx);
+
 
 	////////////////////////////////
 	//// CREATE ALL CONSTRAINTS ////
 	////////////////////////////////
-	void create_input_output_constraints();
-	void create_input_select_constraints(int idx);
-	void create_input_select_limitation_constraints(int idx);
-	void create_shift_limitation_constraints(int idx);
-	void create_shift_constraints(int idx);
-	void create_negate_select_constraints(int idx);
-	void create_xor_constraints(int idx);
-	void create_adder_constraints(int idx);
-	void create_post_adder_shift_limitation_constraints(int idx);
-	void create_post_adder_shift_constraints(int idx);
-	void create_full_adder_allocation_constraints(int idx);
-	void create_full_adder_overlap_constraints(int idx_1);
-	void create_odd_fundamentals_constraints(int idx);
-	void create_mcm_output_constraints();
+	void create_input_output_constraints(bool incremental);
+	void create_input_select_constraints(int idx, bool incremental);
+	void create_input_select_limitation_constraints(int idx, bool incremental);
+	void create_shift_limitation_constraints(int idx, bool incremental);
+	void create_shift_constraints(int idx, bool incremental);
+	void create_negate_select_constraints(int idx, bool incremental);
+	void create_xor_constraints(int idx, bool incremental);
+	void create_adder_constraints(int idx, bool incremental);
+	void create_post_adder_shift_limitation_constraints(int idx, bool incremental);
+	void create_post_adder_shift_constraints(int idx, bool incremental);
+	void create_odd_fundamentals_constraints(int idx, bool incremental);
+	void create_mcm_output_constraints(bool incremental);
+	void create_full_adder_coeff_word_size_constraints(int idx, bool incremental);
+	void create_full_adder_msb_constraints(int idx, bool incremental);
+	void create_full_adder_coeff_word_size_sum_constraints(int idx, bool incremental);
+	void create_full_adder_shift_gain_constraints(int idx, bool incremental);
+	void create_full_adder_shift_sum_constraints(int idx, bool incremental);
+	void create_full_adder_msb_sum_constraints(bool incremental);
+	void create_full_adder_add_subtract_inputs_constraints(bool incremental);
+	void create_full_adder_cpa_constraints(bool incremental);
+	void create_full_adder_result_constraints();
+
+	// helper function to create a bitheap in SAT ...
+	std::vector<int> create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x);
+
+	//////////////////////////////////////////////////////
+	// KEEP TRACK OF SOME WORD SIZES FOR FA COMPUTATION //
+	//////////////////////////////////////////////////////
+
 
 	///////////////////////////////////
 	//// INDICES FOR ALL VARIABLES ////
@@ -538,10 +649,6 @@ private:
 	 * < node idx, left/right, bit > -> variable idx
 	 */
 	std::map<std::tuple<int, input_direction, int>, int> input_select_selection_variables;
-	/*!
-	 * < node idx, left/right, bit > -> variable idx
-	 */
-	std::map<std::tuple<int, input_direction, int>, int> input_value_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 */
@@ -608,9 +715,75 @@ private:
 	 */
 	std::map<std::pair<int, int>, int> mcm_output_variables;
 	/*!
-	 * < node idx, bit, full adder idx > -> variable idx
+	 * < node idx, bit > -> variable idx
 	 */
-	std::map<std::tuple<int, int, int>, int> full_adder_alloc_variables;
+	std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_variables;
+	/*!
+	 * < idx, stage, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int, int>, int> full_adder_coeff_word_size_internal_variables;
+	/*!
+	 * < idx, stage, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_internal_carry_input_variables;
+	/*!
+	 * < node idx > -> variable idx
+	 */
+	std::map<int, int> full_adder_msb_variables;
+	/*!
+	 * < idx, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int>, int> full_adder_word_size_sum_variables;
+	/*!
+	 * < idx, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int>, int> full_adder_shift_gain_variables;
+	/*!
+	 * < idx, bit > -> variable idx
+	 */
+	std::map<std::tuple<int, int>, int> full_adder_shift_sum_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_msb_sum_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_add_subtract_inputs_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_cpa_internal_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_result_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_comparator_ok_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> full_adder_comparator_carry_variables;
+	/*!
+	 * a variable that is forced to 1
+	 */
+	int const_one_bit = -1;
+	/*!
+	 * a variable that is forced to 0
+	 */
+	int const_zero_bit = -1;
+	/*!
+	 * init this->const_one_bit if not yet initialized
+	 * @return this->const_one_bit after init
+	 */
+	int init_const_one_bit();
+	/*!
+	 * init this->const_one_bit if not yet initialized
+	 * @return this->const_one_bit after init
+	 */
+	int init_const_zero_bit();
 };
 
 

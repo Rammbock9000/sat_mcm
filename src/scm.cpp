@@ -57,12 +57,13 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 	}
 }
 
-void scm::optimization_loop() {
+void scm::optimization_loop(bool incremental) {
+	if (!this->quiet) std::cout << "  starting optimization loop (incremental = " << incremental << ")" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (!this->quiet) std::cout << "  resetting backend now" << std::endl;
-	this->reset_backend();
-	if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << (this->max_full_adders>=0?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
-	this->construct_problem();
+	this->reset_backend(incremental);
+	if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
+	this->construct_problem(incremental);
 	if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
@@ -70,7 +71,7 @@ void scm::optimization_loop() {
 	this->found_solution = a;
 	this->ran_into_timeout = b;
 	if (this->found_solution) {
-		std::cout << "  found solution for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
+		std::cout << "  found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
 		this->get_solution_from_backend();
 		if (this->solution_is_valid()) {
 			std::cout << "Solution is verified :-)" << std::endl;
@@ -80,10 +81,10 @@ void scm::optimization_loop() {
 		}
 	}
 	else if (this->ran_into_timeout) {
-		std::cout << "  ran into timeout for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
+		std::cout << "  ran into timeout for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
 	}
 	else {
-		std::cout << "  problem for #adders = " << this->num_adders << (this->max_full_adders>=0?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders>=0?"":"keep trying :-)") << std::endl;
+		std::cout << "  problem for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?"":"keep trying :-)") << std::endl;
 	}
 }
 
@@ -110,10 +111,11 @@ void scm::solve() {
 		this->output_values[0] = 1;
 		return;
 	}
+	bool incremental = false;
 	while (!this->found_solution) {
 		this->fa_minimization_timeout = this->timeout;
 		++this->num_adders;
-		this->optimization_loop();
+		this->optimization_loop(incremental);
 		if (this->ran_into_timeout) {
 			// timeout => can't say anything about optimality
 			this->num_add_opt = false;
@@ -129,6 +131,8 @@ void scm::solve() {
 		// count current # of full adders
 		// except for the last node because its output always has a constant number of full adders
 		int current_full_adders = 0;
+		int MSBs_cut = 0;
+		int MSBs_not_cut = 0;
 		for (int idx = 1; idx <= this->num_adders; idx++) {
 			if (this->output_values.at(idx) == 0) {
 				// more adders allocated than necessary
@@ -150,10 +154,21 @@ void scm::solve() {
 				//   and a - (b << s)
 				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
 			}
-			std::cout << "FAs for node " << idx << " = " << FAs_for_this_node << std::endl;
-			current_full_adders += FAs_for_this_node;
+
+			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
+												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
+			if (can_cut_MSB) {
+				MSBs_cut++;
+			}
+			else {
+				MSBs_not_cut++;
+			}
+			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
-		if (this->max_full_adders < 0) {
+		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
 			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
 			this->print_solution();
 		}
@@ -165,11 +180,14 @@ void scm::solve() {
 			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
 			this->print_solution();
 		}
+		// must add the number of MSBs that could not be cut because the SAT solver allocs an extra LUT for each of them
 		this->max_full_adders = current_full_adders - 1;
-		if (this->max_full_adders < 0) {
+		if (this->max_full_adders < -(this->num_adders * (this->max_shift+1))) {
+			// trivial minimum value reached
 			return;
 		}
-		this->optimization_loop();
+		this->optimization_loop(incremental);
+		incremental = true;
 		if (this->ran_into_timeout) {
 			// timeout => can't say anything about optimality
 			this->num_FA_opt = false;
@@ -178,17 +196,21 @@ void scm::solve() {
 	this->found_solution = true;
 }
 
-void scm::reset_backend() {
+void scm::reset_backend(bool incremental) {
+	if (incremental) return;
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
 }
 
-void scm::construct_problem() {
-	if (!this->quiet) std::cout << "    creating variables now" << std::endl;
-	this->create_variables();
+void scm::construct_problem(bool incremental) {
+	if (!incremental) {
+		// only construct new variables in non-incremental mode
+		if (!this->quiet) std::cout << "    creating variables now" << std::endl;
+		this->create_variables();
+	}
 	if (!this->quiet) std::cout << "    creating constraints now" << std::endl;
-	this->create_constraints();
+	this->create_constraints(incremental);
 	if (this->write_cnf) {
 		if (!this->quiet) std::cout << "    creating cnf file now" << std::endl;
 		this->create_cnf_file();
@@ -230,51 +252,80 @@ void scm::create_variables() {
 			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
-		if (this->max_full_adders > 0 and i <= this->num_adders) {
-			if (!this->quiet) std::cout << "        create_full_adder_alloc_variables" << std::endl;
-			this->create_full_adder_alloc_variables(i);
+		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+			//if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_variables" << std::endl;
+			//this->create_full_adder_coeff_word_size_variables(i);
+			//if (!this->quiet) std::cout << "        create_full_adder_msb_variables" << std::endl;
+			//this->create_full_adder_msb_variables(i);
+			//if (!this->quiet) std::cout << "        create_full_adder_word_size_sum_variables" << std::endl;
+			//this->create_full_adder_word_size_sum_variables(i);
+			//if (!this->quiet) std::cout << "        create_full_adder_shift_sum_variables" << std::endl;
+			//this->create_full_adder_shift_sum_variables(i);
+			//if (!this->quiet) std::cout << "        create_full_adder_msb_sum_variables" << std::endl;
+			//this->create_full_adder_msb_sum_variables(i);
 		}
+	}
+	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+		//if (!this->quiet) std::cout << "      create_full_adder_add_subtract_inputs_variables" << std::endl;
+		//this->create_full_adder_add_subtract_inputs_variables();
+		//if (!this->quiet) std::cout << "      create_full_adder_cpa_internal_variables" << std::endl;
+		//this->create_full_adder_cpa_internal_variables();
+		//if (!this->quiet) std::cout << "      create_full_adder_result_variables" << std::endl;
+		//this->create_full_adder_result_variables();
+		//if (!this->quiet) std::cout << "      create_full_adder_comparator_internal_variables" << std::endl;
+		//this->create_full_adder_comparator_internal_variables();
 	}
 }
 
-void scm::create_constraints() {
+void scm::create_constraints(bool incremental) {
 	if (!this->quiet) std::cout << "      create_input_output_constraints" << std::endl;
-	this->create_input_output_constraints();
+	this->create_input_output_constraints(incremental);
 	for (int i=1; i<=this->num_adders; i++) {
 		if (!this->quiet) std::cout << "      creating constraints for node " << i << std::endl;
 		if (!this->quiet) std::cout << "        create_input_select_constraints" << std::endl;
-		this->create_input_select_constraints(i);
+		this->create_input_select_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_input_select_limitation_constraints" << std::endl;
-		this->create_input_select_limitation_constraints(i);
+		this->create_input_select_limitation_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_shift_limitation_constraints" << std::endl;
-		this->create_shift_limitation_constraints(i);
+		this->create_shift_limitation_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_shift_constraints" << std::endl;
-		this->create_shift_constraints(i);
+		this->create_shift_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_negate_select_constraints" << std::endl;
-		this->create_negate_select_constraints(i);
+		this->create_negate_select_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_xor_constraints" << std::endl;
-		this->create_xor_constraints(i);
+		this->create_xor_constraints(i, incremental);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
-		this->create_adder_constraints(i);
-		if (this->max_full_adders < 0) {
-			// do not force odd fundamentals for low level optimizations
-			// because it actually slows the process down
-			// please tell me why!
-			if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
-			this->create_odd_fundamentals_constraints(i);
-		}
+		this->create_adder_constraints(i, incremental);
+		if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
+		this->create_odd_fundamentals_constraints(i, incremental);
 		if (this->enable_node_output_shift) {
 			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
-			this->create_post_adder_shift_limitation_constraints(i);
+			this->create_post_adder_shift_limitation_constraints(i, incremental);
 			if (!this->quiet) std::cout << "        create_post_adder_shift_constraints" << std::endl;
-			this->create_post_adder_shift_constraints(i);
+			this->create_post_adder_shift_constraints(i, incremental);
 		}
-		if (this->max_full_adders >= 0 and i <= this->num_adders) {
-			if (!this->quiet) std::cout << "        create_full_adder_allocation_constraints" << std::endl;
-			this->create_full_adder_allocation_constraints(i);
-			if (!this->quiet) std::cout << "        create_full_adder_overlap_constraints" << std::endl;
-			this->create_full_adder_overlap_constraints(i);
+		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_constraints" << std::endl;
+			this->create_full_adder_coeff_word_size_constraints(i, incremental);
+			if (!this->quiet) std::cout << "        create_full_adder_msb_constraints" << std::endl;
+			this->create_full_adder_msb_constraints(i, incremental);
+			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_sum_constraints" << std::endl;
+			this->create_full_adder_coeff_word_size_sum_constraints(i, incremental);
+			if (!this->quiet) std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
+			this->create_full_adder_shift_gain_constraints(i, incremental);
+			if (!this->quiet) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
+			this->create_full_adder_shift_sum_constraints(i, incremental);
 		}
+	}
+	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+		if (!this->quiet) std::cout << "        create_full_adder_msb_sum_constraints" << std::endl;
+		this->create_full_adder_msb_sum_constraints(incremental);
+		if (!this->quiet) std::cout << "        create_full_adder_add_subtract_inputs_constraints" << std::endl;
+		this->create_full_adder_add_subtract_inputs_constraints(incremental);
+		if (!this->quiet) std::cout << "        create_full_adder_cpa_constraints" << std::endl;
+		this->create_full_adder_cpa_constraints(incremental);
+		if (!this->quiet) std::cout << "        create_full_adder_result_constraints" << std::endl;
+		this->create_full_adder_result_constraints();
 	}
 }
 
@@ -484,6 +535,10 @@ void scm::create_1x1_negated_implication(int a, int b) {
 	this->create_arbitrary_clause({{a, true}, {b, true}});
 }
 
+void scm::create_1x1_reversed_negated_implication(int a, int b) {
+	this->create_arbitrary_clause({{a, false}, {b, false}});
+}
+
 void scm::create_1xN_implication(int a, const std::vector<int> &b) {
 	std::vector<std::pair<int, bool>> v(b.size()+1);
 	for (auto i=0; i<b.size(); i++) {
@@ -559,6 +614,44 @@ void scm::create_2x1_xor(int a, int b, int y) {
 	this->create_arbitrary_clause({{a, true}, {b, false}, {y, false}});
 	// 4)
 	this->create_arbitrary_clause({{a, true}, {b, true}, {y, true}});
+}
+
+void scm::create_2x1_equiv(int a, int b, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, false}, {b, false}, {y, false}});
+	// 2)
+	this->create_arbitrary_clause({{a, false}, {b, true}, {y, true}});
+	// 3)
+	this->create_arbitrary_clause({{a, true}, {b, false}, {y, true}});
+	// 4)
+	this->create_arbitrary_clause({{a, true}, {b, true}, {y, false}});
+}
+
+void scm::create_2x1_or(int a, int b, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, false},{b, false},{y, true}});
+	// 2)
+	this->create_arbitrary_clause({{a, true},{y, false}});
+	// 3)
+	this->create_arbitrary_clause({{b, true},{y, false}});
+}
+
+void scm::create_2x1_and(int a, int b, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, true},{b, true},{y, false}});
+	// 2)
+	this->create_arbitrary_clause({{a, false},{y, true}});
+	// 3)
+	this->create_arbitrary_clause({{b, false},{y, true}});
+}
+
+void scm::create_2x1_and_b_inv(int a, int b, int y) {
+	// 1)
+	this->create_arbitrary_clause({{a, true},{b, false},{y, false}});
+	// 2)
+	this->create_arbitrary_clause({{a, false},{y, true}});
+	// 3)
+	this->create_arbitrary_clause({{b, true},{y, true}});
 }
 
 void scm::create_add_sum(int a, int b, int c_i, int s) {
@@ -650,7 +743,8 @@ int scm::get_result_value(int var_idx) {
 	throw std::runtime_error("get_result_value is impossible in base class");
 }
 
-void scm::create_input_output_constraints() {
+void scm::create_input_output_constraints(bool incremental) {
+	if (incremental) return;
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
 	for (auto w=0; w<this->word_size; w++) {
@@ -665,11 +759,12 @@ void scm::create_input_output_constraints() {
 	}
 	else {
 		// MCM
-		this->create_mcm_output_constraints();
+		this->create_mcm_output_constraints(incremental);
 	}
 }
 
-void scm::create_input_select_constraints(int idx) {
+void scm::create_input_select_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
 	// create constraints for all muxs
@@ -765,7 +860,8 @@ void scm::create_input_select_constraints(int idx) {
 	}
 }
 
-void scm::create_shift_constraints(int idx) {
+void scm::create_shift_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
 		auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
@@ -855,7 +951,8 @@ void scm::create_shift_constraints(int idx) {
 	}
 }
 
-void scm::create_post_adder_shift_constraints(int idx) {
+void scm::create_post_adder_shift_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
 		auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
@@ -928,7 +1025,8 @@ void scm::create_post_adder_shift_constraints(int idx) {
 	}
 }
 
-void scm::create_negate_select_constraints(int idx) {
+void scm::create_negate_select_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
 		auto left_input_var_idx = this->shift_output_variables.at({idx, w});
@@ -953,7 +1051,8 @@ void scm::create_negate_select_constraints(int idx) {
 	}
 }
 
-void scm::create_xor_constraints(int idx) {
+void scm::create_xor_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
 		auto input_var_idx = this->negate_select_output_variables.at({idx, scm::right, w});
@@ -962,7 +1061,8 @@ void scm::create_xor_constraints(int idx) {
 	}
 }
 
-void scm::create_adder_constraints(int idx) {
+void scm::create_adder_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	for (int w = 0; w < this->word_size; w++) {
 		int c_i;
 		if (w == 0) {
@@ -1005,139 +1105,8 @@ void scm::create_adder_constraints(int idx) {
 	}
 }
 
-void scm::create_full_adder_allocation_constraints(int idx) {
-	// define global FA alloc for each bit with index x
-	if (this->calc_twos_complement) {
-		// negative fundamentals are allowed
-		// handle all but the MSB
-		for (int x = 0; x < this->word_size-2; x++) {
-			int container_size = this->max_full_adders + 4;
-			std::vector<std::pair<int, bool>> vars(container_size);
-			// y: global FA alloc index
-			for (int y = 0; y < this->max_full_adders; y++) {
-				vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
-			}
-			for (int w_1 = x; w_1 < this->word_size-1; w_1++) {
-				// for (a << s) - b
-				// subtract bit
-				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
-				// negate select bit
-				vars[this->max_full_adders + 1] = {this->input_negate_select_variables.at(idx), true};
-				// adder output value bit = 1 and adder output value sign bit = 0
-				vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
-				vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
-				// add to solver
-				this->create_arbitrary_clause(vars);
-				// adder output value bit = 0 and adder output value sign bit = 1
-				vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), false};
-				vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
-				// add to solver
-				this->create_arbitrary_clause(vars);
-				// for a + (b << s) and a - (b << s)
-				for (int w_2 = 0; w_2 <= x; w_2++) {
-					// subtract bit
-					vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
-					// shifted value bit
-					vars[this->max_full_adders + 1] = {this->shift_output_variables.at({idx, w_2}), true};
-					// adder output value bit = 1 and adder output value sign bit = 0
-					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
-					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-					// adder output value bit = 0 and adder output value sign bit = 1
-					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), false};
-					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-					// swap subtract with select bit
-					vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-					// adder output value bit = 1 and adder output value sign bit = 0
-					vars[this->max_full_adders + 2] = {this->adder_output_value_variables.at({idx, w_1}), true};
-					vars[this->max_full_adders + 3] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-				}
-			}
-		}
-		// handle MSB => a LUT is only needed if the result has a different sign than both inputs
-		int x = this->word_size-1;
-		int container_size = this->max_full_adders + 3;
-		std::vector<std::pair<int, bool>> vars(container_size);
-		// y: global FA alloc index
-		for (int y = 0; y < this->max_full_adders; y++) {
-			vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
-		}
-		// result >= 0 and both inputs are < 0
-		vars[this->max_full_adders] = {this->adder_output_value_variables.at({idx, this->word_size-1}), true};
-		vars[this->max_full_adders+1] = {this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), false};
-		vars[this->max_full_adders+2] = {this->xor_output_variables.at({idx, this->word_size-1}), false};
-		// add to solver
-		this->create_arbitrary_clause(vars);
-		// result < 0 and both inputs are >= 0
-		vars[this->max_full_adders] = {this->adder_output_value_variables.at({idx, this->word_size-1}), false};
-		vars[this->max_full_adders+1] = {this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), true};
-		vars[this->max_full_adders+2] = {this->xor_output_variables.at({idx, this->word_size-1}), true};
-		// add to solver
-		this->create_arbitrary_clause(vars);
-	}
-	else {
-		// only positive fundamentals are allowed
-		// => the MSB never needs a LUT because it can be copied from one of the inputs
-		for (int x = 0; x < this->word_size-1; x++) {
-			int container_size = this->max_full_adders + 3;
-			std::vector<std::pair<int, bool>> vars(container_size);
-			// y: global FA alloc index
-			for (int y = 0; y < this->max_full_adders; y++) {
-				vars[y] = {this->full_adder_alloc_variables.at({idx, x, y}), false};
-			}
-			for (int w_1 = x; w_1 < this->word_size; w_1++) {
-				// for (a << s) - b
-				// subtract bit
-				vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), true};
-				// adder output value bit
-				vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
-				// negate select bit
-				vars[this->max_full_adders+2] = {this->input_negate_select_variables.at(idx), true};
-				// add to solver
-				this->create_arbitrary_clause(vars);
-				// for a + (b << s) and a - (b << s)
-				for (int w_2 = 0; w_2 <= x; w_2++) {
-					// subtract bit
-					vars[this->max_full_adders] = {this->input_negate_value_variables.at(idx), false};
-					// adder output value bit
-					vars[this->max_full_adders+1] = {this->adder_output_value_variables.at({idx, w_1}), true};
-					// shifted value bit
-					vars[this->max_full_adders+2] = {this->shift_output_variables.at({idx, w_2}), true};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-					// swap subtract with select bit
-					vars[this->max_full_adders] = {this->input_negate_select_variables.at(idx), false};
-					// add to solver
-					this->create_arbitrary_clause(vars);
-				}
-			}
-		}
-	}
-}
-
-void scm::create_full_adder_overlap_constraints(int idx_1) {
-	if (this->max_full_adders <= 0) return;
-	auto w_lim = (this->calc_twos_complement?this->word_size-1:this->word_size);
-	for (int w_1 = 0; w_1 < w_lim; w_1++) {
-		for (int idx_2 = idx_1; idx_2 <= this->num_adders; idx_2++) {
-			for (int w_2 = 0; w_2 < w_lim; w_2++) {
-				if (idx_1 == idx_2 and w_1 == w_2) continue; // no overlap with itself
-				for (int x = 0; x < this->max_full_adders; x++) {
-					this->create_1x1_negated_implication(this->full_adder_alloc_variables.at({idx_1, w_1, x}), this->full_adder_alloc_variables.at({idx_2, w_2, x}));
-				}
-			}
-		}
-	}
-}
-
-void scm::create_input_select_limitation_constraints(int idx) {
+void scm::create_input_select_limitation_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
 	for (auto &dir : this->input_directions) {
@@ -1151,7 +1120,8 @@ void scm::create_input_select_limitation_constraints(int idx) {
 	}
 }
 
-void scm::create_shift_limitation_constraints(int idx) {
+void scm::create_shift_limitation_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -1162,7 +1132,8 @@ void scm::create_shift_limitation_constraints(int idx) {
 	}
 }
 
-void scm::create_post_adder_shift_limitation_constraints(int idx) {
+void scm::create_post_adder_shift_limitation_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -1183,6 +1154,13 @@ void scm::get_solution_from_backend() {
 	this->post_adder_shift_value.clear();
 	this->add_result_values.clear();
 	this->output_values.clear();
+
+
+	this->coeff_word_size_values.clear();
+	this->can_cut_msb_values.clear();
+	this->coeff_word_size_sum_values.clear();
+	this->shift_sum_values.clear();
+	this->num_FAs_value = 0;
 	// get solution
 	for (int idx = 0; idx <= this->num_adders; idx++) {
 		// output_values
@@ -1219,6 +1197,78 @@ void scm::get_solution_from_backend() {
 				this->add_result_values[idx] += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 			}
 			if (this->calc_twos_complement) this->add_result_values[idx] = sign_extend(this->add_result_values[idx], this->word_size);
+			if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+				// coeff word size internal
+				for (auto w = this->word_size-1; w >= 0; w--) {
+					auto max_val = this->word_size - w;
+					auto max_val_w = this->ceil_log2(max_val + 1);
+					auto internal_val = 0;
+					for (auto x = 0; x < max_val_w; x++) {
+						auto bit_val = this->get_result_value(this->full_adder_coeff_word_size_internal_variables.at({idx, w, x}));
+						internal_val += (bit_val << x);
+					}
+					//std::cout << "#q# coeff_word_size_internal_values[" << idx << "," << w << "] = " << internal_val << std::endl;
+					//std::cout << "#q# coeff_word_size_carry_input_values[" << idx << "," << w << "] = " << this->get_result_value(this->full_adder_coeff_word_size_internal_carry_input_variables.at({idx, w})) << std::endl;
+				}
+				// coeff word size
+				this->coeff_word_size_values[idx] = 0;
+				auto num_bits_word_size = this->ceil_log2(this->word_size+1);
+				for (auto w = 0; w < num_bits_word_size; w++) {
+					this->coeff_word_size_values[idx] += (this->get_result_value(this->full_adder_coeff_word_size_variables.at({idx, w})) << w);
+				}
+				//std::cout << "#q# coeff_word_size_values[" << idx << "] = " << this->coeff_word_size_values[idx] << std::endl;
+				// cut msb
+				this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
+				//std::cout << "#q# can_cut_msb_values[" << idx << "] = " << this->can_cut_msb_values[idx] << std::endl;
+				// coeff word size sum
+				this->coeff_word_size_sum_values[idx] = 0;
+				auto coeff_sum_output_word_size = this->ceil_log2((idx*this->word_size)+1);
+				for (auto w = 0; w < coeff_sum_output_word_size; w++) {
+					this->coeff_word_size_sum_values[idx] += (this->get_result_value(this->full_adder_word_size_sum_variables.at({idx, w})) << w);
+				}
+				//std::cout << "#q# coeff_word_size_sum_values[" << idx << "] = " << this->coeff_word_size_sum_values[idx] << std::endl;
+				// shift gain
+				this->shift_gain_values[idx] = 0;
+				for (auto w = 0; w < this->shift_word_size; w++) {
+					this->shift_gain_values[idx] += (this->get_result_value(this->full_adder_shift_gain_variables.at({idx, w})) << w);
+				}
+				//std::cout << "#q# shift_gain_values[" << idx << "] = " << this->shift_gain_values[idx] << std::endl;
+				// shift sum
+				this->shift_sum_values[idx] = 0;
+				auto shift_sum_output_word_size = this->ceil_log2((idx*this->max_shift)+1);
+				for (auto w = 0; w < shift_sum_output_word_size; w++) {
+					this->shift_sum_values[idx] += (this->get_result_value(this->full_adder_shift_sum_variables.at({idx, w})) << w);
+				}
+				//std::cout << "#q# shift_sum_values[" << idx << "] = " << this->shift_sum_values[idx] << std::endl;
+			}
+		}
+	}
+	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+		// number of FAs
+		this->num_FAs_value = 0;
+		auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
+		auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+		auto output_word_size = std::max(input_word_size_add, input_word_size_sub)+1;
+		for (auto w = 0; w < output_word_size; w++) {
+			this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
+		}
+		//std::cout << "#q# num_FAs_value = " << this->num_FAs_value << std::endl;
+		// print number of FAs as bit string
+		//std::cout << "#q# num_FAs_value(bits) = ";
+		for (auto w = output_word_size-1; w >= 0; w--) {
+			//std::cout << ((this->num_FAs_value >> w) & 1) << " ";
+		}
+		//std::cout << std::endl;
+		// print limit as bit string
+		//std::cout << "#q# FA_limit(bits) = ";
+		for (auto w = output_word_size-1; w >= 0; w--) {
+			//std::cout << ((this->max_full_adders >> w) & 1) << " ";
+		}
+		//std::cout << std::endl;
+		// print ok and carry bits
+		for (auto w = output_word_size-1; w >= 0; w--) {
+			//std::cout << "#q# ok[" << w << "] = " << this->full_adder_comparator_ok_variables.at(w) << " = " << this->get_result_value(this->full_adder_comparator_ok_variables.at(w)) << std::endl;
+			//std::cout << "#q# carry[" << w << "] = " << this->full_adder_comparator_carry_variables.at(w) << " = " << this->get_result_value(this->full_adder_comparator_carry_variables.at(w)) << std::endl;
 		}
 	}
 }
@@ -1267,12 +1317,15 @@ bool scm::solution_is_valid() {
 						this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w}]) << w);
 				}
 			}
+			if (this->calc_twos_complement) this->input_select_mux_output[{idx, scm::left}] = sign_extend(this->input_select_mux_output[{idx, scm::left}], this->word_size);
+			if (this->calc_twos_complement) this->input_select_mux_output[{idx, scm::right}] = sign_extend(this->input_select_mux_output[{idx, scm::right}], this->word_size);
 			input_node_idx_l = this->input_select[{idx, scm::left}];
 			input_node_idx_r = this->input_select[{idx, scm::right}];
 			actual_input_value_l = this->input_select_mux_output[{idx, scm::left}];
 			actual_input_value_r = this->input_select_mux_output[{idx, scm::right}];
-			if (this->calc_twos_complement) actual_input_value_l = sign_extend(actual_input_value_l, this->word_size);
-			if (this->calc_twos_complement) actual_input_value_r = sign_extend(actual_input_value_r, this->word_size);
+		}
+		else {
+			this->input_select_mux_output[{idx, scm::left}] = this->input_select_mux_output[{idx, scm::right}] = 1;
 		}
 		int64_t left_input_value = this->output_values[input_node_idx_l];
 		int64_t right_input_value = this->output_values[input_node_idx_r];
@@ -1449,6 +1502,60 @@ bool scm::solution_is_valid() {
 				valid = false;
 			}
 		}
+		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+			// coeff word size
+			auto add_result = this->add_result_values.at(idx);
+			auto expected_add_result_word_size = this->ceil_log2(std::abs(add_result)+1);
+			auto actual_add_result_word_size = this->coeff_word_size_values.at(idx);
+			if (!this->quiet) {
+				std::cout << "node #" << idx << " add result word size" << std::endl;
+				std::cout << "  add result = " << add_result << std::endl;
+				std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
+			}
+			if (expected_add_result_word_size != actual_add_result_word_size) {
+				std::cout << "node #" << idx << " has invalid add result word size" << std::endl;
+				std::cout << "  add result = " << add_result << std::endl;
+				std::cout << "  expected word size = " << expected_add_result_word_size << std::endl;
+				std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
+				valid = false;
+			}
+			// coeff word size sum
+			auto expected_sum = 0;
+			for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+				expected_sum += this->coeff_word_size_values.at(prev_idx);
+			}
+			auto actual_sum = this->coeff_word_size_sum_values.at(idx);
+			if (!this->quiet) {
+				std::cout << "node #" << idx << " add result word size sum" << std::endl;
+				for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+					std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx) << std::endl;
+				}
+				std::cout << "  actual sum = " << actual_sum << std::endl;
+			}
+			if (expected_sum != actual_sum) {
+				std::cout << "node #" << idx << " has invalid add result word size sum" << std::endl;
+				for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+					std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx) << std::endl;
+				}
+				std::cout << "  expected sum = " << expected_sum << std::endl;
+				std::cout << "  actual sum = " << actual_sum << std::endl;
+				valid = false;
+			}
+			// shift gain
+			// todo: implement
+			// shift sum
+			// todo: implement
+			// cut msb
+			// todo: implement
+		}
+	}
+	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+		// cut msb sum
+		// todo: implement
+		// num FAs result
+		// todo: implement
+		// limit exceeded?
+		// todo: implement
 	}
 	return valid;
 }
@@ -1461,7 +1568,7 @@ void scm::create_cnf_file() {
 		constants << this->C[i];
 	}
 	std::string filename;
-	if (this->max_full_adders >= 0) {
+	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 		filename = constants.str() + "-" + std::to_string(this->num_adders) + "-" + std::to_string(this->max_full_adders) + ".cnf";
 	}
 	else {
@@ -1473,7 +1580,8 @@ void scm::create_cnf_file() {
 	f.close();
 }
 
-void scm::create_mcm_output_constraints() {
+void scm::create_mcm_output_constraints(bool incremental) {
+	if (incremental) return;
 	for (auto &c : this->C) {
 		std::vector<int> or_me;
 		for (int idx = 1; idx <= this->num_adders; idx++) {
@@ -1516,17 +1624,8 @@ void scm::create_mcm_output_variables(int idx) {
 	}
 }
 
-void scm::create_full_adder_alloc_variables(int idx) {
-	auto w_lim = (this->calc_twos_complement?this->word_size-1:this->word_size);
-	for (int w = 0; w < w_lim; w++) {
-		for (int x = 0; x < this->max_full_adders; x++) {
-			this->full_adder_alloc_variables[{idx, w, x}] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-		}
-	}
-}
-
-void scm::create_odd_fundamentals_constraints(int idx) {
+void scm::create_odd_fundamentals_constraints(int idx, bool incremental) {
+	if (incremental) return;
 	this->force_bit(this->output_value_variables.at({idx,0}), 1);
 }
 
@@ -1628,4 +1727,578 @@ void scm::ignore_sign(bool only_apply_to_negative_coefficients) {
 			this->sign_inversion_allowed[c] = true;
 		}
 	}
+}
+
+void scm::create_full_adder_coeff_word_size_constraints(int idx, bool incremental) {
+	if (incremental) return;
+	std::vector<int> abs_coeff_bits(this->word_size);
+	if (this->calc_twos_complement) {
+		// compute abs(c) using a MUX and an inversion and a +1 adder
+		/*int carry_bit = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		this->force_bit(carry_bit, 1);*/
+		int carry_bit = this->init_const_one_bit();
+		std::vector<int> inv_c_bits(this->word_size);
+		auto &sign_bit = this->adder_output_value_variables.at({idx, this->word_size-1});
+		for (int w = 0; w < this->word_size; w++) {
+			// first, implement c*(-1)
+			auto sum_bit = inv_c_bits[w] = ++this->variable_counter; // sum bit
+			this->create_new_variable(this->variable_counter);
+			auto &add_bit = this->adder_output_value_variables.at({idx, w});
+			if (w < this->word_size-1) {
+				int carry_out_bit = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				// create clauses for sum and carry bits
+				//this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit, carry_out_bit);
+				this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false}, {carry_out_bit, false});
+				// pass carry bit to next stage
+				carry_bit = carry_out_bit;
+			}
+			else {
+				// only create clauses for sum bit
+				//this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit);
+				this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false});
+			}
+			// now, implement the MUX, controlled by the sign bit
+			auto mux_bit = abs_coeff_bits[w] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+			this->create_2x1_mux(add_bit, sum_bit, sign_bit, mux_bit);
+		}
+	}
+	else {
+		// abs(c) = c because c is an unsigned number
+		for (int w=0; w<this->word_size; w++) {
+			abs_coeff_bits[w] = this->adder_output_value_variables.at({idx, w});
+		}
+	}
+
+	// compute word size of abs(c)
+	// carry-input = 0
+	/*int carry_bit = ++this->variable_counter;
+	this->create_new_variable(this->variable_counter);
+	this->force_bit(carry_bit, 0);*/
+	int carry_bit = this->init_const_zero_bit();
+	// initial value = 0
+	std::vector<int> val(1);
+	/*val[0] = ++this->variable_counter;
+	this->create_new_variable(this->variable_counter);
+	this->force_bit(val[0], 0);*/
+	val[0] = this->init_const_zero_bit();
+	for (int w=this->word_size-1; w>=0; w--) {
+		this->full_adder_coeff_word_size_internal_carry_input_variables[{idx, w}] = carry_bit;
+		auto w_in = val.size();
+		auto max_val = this->word_size-w;
+		auto w_out = this->ceil_log2(max_val+1);
+		auto &bit_value = abs_coeff_bits[w];
+		// temp_or = carry OR bit_value
+		auto temp_or = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		this->create_2x1_or(carry_bit, bit_value, temp_or);
+		// temp_and[x] = carry AND val[x]
+		std::vector<int> temp_and(w_in);
+		for (int x = 0; x < w_in; x++) {
+			temp_and[x] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+			this->create_2x1_and(carry_bit, val[x], temp_and[x]);
+		}
+		// val_new = temp_or + temp_and
+		auto add_carry = temp_or;
+		std::vector<int> val_new(w_out);
+		for (int x = 0; x < w_in; x++) {
+			this->full_adder_coeff_word_size_internal_variables[{idx, w, x}] = val_new[x] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+			if (x == w_in-1) {
+				if (w_in == w_out) {
+					// no carry output required
+					//this->create_half_adder(add_carry, val[x], val_new[x]);
+					this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false});
+				}
+				else {
+					// use carry output as sum output for result MSB
+					int carry_out = ++this->variable_counter;
+					this->create_new_variable(this->variable_counter);
+					//this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
+					this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false}, {carry_out, false});
+					this->full_adder_coeff_word_size_internal_variables[{idx, w, x+1}] = val_new[x+1] = carry_out;
+				}
+			}
+			else {
+				// normal half adder
+				int carry_out = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				//this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
+				this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false}, {carry_out, false});
+				add_carry = carry_out;
+			}
+		}
+		val = val_new;
+		carry_bit = temp_or;
+	}
+	for (int w = 0; w < val.size(); w++) {
+		this->full_adder_coeff_word_size_variables[{idx, w}] = val[w];
+	}
+}
+
+void scm::create_full_adder_msb_constraints(int idx, bool incremental) {
+	if (incremental) return;
+	if (!this->calc_twos_complement) {
+		// can always cut MSB because all coefficients are positive
+		// -> just set the m to 1 and count on unit propagation within the solver :)
+		this->full_adder_msb_variables[idx] = this->init_const_one_bit();
+		this->force_bit(this->const_one_bit, 1);
+		return;
+	}
+	auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
+	this->create_new_variable(this->variable_counter);
+	int s_c = this->adder_output_value_variables.at({idx, this->word_size-1});
+	if (idx == 1) {
+		// m = not s_c
+		this->create_1x1_negated_implication(s_c, m);
+		this->create_1x1_reversed_negated_implication(s_c, m);
+		return;
+	}
+	int s_x = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
+	int s_y = this->input_select_mux_output_variables.at({idx, scm::right, this->word_size-1});
+	// create clauses to decide whether the sign m can be copied from one of the inputs
+	// 1)
+	this->create_arbitrary_clause({
+																	{s_y, false},
+																	{s_c, false},
+																	{m,   false},
+																});
+	// 2)
+	this->create_arbitrary_clause({
+																	{s_x, false},
+																	{s_y, true},
+																	{m,   false},
+																});
+	// 3)
+	this->create_arbitrary_clause({
+																	{s_x, true},
+																	{s_c, true},
+																	{m,   false},
+																});
+	// 4)
+	// 5)
+	// 6)
+	// 7)
+	this->create_arbitrary_clause({
+																	{s_x, true},
+																	{s_y, true},
+																	{s_c, false},
+																	{m,   true},
+																});
+	// 8)
+	this->create_arbitrary_clause({
+																	{s_x, false},
+																	{s_y, false},
+																	{s_c, true},
+																	{m,   true},
+																});
+}
+
+void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, bool incremental) {
+	if (incremental) return;
+	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
+	if (idx == 1) {
+		// no addition necessary -> just set container with variables
+		for (int w=0; w<num_bits_word_size; w++) {
+			this->full_adder_word_size_sum_variables[{idx, w}] = this->full_adder_coeff_word_size_variables.at({idx, w});
+		}
+		return;
+	}
+	// result[idx] = num_bits[idx] + result[idx-1]
+	auto input_word_size = this->ceil_log2(((idx-1)*this->word_size)+1);
+	auto output_word_size = this->ceil_log2((idx*this->word_size)+1);
+	std::vector<std::pair<std::vector<int>, bool>> x(2);
+	x[0].second = x[1].second = false; // add both bit vectors
+	// first input: num_bits[idx]
+	x[0].first.resize(num_bits_word_size);
+	for (int w=0; w<num_bits_word_size; w++) {
+		x[0].first[w] = this->full_adder_coeff_word_size_variables.at({idx, w});
+	}
+	// second input: result[idx-1]
+	x[1].first.resize(input_word_size);
+	for (int w=0; w<input_word_size; w++) {
+		x[1].first[w] = this->full_adder_word_size_sum_variables.at({idx-1, w});
+	}
+	// output: result[idx]
+	auto output_bits = this->create_bitheap(x);
+	for (int w=0; w<output_word_size; w++) {
+		this->full_adder_word_size_sum_variables[{idx, w}] = output_bits.at(w);
+	}
+}
+
+void scm::create_full_adder_shift_gain_constraints(int idx, bool incremental) {
+	if (incremental) return;
+	for (int w = 0; w < this->shift_word_size; w++) {
+		auto var = this->full_adder_shift_gain_variables[{idx, w}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		/*
+		this->create_arbitrary_clause({
+																		{this->shift_output_variables.at({idx, w}), false},
+																		{var, true},
+																	});
+		this->create_arbitrary_clause({
+																		{this->input_negate_value_variables.at(idx), true},
+																		{this->input_negate_select_variables.at(idx), true},
+																		{var, true},
+																	});
+		this->create_arbitrary_clause({
+																		{this->shift_output_variables.at({idx, w}), true},
+																		{this->input_negate_value_variables.at(idx), false},
+																		{var, false},
+																	});
+		this->create_arbitrary_clause({
+																		{this->shift_output_variables.at({idx, w}), true},
+																		{this->input_negate_select_variables.at(idx), false},
+																		{var, false},
+																	});
+																	*/
+		this->create_arbitrary_clause({
+																		{this->input_shift_value_variables.at({idx, w}), false},
+																		{var, true},
+																	});
+		this->create_arbitrary_clause({
+																		{this->input_negate_value_variables.at(idx), true},
+																		{this->input_negate_select_variables.at(idx), true},
+																		{var, true},
+																	});
+		this->create_arbitrary_clause({
+																		{this->input_shift_value_variables.at({idx, w}), true},
+																		{this->input_negate_value_variables.at(idx), false},
+																		{var, false},
+																	});
+		this->create_arbitrary_clause({
+																		{this->input_shift_value_variables.at({idx, w}), true},
+																		{this->input_negate_select_variables.at(idx), false},
+																		{var, false},
+																	});
+	}
+}
+
+void scm::create_full_adder_shift_sum_constraints(int idx, bool incremental) {
+	if (incremental) return;
+	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
+	if (idx == 1) {
+		// no addition necessary -> just set container with variables
+		for (int w=0; w<num_bits_word_size; w++) {
+			this->full_adder_shift_sum_variables[{idx, w}] = this->full_adder_shift_gain_variables.at({idx, w});
+		}
+	}
+	// result[idx] = shift[idx] + result[idx-1]
+	auto input_word_size = this->ceil_log2(((idx-1)*this->max_shift)+1);
+	auto output_word_size = this->ceil_log2((idx*this->max_shift)+1);
+	std::vector<std::pair<std::vector<int>, bool>> x(2);
+	x[0].second = x[1].second = false; // add both bit vectors
+	// first input: shift[idx]
+	x[0].first.resize(num_bits_word_size);
+	for (int w=0; w<num_bits_word_size; w++) {
+		x[0].first[w] = this->full_adder_shift_gain_variables.at({idx, w});
+	}
+	// second input: result[idx-1]
+	x[1].first.resize(input_word_size);
+	for (int w=0; w<input_word_size; w++) {
+		x[1].first[w] = this->full_adder_shift_sum_variables.at({idx-1, w});
+	}
+	// output: result[idx]
+	auto output_bits = this->create_bitheap(x);
+	for (int w=0; w<output_word_size; w++) {
+		this->full_adder_shift_sum_variables[{idx, w}] = output_bits.at(w);
+	}
+}
+
+void scm::create_full_adder_msb_sum_constraints(bool incremental) {
+	if (incremental) return;
+	if (this->num_adders == 1) {
+		// no addition necessary -> just set container with variable
+		this->full_adder_msb_sum_variables[0] = this->full_adder_msb_variables.at(1);
+		return;
+	}
+	// sum all bits up
+	std::vector<std::pair<std::vector<int>, bool>> x(this->num_adders, std::pair<std::vector<int>, bool>(std::vector<int>(1), false));
+	for (int idx=1; idx<=this->num_adders; idx++) {
+		x[idx-1].first[0] = this->full_adder_msb_variables.at(idx);
+	}
+	auto output_bits = this->create_bitheap(x);
+	auto output_word_size = this->ceil_log2(this->num_adders+1);
+	for (int w=0; w<output_word_size; w++) {
+		this->full_adder_msb_sum_variables[w] = output_bits.at(w);
+	}
+}
+
+void scm::create_full_adder_add_subtract_inputs_constraints(bool incremental) {
+	if (incremental) return;
+	// result = shift_result[last_stage] + msb_sum
+	auto word_size_left_input = this->ceil_log2(this->num_adders * this->max_shift + 1);
+	auto word_size_right_input = this->ceil_log2(this->num_adders + 1);
+	auto output_word_size = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+	std::vector<std::pair<std::vector<int>, bool>> x(2);
+	x[0].second = x[1].second = false;
+	x[0].first.resize(word_size_left_input);
+	for (int w=0; w<word_size_left_input; w++) {
+		x[0].first[w] = this->full_adder_shift_sum_variables.at({this->num_adders, w});
+	}
+	x[1].first.resize(word_size_right_input);
+	for (int w=0; w<word_size_right_input; w++) {
+		x[1].first[w] = this->full_adder_msb_sum_variables.at(w);
+	}
+	auto output_bits = this->create_bitheap(x);
+	for (int w=0; w<output_word_size; w++) {
+		this->full_adder_add_subtract_inputs_variables[w] = output_bits.at(w);
+	}
+}
+
+void scm::create_full_adder_cpa_constraints(bool incremental) {
+	if (incremental) return;
+	// result = num_bits[last_stage] - (shift_result[last_stage] + msb_sum)
+	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
+	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+	auto output_word_size = std::max(input_word_size_add, input_word_size_sub)+1;
+	std::vector<std::pair<std::vector<int>, bool>> x(2);
+	// decide add/sub for the two inputs
+	x[0].second = false;
+	x[1].second = true;
+	// prepare add input bits
+	x[0].first.resize(output_word_size);
+	for (int w=0; w<input_word_size_add; w++) {
+		x[0].first[w] = this->full_adder_word_size_sum_variables.at({this->num_adders, w});
+	}
+	// sign extend add input with zeros
+	for (int w=input_word_size_add; w<output_word_size; w++) {
+		x[0].first[w] = this->init_const_zero_bit();
+	}
+	// prepare sub input bits
+	x[1].first.resize(output_word_size);
+	for (int w=0; w<input_word_size_sub; w++) {
+		x[1].first[w] = this->full_adder_add_subtract_inputs_variables.at(w);
+	}
+	// sign extend sub input with zeros
+	for (int w=input_word_size_add; w<output_word_size; w++) {
+		x[1].first[w] = this->init_const_zero_bit();
+	}
+	// compute output
+	auto output_bits = this->create_bitheap(x);
+	for (int w=0; w<output_word_size; w++) {
+		this->full_adder_result_variables[w] = output_bits.at(w);
+	}
+}
+
+void scm::create_full_adder_result_constraints() {
+	// force num_full_adders <= max_full_adders
+	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
+	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+	auto output_word_size = std::max(input_word_size_add, input_word_size_sub)+1;
+	int ok_last = -1;
+	int carry_last = -1;
+	for (int w=output_word_size-1; w>=0; w--) {
+		auto c = (int)((this->max_full_adders >> w) & 1);
+		int x = this->full_adder_result_variables.at(w);
+		int ok_new = -1;
+		int carry_new = -1;
+		if (w == output_word_size-1) {
+			// sign bit
+			if (c) {
+				ok_new = this->full_adder_result_variables.at(w);
+				if (w != 0) {
+					carry_new = this->full_adder_result_variables.at(w);
+				}
+			}
+			else {
+				ok_new = this->init_const_one_bit();
+				if (w != 0) {
+					carry_new = ++this->variable_counter;
+					this->create_new_variable(this->variable_counter);
+					// carry_new = not x (via negated implications)
+					this->create_1x1_negated_implication(x, carry_new);
+					this->create_1x1_reversed_negated_implication(x, carry_new);
+				}
+			}
+		}
+		else {
+			// regular bit
+			ok_new = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+			if (w != 0) {
+				carry_new = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+			}
+			if (c) {
+				this->create_2x1_or(ok_last, carry_last, ok_new);
+				if (w != 0) {
+					this->create_2x1_and(x, carry_last, carry_new);
+				}
+			}
+			else {
+				auto not_x = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				this->create_1x1_negated_implication(x, not_x);
+				this->create_1x1_reversed_negated_implication(x, not_x);
+				this->create_2x1_mux(ok_last, not_x, carry_last, ok_new);
+				if (w != 0) {
+					this->create_2x1_and(carry_last, not_x, carry_new);
+				}
+			}
+		}
+		// force ok bit of this stage to 1
+		this->force_bit(ok_new, 1);
+		// pass ok and carry bits to next stage
+		this->full_adder_comparator_ok_variables[w] = ok_last = ok_new;
+		this->full_adder_comparator_carry_variables[w] = carry_last = carry_new;
+	}
+}
+
+void scm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
+	//this->create_add_sum(a, b, c_i, sum);
+	// 1)
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, not b.second}, {c_i.first, c_i.second}, {sum.first, sum.second}});
+	// 2)
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, b.second}, {c_i.first, c_i.second}, {sum.first, sum.second}});
+	// 3)
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {c_i.first, c_i.second}, {sum.first, not sum.second}});
+	// 4)
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, not b.second}, {c_i.first, c_i.second}, {sum.first, not sum.second}});
+	// 5)
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, not b.second}, {c_i.first, not c_i.second}, {sum.first, not sum.second}});
+	// 6)
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, b.second}, {c_i.first, not c_i.second}, {sum.first, not sum.second}});
+	// 7)
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {c_i.first, not c_i.second}, {sum.first, sum.second}});
+	// 8)
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, not b.second}, {c_i.first, not c_i.second}, {sum.first, sum.second}});
+
+	if (c_o.first <= 0) return;
+	//this->create_add_carry(a, b, c_i, c_o);
+	// 1)
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, not b.second}, {c_o.first, c_o.second}});
+	// 2)
+	this->create_arbitrary_clause({{a.first, a.second}, {c_i.first, c_i.second}, {c_o.first, not c_o.second}});
+	// 3)
+	this->create_arbitrary_clause({{b.first, b.second}, {c_i.first, c_i.second}, {c_o.first, not c_o.second}});
+	// 4)
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {c_o.first, not c_o.second}});
+	// 5)
+	this->create_arbitrary_clause({{b.first, not b.second}, {c_i.first, not c_i.second}, {c_o.first, c_o.second}});
+	// 6)
+	this->create_arbitrary_clause({{a.first, not a.second}, {c_i.first, not c_i.second}, {c_o.first, c_o.second}});
+}
+
+void scm::create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
+	//this->create_2x1_xor(a, b, sum);
+	// 1) a b -sum
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {sum.first, not sum.second}});
+	// 2) a -b sum
+	this->create_arbitrary_clause({{a.first, a.second}, {b.first, not b.second}, {sum.first, sum.second}});
+	// 3) -a b sum
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, b.second}, {sum.first, sum.second}});
+	// 4) -a -b -sum
+	this->create_arbitrary_clause({{a.first, not a.second}, {b.first, not b.second}, {sum.first, not sum.second}});
+
+	if (c_o.first <= 0) return;
+	//this->create_2x1_and(a, b, c_o);
+	// 1) -a -b c_o
+	this->create_arbitrary_clause({{a.first, not a.second},{b.first, not b.second},{c_o.first, c_o.second}});
+	// 2) a -c_o
+	this->create_arbitrary_clause({{a.first, a.second},{c_o.first, not c_o.second}});
+	// 3) b -c_o
+	this->create_arbitrary_clause({{b.first, b.second},{c_o.first, not c_o.second}});
+}
+
+int scm::init_const_one_bit() {
+	if (this->const_one_bit < 1) {
+		this->const_one_bit = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		this->force_bit(this->const_one_bit, 1);
+	}
+	return this->const_one_bit;
+}
+
+int scm::init_const_zero_bit() {
+	if (this->const_zero_bit < 1) {
+		this->const_zero_bit = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		this->force_bit(this->const_zero_bit, 0);
+	}
+	return this->const_zero_bit;
+}
+
+std::vector<int> scm::create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x) {
+	std::vector<int> result_variables;
+	std::map<int, std::vector<std::pair<int, bool>>> y;
+	int num_bits = 0;
+	for (auto &it : x) {
+		auto bits = it.first;
+		auto sub = it.second;
+		if (bits.size() > num_bits) num_bits = bits.size();
+		if (sub) {
+			// add 1 for 2k inversion
+			y[0].emplace_back(this->init_const_one_bit(), false);
+			// add inverted bits
+			for (int bit_pos=0; bit_pos<bits.size(); bit_pos++) {
+				y[bit_pos].emplace_back(bits[bit_pos], true);
+			}
+		}
+		else {
+			// add bits
+			for (int bit_pos=0; bit_pos<bits.size(); bit_pos++) {
+				y[bit_pos].emplace_back(bits[bit_pos], false);
+			}
+		}
+	}
+	int i = 0;
+	while (i < num_bits) {
+		while (y[i].size() > 1) {
+			if (y[i].size() == 2) {
+				// half adder
+				// create new literals for sum and carry
+				auto sum = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				auto carry = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				// get bits to add from container
+				auto a = y[i].back();
+				y[i].pop_back();
+				auto b = y[i].back();
+				y[i].pop_back();
+				// create clauses
+				this->create_half_adder(a, b, {sum, false}, {carry, false});
+				// add new bits to bitheap
+				y[i].emplace_back(sum, false);
+				y[i+1].emplace_back(carry, false);
+				if (i+2 > num_bits) num_bits = i+2;
+			}
+			else {
+				// full adder
+				// create new literals for sum and carry
+				auto sum = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				auto carry = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+				// get bits to add from container
+				auto a = y[i].back();
+				y[i].pop_back();
+				auto b = y[i].back();
+				y[i].pop_back();
+				auto c = y[i].back();
+				y[i].pop_back();
+				// create clauses
+				this->create_full_adder(a, b, c, {sum, false}, {carry, false});
+				y[i].emplace_back(sum, false);
+				y[i+1].emplace_back(carry, false);
+				if (i+2 > num_bits) num_bits = i+2;
+			}
+		}
+		if (y[i].size() != 1) {
+			std::cerr << "Failed compressing bits at position " << i << " -> " << y[i].size() << " bits are left instead of 1" << std::endl;
+			throw std::runtime_error("error during bitheap clause generation");
+		}
+		if (y[i][0].second) {
+			std::cerr << "Failed compressing bits at position " << i << " -> the output bit is inverted..." << std::endl;
+			throw std::runtime_error("error during bitheap clause generation");
+		}
+		result_variables.emplace_back(y[i][0].first);
+		// advance to next bit position
+		i++;
+	}
+	return result_variables;
 }
