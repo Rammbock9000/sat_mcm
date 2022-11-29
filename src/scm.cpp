@@ -2074,7 +2074,7 @@ void scm::create_full_adder_cpa_constraints(bool incremental) {
 		x[1].first[w] = this->full_adder_add_subtract_inputs_variables.at(w);
 	}
 	// sign extend sub input with zeros
-	for (int w=input_word_size_add; w<output_word_size; w++) {
+	for (int w=input_word_size_sub; w<output_word_size; w++) {
 		x[1].first[w] = this->init_const_zero_bit();
 	}
 	// compute output
