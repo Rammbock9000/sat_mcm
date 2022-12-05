@@ -20,6 +20,9 @@ public:
 	enum input_direction {
 		left, right
 	};
+	enum formulation_mode {
+		reset_all, all_FA_clauses, only_FA_limit
+	};
 	const std::set<input_direction> input_directions = {left, right};
 	/*!
 	 * constructor
@@ -90,7 +93,7 @@ protected:
 	/*!
 	 * reset the solver backend
 	 */
-	virtual void reset_backend(bool incremental);
+	virtual void reset_backend(formulation_mode mode);
 
 	/*!
 	 * create new variable (if backend needs it)
@@ -562,15 +565,15 @@ private:
 	/*!
 	 * create solver constraints
 	 */
-	void create_constraints(bool incremental);
+	void create_constraints(formulation_mode mode);
 	/*!
 	 * construct the problem (everything needed for solving)
 	 */
-	void construct_problem(bool incremental);
+	void construct_problem(formulation_mode mode);
 	/*!
 	 * optimize #adders or #full_adders within this loop
 	 */
-	void optimization_loop(bool incremental = false);
+	void optimization_loop(formulation_mode mode);
 	/*!
 	 * cache values for ceil(log2(n))
 	 */
@@ -602,26 +605,26 @@ private:
 	////////////////////////////////
 	//// CREATE ALL CONSTRAINTS ////
 	////////////////////////////////
-	void create_input_output_constraints(bool incremental);
-	void create_input_select_constraints(int idx, bool incremental);
-	void create_input_select_limitation_constraints(int idx, bool incremental);
-	void create_shift_limitation_constraints(int idx, bool incremental);
-	void create_shift_constraints(int idx, bool incremental);
-	void create_negate_select_constraints(int idx, bool incremental);
-	void create_xor_constraints(int idx, bool incremental);
-	void create_adder_constraints(int idx, bool incremental);
-	void create_post_adder_shift_limitation_constraints(int idx, bool incremental);
-	void create_post_adder_shift_constraints(int idx, bool incremental);
-	void create_odd_fundamentals_constraints(int idx, bool incremental);
-	void create_mcm_output_constraints(bool incremental);
-	void create_full_adder_coeff_word_size_constraints(int idx, bool incremental);
-	void create_full_adder_msb_constraints(int idx, bool incremental);
-	void create_full_adder_coeff_word_size_sum_constraints(int idx, bool incremental);
-	void create_full_adder_shift_gain_constraints(int idx, bool incremental);
-	void create_full_adder_shift_sum_constraints(int idx, bool incremental);
-	void create_full_adder_msb_sum_constraints(bool incremental);
-	void create_full_adder_add_subtract_inputs_constraints(bool incremental);
-	void create_full_adder_cpa_constraints(bool incremental);
+	void create_input_output_constraints(formulation_mode mode);
+	void create_input_select_constraints(int idx, formulation_mode mode);
+	void create_input_select_limitation_constraints(int idx, formulation_mode mode);
+	void create_shift_limitation_constraints(int idx, formulation_mode mode);
+	void create_shift_constraints(int idx, formulation_mode mode);
+	void create_negate_select_constraints(int idx, formulation_mode mode);
+	void create_xor_constraints(int idx, formulation_mode mode);
+	void create_adder_constraints(int idx, formulation_mode mode);
+	void create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode);
+	void create_post_adder_shift_constraints(int idx, formulation_mode mode);
+	void create_odd_fundamentals_constraints(int idx, formulation_mode mode);
+	void create_mcm_output_constraints(formulation_mode mode);
+	void create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode);
+	void create_full_adder_msb_constraints(int idx, formulation_mode mode);
+	void create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode);
+	void create_full_adder_shift_gain_constraints(int idx, formulation_mode mode);
+	void create_full_adder_shift_sum_constraints(int idx, formulation_mode mode);
+	void create_full_adder_msb_sum_constraints(formulation_mode mode);
+	void create_full_adder_add_subtract_inputs_constraints(formulation_mode mode);
+	void create_full_adder_cpa_constraints(formulation_mode mode);
 	void create_full_adder_result_constraints();
 
 	// helper function to create a bitheap in SAT ...

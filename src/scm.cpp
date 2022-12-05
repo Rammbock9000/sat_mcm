@@ -57,13 +57,13 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 	}
 }
 
-void scm::optimization_loop(bool incremental) {
-	if (!this->quiet) std::cout << "  starting optimization loop (incremental = " << incremental << ")" << std::endl;
+void scm::optimization_loop(formulation_mode mode) {
+	if (!this->quiet) std::cout << "  starting optimization loop (mode = " << mode << ")" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (!this->quiet) std::cout << "  resetting backend now" << std::endl;
-	this->reset_backend(incremental);
+	this->reset_backend(mode);
 	if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
-	this->construct_problem(incremental);
+	this->construct_problem(mode);
 	if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
@@ -111,11 +111,11 @@ void scm::solve() {
 		this->output_values[0] = 1;
 		return;
 	}
-	bool incremental = false;
+	formulation_mode mode = formulation_mode::reset_all;
 	while (!this->found_solution) {
 		this->fa_minimization_timeout = this->timeout;
 		++this->num_adders;
-		this->optimization_loop(incremental);
+		this->optimization_loop(mode);
 		if (this->ran_into_timeout) {
 			// timeout => can't say anything about optimality
 			this->num_add_opt = false;
@@ -126,6 +126,7 @@ void scm::solve() {
 		this->num_FA_opt = false; // don't know if solution is optimal w.r.t. full adders
 		return;
 	}
+	mode = formulation_mode::all_FA_clauses;
 	while (this->found_solution) {
 		this->timeout = this->fa_minimization_timeout;
 		// count current # of full adders
@@ -186,8 +187,8 @@ void scm::solve() {
 			// trivial minimum value reached
 			return;
 		}
-		this->optimization_loop(incremental);
-		incremental = true;
+		this->optimization_loop(mode);
+		mode = formulation_mode::only_FA_limit;
 		if (this->ran_into_timeout) {
 			// timeout => can't say anything about optimality
 			this->num_FA_opt = false;
@@ -196,21 +197,21 @@ void scm::solve() {
 	this->found_solution = true;
 }
 
-void scm::reset_backend(bool incremental) {
-	if (incremental) return;
+void scm::reset_backend(formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
 }
 
-void scm::construct_problem(bool incremental) {
-	if (!incremental) {
+void scm::construct_problem(formulation_mode mode) {
+	if (mode == formulation_mode::reset_all) {
 		// only construct new variables in non-incremental mode
 		if (!this->quiet) std::cout << "    creating variables now" << std::endl;
 		this->create_variables();
 	}
 	if (!this->quiet) std::cout << "    creating constraints now" << std::endl;
-	this->create_constraints(incremental);
+	this->create_constraints(mode);
 	if (this->write_cnf) {
 		if (!this->quiet) std::cout << "    creating cnf file now" << std::endl;
 		this->create_cnf_file();
@@ -252,78 +253,57 @@ void scm::create_variables() {
 			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
-		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-			//if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_variables" << std::endl;
-			//this->create_full_adder_coeff_word_size_variables(i);
-			//if (!this->quiet) std::cout << "        create_full_adder_msb_variables" << std::endl;
-			//this->create_full_adder_msb_variables(i);
-			//if (!this->quiet) std::cout << "        create_full_adder_word_size_sum_variables" << std::endl;
-			//this->create_full_adder_word_size_sum_variables(i);
-			//if (!this->quiet) std::cout << "        create_full_adder_shift_sum_variables" << std::endl;
-			//this->create_full_adder_shift_sum_variables(i);
-			//if (!this->quiet) std::cout << "        create_full_adder_msb_sum_variables" << std::endl;
-			//this->create_full_adder_msb_sum_variables(i);
-		}
-	}
-	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-		//if (!this->quiet) std::cout << "      create_full_adder_add_subtract_inputs_variables" << std::endl;
-		//this->create_full_adder_add_subtract_inputs_variables();
-		//if (!this->quiet) std::cout << "      create_full_adder_cpa_internal_variables" << std::endl;
-		//this->create_full_adder_cpa_internal_variables();
-		//if (!this->quiet) std::cout << "      create_full_adder_result_variables" << std::endl;
-		//this->create_full_adder_result_variables();
-		//if (!this->quiet) std::cout << "      create_full_adder_comparator_internal_variables" << std::endl;
-		//this->create_full_adder_comparator_internal_variables();
+		// full adder variables are constructed "on the fly" and put into their containers
 	}
 }
 
-void scm::create_constraints(bool incremental) {
+void scm::create_constraints(formulation_mode mode) {
 	if (!this->quiet) std::cout << "      create_input_output_constraints" << std::endl;
-	this->create_input_output_constraints(incremental);
+	this->create_input_output_constraints(mode);
 	for (int i=1; i<=this->num_adders; i++) {
 		if (!this->quiet) std::cout << "      creating constraints for node " << i << std::endl;
 		if (!this->quiet) std::cout << "        create_input_select_constraints" << std::endl;
-		this->create_input_select_constraints(i, incremental);
+		this->create_input_select_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_input_select_limitation_constraints" << std::endl;
-		this->create_input_select_limitation_constraints(i, incremental);
+		this->create_input_select_limitation_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_shift_limitation_constraints" << std::endl;
-		this->create_shift_limitation_constraints(i, incremental);
+		this->create_shift_limitation_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_shift_constraints" << std::endl;
-		this->create_shift_constraints(i, incremental);
+		this->create_shift_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_negate_select_constraints" << std::endl;
-		this->create_negate_select_constraints(i, incremental);
+		this->create_negate_select_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_xor_constraints" << std::endl;
-		this->create_xor_constraints(i, incremental);
+		this->create_xor_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
-		this->create_adder_constraints(i, incremental);
+		this->create_adder_constraints(i, mode);
 		if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
-		this->create_odd_fundamentals_constraints(i, incremental);
+		this->create_odd_fundamentals_constraints(i, mode);
 		if (this->enable_node_output_shift) {
 			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
-			this->create_post_adder_shift_limitation_constraints(i, incremental);
+			this->create_post_adder_shift_limitation_constraints(i, mode);
 			if (!this->quiet) std::cout << "        create_post_adder_shift_constraints" << std::endl;
-			this->create_post_adder_shift_constraints(i, incremental);
+			this->create_post_adder_shift_constraints(i, mode);
 		}
 		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_constraints" << std::endl;
-			this->create_full_adder_coeff_word_size_constraints(i, incremental);
+			this->create_full_adder_coeff_word_size_constraints(i, mode);
 			if (!this->quiet) std::cout << "        create_full_adder_msb_constraints" << std::endl;
-			this->create_full_adder_msb_constraints(i, incremental);
+			this->create_full_adder_msb_constraints(i, mode);
 			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_sum_constraints" << std::endl;
-			this->create_full_adder_coeff_word_size_sum_constraints(i, incremental);
+			this->create_full_adder_coeff_word_size_sum_constraints(i, mode);
 			if (!this->quiet) std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
-			this->create_full_adder_shift_gain_constraints(i, incremental);
+			this->create_full_adder_shift_gain_constraints(i, mode);
 			if (!this->quiet) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
-			this->create_full_adder_shift_sum_constraints(i, incremental);
+			this->create_full_adder_shift_sum_constraints(i, mode);
 		}
 	}
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 		if (!this->quiet) std::cout << "        create_full_adder_msb_sum_constraints" << std::endl;
-		this->create_full_adder_msb_sum_constraints(incremental);
+		this->create_full_adder_msb_sum_constraints(mode);
 		if (!this->quiet) std::cout << "        create_full_adder_add_subtract_inputs_constraints" << std::endl;
-		this->create_full_adder_add_subtract_inputs_constraints(incremental);
+		this->create_full_adder_add_subtract_inputs_constraints(mode);
 		if (!this->quiet) std::cout << "        create_full_adder_cpa_constraints" << std::endl;
-		this->create_full_adder_cpa_constraints(incremental);
+		this->create_full_adder_cpa_constraints(mode);
 		if (!this->quiet) std::cout << "        create_full_adder_result_constraints" << std::endl;
 		this->create_full_adder_result_constraints();
 	}
@@ -743,8 +723,8 @@ int scm::get_result_value(int var_idx) {
 	throw std::runtime_error("get_result_value is impossible in base class");
 }
 
-void scm::create_input_output_constraints(bool incremental) {
-	if (incremental) return;
+void scm::create_input_output_constraints(formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
 	for (auto w=0; w<this->word_size; w++) {
@@ -759,12 +739,12 @@ void scm::create_input_output_constraints(bool incremental) {
 	}
 	else {
 		// MCM
-		this->create_mcm_output_constraints(incremental);
+		this->create_mcm_output_constraints(mode);
 	}
 }
 
-void scm::create_input_select_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_input_select_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
 	// create constraints for all muxs
@@ -860,8 +840,8 @@ void scm::create_input_select_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_shift_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_shift_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
 		auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
@@ -951,8 +931,8 @@ void scm::create_shift_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_post_adder_shift_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
 		auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
@@ -1025,8 +1005,8 @@ void scm::create_post_adder_shift_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_negate_select_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_negate_select_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
 		auto left_input_var_idx = this->shift_output_variables.at({idx, w});
@@ -1051,8 +1031,8 @@ void scm::create_negate_select_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_xor_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_xor_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
 		auto input_var_idx = this->negate_select_output_variables.at({idx, scm::right, w});
@@ -1061,8 +1041,8 @@ void scm::create_xor_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_adder_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_adder_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	for (int w = 0; w < this->word_size; w++) {
 		int c_i;
 		if (w == 0) {
@@ -1105,8 +1085,8 @@ void scm::create_adder_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_input_select_limitation_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
 	for (auto &dir : this->input_directions) {
@@ -1120,8 +1100,8 @@ void scm::create_input_select_limitation_constraints(int idx, bool incremental) 
 	}
 }
 
-void scm::create_shift_limitation_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -1132,8 +1112,8 @@ void scm::create_shift_limitation_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_post_adder_shift_limitation_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -1580,8 +1560,8 @@ void scm::create_cnf_file() {
 	f.close();
 }
 
-void scm::create_mcm_output_constraints(bool incremental) {
-	if (incremental) return;
+void scm::create_mcm_output_constraints(formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	for (auto &c : this->C) {
 		std::vector<int> or_me;
 		for (int idx = 1; idx <= this->num_adders; idx++) {
@@ -1624,8 +1604,8 @@ void scm::create_mcm_output_variables(int idx) {
 	}
 }
 
-void scm::create_odd_fundamentals_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
+	if (mode != formulation_mode::reset_all) return;
 	this->force_bit(this->output_value_variables.at({idx,0}), 1);
 }
 
@@ -1729,8 +1709,8 @@ void scm::ignore_sign(bool only_apply_to_negative_coefficients) {
 	}
 }
 
-void scm::create_full_adder_coeff_word_size_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	std::vector<int> abs_coeff_bits(this->word_size);
 	if (this->calc_twos_complement) {
 		// compute abs(c) using a MUX and an inversion and a +1 adder
@@ -1839,8 +1819,8 @@ void scm::create_full_adder_coeff_word_size_constraints(int idx, bool incrementa
 	}
 }
 
-void scm::create_full_adder_msb_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	if (!this->calc_twos_complement) {
 		// can always cut MSB because all coefficients are positive
 		// -> just set the m to 1 and count on unit propagation within the solver :)
@@ -1878,9 +1858,9 @@ void scm::create_full_adder_msb_constraints(int idx, bool incremental) {
 																	{s_c, true},
 																	{m,   false},
 																});
-	// 4)
-	// 5)
-	// 6)
+	// 4) -> redundant
+	// 5) -> redundant
+	// 6) -> redundant
 	// 7)
 	this->create_arbitrary_clause({
 																	{s_x, true},
@@ -1897,8 +1877,8 @@ void scm::create_full_adder_msb_constraints(int idx, bool incremental) {
 																});
 }
 
-void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
 	if (idx == 1) {
 		// no addition necessary -> just set container with variables
@@ -1929,8 +1909,8 @@ void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, bool increm
 	}
 }
 
-void scm::create_full_adder_shift_gain_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	for (int w = 0; w < this->shift_word_size; w++) {
 		auto var = this->full_adder_shift_gain_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -1977,8 +1957,8 @@ void scm::create_full_adder_shift_gain_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_full_adder_shift_sum_constraints(int idx, bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
 	if (idx == 1) {
 		// no addition necessary -> just set container with variables
@@ -2008,8 +1988,8 @@ void scm::create_full_adder_shift_sum_constraints(int idx, bool incremental) {
 	}
 }
 
-void scm::create_full_adder_msb_sum_constraints(bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	if (this->num_adders == 1) {
 		// no addition necessary -> just set container with variable
 		this->full_adder_msb_sum_variables[0] = this->full_adder_msb_variables.at(1);
@@ -2027,8 +2007,8 @@ void scm::create_full_adder_msb_sum_constraints(bool incremental) {
 	}
 }
 
-void scm::create_full_adder_add_subtract_inputs_constraints(bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	// result = shift_result[last_stage] + msb_sum
 	auto word_size_left_input = this->ceil_log2(this->num_adders * this->max_shift + 1);
 	auto word_size_right_input = this->ceil_log2(this->num_adders + 1);
@@ -2049,8 +2029,8 @@ void scm::create_full_adder_add_subtract_inputs_constraints(bool incremental) {
 	}
 }
 
-void scm::create_full_adder_cpa_constraints(bool incremental) {
-	if (incremental) return;
+void scm::create_full_adder_cpa_constraints(formulation_mode mode) {
+	if (mode == formulation_mode::only_FA_limit) return;
 	// result = num_bits[last_stage] - (shift_result[last_stage] + msb_sum)
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
 	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);

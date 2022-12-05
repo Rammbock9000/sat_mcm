@@ -21,7 +21,7 @@ public:
 
 protected:
 	std::pair<bool, bool> check() override;
-	void reset_backend(bool incremental) override;
+	void reset_backend(formulation_mode mode) override;
 	int get_result_value(int var_idx) override;
 	void create_new_variable(int idx) override;
 
