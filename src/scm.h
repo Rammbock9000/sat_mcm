@@ -37,6 +37,11 @@ public:
 	 */
 	void set_min_add(int new_min_add);
 	/*!
+	 * define whether all solutions shall be enumerated or only the optimal solution is of interest
+	 * @param new_enumerate_all value
+	 */
+	void set_enumerate_all(bool new_enumerate_all);
+	/*!
 	 * also minimize full adders for the optimal number of adder nodes during this->solve()
 	 */
 	void also_minimize_full_adders();
@@ -481,6 +486,18 @@ protected:
 
 private:
 	/*!
+	 * whether we want to enumerate all solutions for minimum adder count
+	 */
+	bool enumerate_all = false;
+	/*!
+	 * solving method for this->enumerate_all == true
+	 */
+	void solve_enumeration();
+	/*!
+	 * solving method for this->enumerate_all == false (standard case)
+	 */
+	void solve_standard();
+	/*!
 	 * limit on the number of full adders used
 	 * FULL_ADDERS_UNLIMITED = no limit
 	 */
@@ -626,14 +643,10 @@ private:
 	void create_full_adder_add_subtract_inputs_constraints(formulation_mode mode);
 	void create_full_adder_cpa_constraints(formulation_mode mode);
 	void create_full_adder_result_constraints();
+	void prohibit_current_solution();
 
 	// helper function to create a bitheap in SAT ...
 	std::vector<int> create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x);
-
-	//////////////////////////////////////////////////////
-	// KEEP TRACK OF SOME WORD SIZES FOR FA COMPUTATION //
-	//////////////////////////////////////////////////////
-
 
 	///////////////////////////////////
 	//// INDICES FOR ALL VARIABLES ////

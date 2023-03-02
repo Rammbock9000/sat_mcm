@@ -89,112 +89,12 @@ void scm::optimization_loop(formulation_mode mode) {
 }
 
 void scm::solve() {
-	this->num_FA_opt = true;
-	this->num_add_opt = true;
-	if (!this->quiet) {
-		std::cout << "trying to solve SCM problem for following constants: ";
-		for (auto &c : this->C) {
-			std::cout << "  " << c << std::endl;
-		}
-		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
+	if (this->enumerate_all) {
+		this->solve_enumeration();
 	}
-	bool trivial = true;
-	for (auto &c : this->C) {
-		if (c != 1) {
-			trivial = false;
-			break;
-		}
+	else {
+		this->solve_standard();
 	}
-	if (trivial) {
-		this->found_solution = true;
-		this->ran_into_timeout = false;
-		this->output_values[0] = 1;
-		return;
-	}
-	formulation_mode mode = formulation_mode::reset_all;
-	while (!this->found_solution) {
-		this->fa_minimization_timeout = this->timeout;
-		++this->num_adders;
-		this->optimization_loop(mode);
-		if (this->ran_into_timeout) {
-			// timeout => can't say anything about optimality
-			this->num_add_opt = false;
-		}
-	}
-	// check if we should even optimize the number of full adders and return if not
-	if (!this->minimize_full_adders) {
-		this->num_FA_opt = false; // don't know if solution is optimal w.r.t. full adders
-		return;
-	}
-	mode = formulation_mode::all_FA_clauses;
-	while (this->found_solution) {
-		this->timeout = this->fa_minimization_timeout;
-		// count current # of full adders
-		// except for the last node because its output always has a constant number of full adders
-		int current_full_adders = 0;
-		int MSBs_cut = 0;
-		int MSBs_not_cut = 0;
-		for (int idx = 1; idx <= this->num_adders; idx++) {
-			if (this->output_values.at(idx) == 0) {
-				// more adders allocated than necessary
-				continue;
-			}
-			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
-			int shifter_input_non_zero_LSBs = 0;
-			int shifter_input = 1;
-			if (idx > 1) {
-				shifter_input = this->input_select_mux_output.at({idx, scm::left});
-			}
-			while ((shifter_input & 1) == 0) {
-				shifter_input = shifter_input >> 1;
-				shifter_input_non_zero_LSBs++;
-			}
-			if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
-				// we do not need to use a full adder for the shifted LSBs
-				//   for a + b
-				//   and a - (b << s)
-				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
-			}
-
-			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
-												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
-			if (can_cut_MSB) {
-				MSBs_cut++;
-			}
-			else {
-				MSBs_not_cut++;
-			}
-			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
-			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
-		}
-		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
-			this->print_solution();
-		}
-		else if (current_full_adders > this->max_full_adders) {
-			this->print_solution();
-			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
-		}
-		else {
-			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
-			this->print_solution();
-		}
-		// must add the number of MSBs that could not be cut because the SAT solver allocs an extra LUT for each of them
-		this->max_full_adders = current_full_adders - 1;
-		if (this->max_full_adders < -(this->num_adders * (this->max_shift+1))) {
-			// trivial minimum value reached
-			return;
-		}
-		this->optimization_loop(mode);
-		mode = formulation_mode::only_FA_limit;
-		if (this->ran_into_timeout) {
-			// timeout => can't say anything about optimality
-			this->num_FA_opt = false;
-		}
-	}
-	this->found_solution = true;
 }
 
 void scm::reset_backend(formulation_mode mode) {
@@ -2281,4 +2181,256 @@ std::vector<int> scm::create_bitheap(const std::vector<std::pair<std::vector<int
 		i++;
 	}
 	return result_variables;
+}
+
+void scm::prohibit_current_solution() {
+	std::vector<std::pair<int, bool>> clause;
+	int v; // variable buffer
+	for (int i=1; i<=this->num_adders; i++) {
+		auto mux_word_size = this->ceil_log2(i);
+		// left input mux
+		for (int s=0; s<mux_word_size; s++) {
+			v = this->input_select_selection_variables.at({i, scm::left, s});
+			clause.emplace_back(v, this->get_result_value(v));
+		}
+		// right input mux
+		for (int s=0; s<mux_word_size; s++) {
+			v = this->input_select_selection_variables.at({i, scm::right, s});
+			clause.emplace_back(v, this->get_result_value(v));
+		}
+		// pre add shift
+		for (int s=0; s<this->shift_word_size; s++) {
+			v = this->input_shift_value_variables.at({i, s});
+			clause.emplace_back(v, this->get_result_value(v));
+		}
+		// negate select
+		v = this->input_negate_select_variables.at(i);
+		clause.emplace_back(v, this->get_result_value(v));
+		// negate value
+		v = this->input_negate_value_variables.at(i);
+		clause.emplace_back(v, this->get_result_value(v));
+		// post add shift
+		if (this->enable_node_output_shift) {
+			for (int s=0; s<this->shift_word_size; s++) {
+				v = this->input_post_adder_shift_value_variables.at({i, s});
+				clause.emplace_back(v, this->get_result_value(v));
+			}
+		}
+	}
+	this->create_arbitrary_clause(clause);
+}
+
+void scm::set_enumerate_all(bool new_enumerate_all) {
+	this->enumerate_all = new_enumerate_all;
+}
+
+void scm::solve_enumeration() {
+	this->num_FA_opt = true;
+	this->num_add_opt = true;
+	if (!this->quiet) {
+		std::cout << "trying to solve SCM problem for following constants: ";
+		for (auto &c : this->C) {
+			std::cout << "  " << c << std::endl;
+		}
+		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
+	}
+	bool trivial = true;
+	for (auto &c : this->C) {
+		if (c != 1) {
+			trivial = false;
+			break;
+		}
+	}
+	if (trivial) {
+		this->found_solution = true;
+		this->ran_into_timeout = false;
+		this->output_values[0] = 1;
+		return;
+	}
+	formulation_mode mode = formulation_mode::reset_all;
+	while (!this->found_solution) {
+		this->fa_minimization_timeout = this->timeout;
+		++this->num_adders;
+		this->optimization_loop(mode);
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_add_opt = false;
+		}
+	}
+	// now enumerate all solutions for minimum adder count
+	mode = formulation_mode::all_FA_clauses;
+	while (this->found_solution) {
+		this->timeout = this->fa_minimization_timeout;
+		// count current # of full adders
+		// except for the last node because its output always has a constant number of full adders
+		int current_full_adders = 0;
+		int MSBs_cut = 0;
+		int MSBs_not_cut = 0;
+		for (int idx = 1; idx <= this->num_adders; idx++) {
+			if (this->output_values.at(idx) == 0) {
+				// more adders allocated than necessary
+				continue;
+			}
+			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
+			int shifter_input_non_zero_LSBs = 0;
+			int shifter_input = 1;
+			if (idx > 1) {
+				shifter_input = this->input_select_mux_output.at({idx, scm::left});
+			}
+			while ((shifter_input & 1) == 0) {
+				shifter_input = shifter_input >> 1;
+				shifter_input_non_zero_LSBs++;
+			}
+			if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
+				// we do not need to use a full adder for the shifted LSBs
+				//   for a + b
+				//   and a - (b << s)
+				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
+			}
+
+			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
+												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
+			if (can_cut_MSB) {
+				MSBs_cut++;
+			}
+			else {
+				MSBs_not_cut++;
+			}
+			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
+		}
+		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
+			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
+		}
+		else if (current_full_adders > this->max_full_adders) {
+			this->print_solution();
+			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
+		}
+		else {
+			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
+		}
+		// no full adder limitation since we are interested in ALL solutions
+		this->max_full_adders = FULL_ADDERS_UNLIMITED;
+		this->prohibit_current_solution(); // ENUMERATE ALL POSSIBLE SOLUTIONS but prohibit the last found one
+		this->optimization_loop(mode);
+		mode = formulation_mode::only_FA_limit;
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_FA_opt = false;
+		}
+	}
+	this->found_solution = true;
+}
+
+void scm::solve_standard() {
+	this->num_FA_opt = true;
+	this->num_add_opt = true;
+	if (!this->quiet) {
+		std::cout << "trying to solve SCM problem for following constants: ";
+		for (auto &c : this->C) {
+			std::cout << "  " << c << std::endl;
+		}
+		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
+	}
+	bool trivial = true;
+	for (auto &c : this->C) {
+		if (c != 1) {
+			trivial = false;
+			break;
+		}
+	}
+	if (trivial) {
+		this->found_solution = true;
+		this->ran_into_timeout = false;
+		this->output_values[0] = 1;
+		return;
+	}
+	formulation_mode mode = formulation_mode::reset_all;
+	while (!this->found_solution) {
+		this->fa_minimization_timeout = this->timeout;
+		++this->num_adders;
+		this->optimization_loop(mode);
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_add_opt = false;
+		}
+	}
+	// check if we should even optimize the number of full adders and return if not
+	if (!this->minimize_full_adders) {
+		this->num_FA_opt = false; // don't know if solution is optimal w.r.t. full adders
+		return;
+	}
+	mode = formulation_mode::all_FA_clauses;
+	while (this->found_solution) {
+		this->timeout = this->fa_minimization_timeout;
+		// count current # of full adders
+		// except for the last node because its output always has a constant number of full adders
+		int current_full_adders = 0;
+		int MSBs_cut = 0;
+		int MSBs_not_cut = 0;
+		for (int idx = 1; idx <= this->num_adders; idx++) {
+			if (this->output_values.at(idx) == 0) {
+				// more adders allocated than necessary
+				continue;
+			}
+			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
+			int shifter_input_non_zero_LSBs = 0;
+			int shifter_input = 1;
+			if (idx > 1) {
+				shifter_input = this->input_select_mux_output.at({idx, scm::left});
+			}
+			while ((shifter_input & 1) == 0) {
+				shifter_input = shifter_input >> 1;
+				shifter_input_non_zero_LSBs++;
+			}
+			if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
+				// we do not need to use a full adder for the shifted LSBs
+				//   for a + b
+				//   and a - (b << s)
+				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
+			}
+
+			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
+												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
+			if (can_cut_MSB) {
+				MSBs_cut++;
+			}
+			else {
+				MSBs_not_cut++;
+			}
+			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
+		}
+		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
+			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
+		}
+		else if (current_full_adders > this->max_full_adders) {
+			this->print_solution();
+			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
+		}
+		else {
+			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
+			this->print_solution();
+		}
+		// must add the number of MSBs that could not be cut because the SAT solver allocs an extra LUT for each of them
+		this->max_full_adders = current_full_adders - 1;
+		if (this->max_full_adders < -(this->num_adders * (this->max_shift+1))) {
+			// trivial minimum value reached
+			return;
+		}
+		this->optimization_loop(mode);
+		mode = formulation_mode::only_FA_limit;
+		if (this->ran_into_timeout) {
+			// timeout => can't say anything about optimality
+			this->num_FA_opt = false;
+		}
+	}
+	this->found_solution = true;
 }
