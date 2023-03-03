@@ -71,10 +71,7 @@ ENDIF (SYRUP_LIB AND SYRUP_H AND PTHREAD_LIB)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 # specify sources
-file(GLOB LIBSOURCES
-        # main
-        # main.cpp
-
+file(GLOB lib_sources
         # base class
         src/scm.cpp
 
@@ -82,17 +79,24 @@ file(GLOB LIBSOURCES
         src/scm_cadical.cpp
         src/scm_z3.cpp
         src/scm_syrup.cpp
-     )
+        )
+
+file(GLOB header_sources
+        # base class
+        src/scm.h
+
+        # derived classes
+        src/scm_cadical.h
+        src/scm_z3.h
+        src/scm_syrup.h
+        )
 
 # compilation settings
 add_compile_options(-O3)
 
 # create library
-add_library(satscm-lib ${LIBSOURCES})
+add_library(satscm-lib ${lib_sources})
 set_target_properties(satscm-lib PROPERTIES OUTPUT_NAME "satscm")
-
-# add executable
-#add_executable(satscm ${SOURCES})
 
 # include directories
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -126,7 +130,21 @@ if(SYRUP_LIB)
     target_link_libraries(satscm-lib ${SYRUP_LIB})
 ENDIF(SYRUP_LIB)
 
-# link executable to library
+# create executable, set name and link it to library
 add_executable(satscm-bin main.cpp)
 set_target_properties(satscm-bin PROPERTIES OUTPUT_NAME "satscm")
 target_link_libraries(satscm-bin satscm-lib)
+
+# define install paths
+set(bin_dest "bin/")
+set(include_dest "include/")
+set(lib_dest "lib/")
+
+# install binary
+install(TARGETS satscm-bin DESTINATION "${bin_dest}")
+
+# install lib
+install(TARGETS satscm-lib DESTINATION "${lib_dest}")
+
+# install header files
+install(FILES ${header_sources} DESTINATION "${include_dest}")
