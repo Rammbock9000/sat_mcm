@@ -71,9 +71,9 @@ ENDIF (SYRUP_LIB AND SYRUP_H AND PTHREAD_LIB)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 
 # specify sources
-file(GLOB SOURCES
+file(GLOB LIBSOURCES
         # main
-        main.cpp
+        # main.cpp
 
         # base class
         src/scm.cpp
@@ -87,8 +87,12 @@ file(GLOB SOURCES
 # compilation settings
 add_compile_options(-O3)
 
+# create library
+add_library(satscm-lib ${LIBSOURCES})
+set_target_properties(satscm-lib PROPERTIES OUTPUT_NAME "satscm")
+
 # add executable
-add_executable(satscm ${SOURCES})
+#add_executable(satscm ${SOURCES})
 
 # include directories
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -107,28 +111,22 @@ ENDIF(SYRUP_H)
 
 # link libraries
 if(SCALP_LIB)
-    target_link_libraries(satscm ${SCALP_LIB})
+    target_link_libraries(satscm-lib ${SCALP_LIB})
 ENDIF(SCALP_LIB)
 if(Z3_LIB)
-    target_link_libraries(satscm ${Z3_LIB})
+    target_link_libraries(satscm-lib ${Z3_LIB})
 ENDIF(Z3_LIB)
 if(CADICAL_LIB)
-    target_link_libraries(satscm ${CADICAL_LIB})
+    target_link_libraries(satscm-lib ${CADICAL_LIB})
 ENDIF(CADICAL_LIB)
 if(PTHREAD_LIB)
-    target_link_libraries(satscm ${PTHREAD_LIB})
+    target_link_libraries(satscm-lib ${PTHREAD_LIB})
 ENDIF(PTHREAD_LIB)
 if(SYRUP_LIB)
-    target_link_libraries(satscm ${SYRUP_LIB})
+    target_link_libraries(satscm-lib ${SYRUP_LIB})
 ENDIF(SYRUP_LIB)
 
-# install
-install(FILES ${HEADERS}
-        DESTINATION src
-        )
-
-install(TARGETS satscm
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-        )
+# link executable to library
+add_executable(satscm-bin main.cpp)
+set_target_properties(satscm-bin PROPERTIES OUTPUT_NAME "satscm")
+target_link_libraries(satscm-bin satscm-lib)
