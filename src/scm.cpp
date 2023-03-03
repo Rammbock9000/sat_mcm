@@ -49,7 +49,7 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 	}
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
 	this->num_adders = (int)non_one_unique_constants.size()-1;
-	std::cout << "min num adders = " << this->num_adders+1 << std::endl;
+	std::cout << "Min num adders = " << this->num_adders+1 << std::endl;
 	// set constants vector
 	this->C.clear();
 	for (auto &c : non_one_unique_constants) {
@@ -58,20 +58,20 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 }
 
 void scm::optimization_loop(formulation_mode mode) {
-	if (!this->quiet) std::cout << "  starting optimization loop (mode = " << mode << ")" << std::endl;
+	if (!this->quiet) std::cout << "  Starting optimization loop (mode = " << mode << ")" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
-	if (!this->quiet) std::cout << "  resetting backend now" << std::endl;
+	if (!this->quiet) std::cout << "  Resetting backend now" << std::endl;
 	this->reset_backend(mode);
-	if (!this->quiet) std::cout << "  constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
+	if (!this->quiet) std::cout << "  Constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
 	this->construct_problem(mode);
-	if (!this->quiet) std::cout << "  start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
+	if (!this->quiet) std::cout << "  Start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	this->fa_minimization_timeout -= elapsed_time;
 	this->found_solution = a;
 	this->ran_into_timeout = b;
 	if (this->found_solution) {
-		std::cout << "  found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
+		std::cout << "  Found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
 		this->get_solution_from_backend();
 		if (this->solution_is_valid()) {
 			std::cout << "Solution is verified :-)" << std::endl;
@@ -81,10 +81,10 @@ void scm::optimization_loop(formulation_mode mode) {
 		}
 	}
 	else if (this->ran_into_timeout) {
-		std::cout << "  ran into timeout for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
+		std::cout << "  Ran into timeout for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
 	}
 	else {
-		std::cout << "  problem for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?"":"keep trying :-)") << std::endl;
+		std::cout << "  Problem for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?"":"keep trying :-)") << std::endl;
 	}
 }
 
@@ -648,7 +648,9 @@ void scm::create_input_select_constraints(int idx, formulation_mode mode) {
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
 	// create constraints for all muxs
-	if (!this->quiet) std::cout << "creating input select constraints for node #" << idx << std::endl;
+	if (!this->quiet) {
+		std::cout << "creating input select constraints for node #" << idx << std::endl;
+	}
 	auto select_word_size = this->ceil_log2(idx);
 	auto next_pow_two = (1 << select_word_size);
 	for (auto &dir : this->input_directions) {
@@ -896,9 +898,7 @@ void scm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 		}
 		// sign bits before and after shifting must be identical if calculating in 2's complement
 		if (this->calc_twos_complement) {
-			//int shift_output_sign_bit_idx = this->shift_output_variables.at({idx, this->word_size-1});
 			int shift_output_sign_bit_idx = this->post_adder_shift_output_variables.at({idx, this->word_size-1});
-			//int shift_input_sign_bit_idx = this->shift_select_output_variables.at({idx, scm::left, this->word_size-1});
 			int shift_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
 			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
 		}
@@ -1034,8 +1034,6 @@ void scm::get_solution_from_backend() {
 	this->post_adder_shift_value.clear();
 	this->add_result_values.clear();
 	this->output_values.clear();
-
-
 	this->coeff_word_size_values.clear();
 	this->can_cut_msb_values.clear();
 	this->coeff_word_size_sum_values.clear();
@@ -1087,8 +1085,6 @@ void scm::get_solution_from_backend() {
 						auto bit_val = this->get_result_value(this->full_adder_coeff_word_size_internal_variables.at({idx, w, x}));
 						internal_val += (bit_val << x);
 					}
-					//std::cout << "#q# coeff_word_size_internal_values[" << idx << "," << w << "] = " << internal_val << std::endl;
-					//std::cout << "#q# coeff_word_size_carry_input_values[" << idx << "," << w << "] = " << this->get_result_value(this->full_adder_coeff_word_size_internal_carry_input_variables.at({idx, w})) << std::endl;
 				}
 				// coeff word size
 				this->coeff_word_size_values[idx] = 0;
@@ -1096,30 +1092,25 @@ void scm::get_solution_from_backend() {
 				for (auto w = 0; w < num_bits_word_size; w++) {
 					this->coeff_word_size_values[idx] += (this->get_result_value(this->full_adder_coeff_word_size_variables.at({idx, w})) << w);
 				}
-				//std::cout << "#q# coeff_word_size_values[" << idx << "] = " << this->coeff_word_size_values[idx] << std::endl;
 				// cut msb
 				this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
-				//std::cout << "#q# can_cut_msb_values[" << idx << "] = " << this->can_cut_msb_values[idx] << std::endl;
 				// coeff word size sum
 				this->coeff_word_size_sum_values[idx] = 0;
 				auto coeff_sum_output_word_size = this->ceil_log2((idx*this->word_size)+1);
 				for (auto w = 0; w < coeff_sum_output_word_size; w++) {
 					this->coeff_word_size_sum_values[idx] += (this->get_result_value(this->full_adder_word_size_sum_variables.at({idx, w})) << w);
 				}
-				//std::cout << "#q# coeff_word_size_sum_values[" << idx << "] = " << this->coeff_word_size_sum_values[idx] << std::endl;
 				// shift gain
 				this->shift_gain_values[idx] = 0;
 				for (auto w = 0; w < this->shift_word_size; w++) {
 					this->shift_gain_values[idx] += (this->get_result_value(this->full_adder_shift_gain_variables.at({idx, w})) << w);
 				}
-				//std::cout << "#q# shift_gain_values[" << idx << "] = " << this->shift_gain_values[idx] << std::endl;
 				// shift sum
 				this->shift_sum_values[idx] = 0;
 				auto shift_sum_output_word_size = this->ceil_log2((idx*this->max_shift)+1);
 				for (auto w = 0; w < shift_sum_output_word_size; w++) {
 					this->shift_sum_values[idx] += (this->get_result_value(this->full_adder_shift_sum_variables.at({idx, w})) << w);
 				}
-				//std::cout << "#q# shift_sum_values[" << idx << "] = " << this->shift_sum_values[idx] << std::endl;
 			}
 		}
 	}
@@ -1131,24 +1122,6 @@ void scm::get_solution_from_backend() {
 		auto output_word_size = std::max(input_word_size_add, input_word_size_sub)+1;
 		for (auto w = 0; w < output_word_size; w++) {
 			this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
-		}
-		//std::cout << "#q# num_FAs_value = " << this->num_FAs_value << std::endl;
-		// print number of FAs as bit string
-		//std::cout << "#q# num_FAs_value(bits) = ";
-		for (auto w = output_word_size-1; w >= 0; w--) {
-			//std::cout << ((this->num_FAs_value >> w) & 1) << " ";
-		}
-		//std::cout << std::endl;
-		// print limit as bit string
-		//std::cout << "#q# FA_limit(bits) = ";
-		for (auto w = output_word_size-1; w >= 0; w--) {
-			//std::cout << ((this->max_full_adders >> w) & 1) << " ";
-		}
-		//std::cout << std::endl;
-		// print ok and carry bits
-		for (auto w = output_word_size-1; w >= 0; w--) {
-			//std::cout << "#q# ok[" << w << "] = " << this->full_adder_comparator_ok_variables.at(w) << " = " << this->get_result_value(this->full_adder_comparator_ok_variables.at(w)) << std::endl;
-			//std::cout << "#q# carry[" << w << "] = " << this->full_adder_comparator_carry_variables.at(w) << " = " << this->get_result_value(this->full_adder_comparator_carry_variables.at(w)) << std::endl;
 		}
 	}
 }
@@ -1247,9 +1220,6 @@ bool scm::solution_is_valid() {
 			}
 			valid = false;
 		}
-		// verify shift mux outputs
-		//int64_t shift_mux_output_l = left_input_value;
-		//int64_t shift_mux_output_r = right_input_value;
 		// verify shifter output
 		int64_t expected_shift_output = (((int64_t)left_input_value) << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
 		if (this->calc_twos_complement) expected_shift_output = sign_extend(expected_shift_output, this->word_size);
@@ -1421,21 +1391,7 @@ bool scm::solution_is_valid() {
 				std::cout << "  actual sum = " << actual_sum << std::endl;
 				valid = false;
 			}
-			// shift gain
-			// todo: implement
-			// shift sum
-			// todo: implement
-			// cut msb
-			// todo: implement
 		}
-	}
-	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-		// cut msb sum
-		// todo: implement
-		// num FAs result
-		// todo: implement
-		// limit exceeded?
-		// todo: implement
 	}
 	return valid;
 }
@@ -2228,9 +2184,14 @@ void scm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (!this->quiet) {
-		std::cout << "trying to solve SCM problem for following constants: ";
-		for (auto &c : this->C) {
-			std::cout << "  " << c << std::endl;
+		if (this->C.size() == 1) {
+			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
+		}
+		else {
+			std::cout << "Trying to solve MCM problem for following constants: ";
+			for (auto &c : this->C) {
+				std::cout << "  " << c << std::endl;
+			}
 		}
 		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
 	}
@@ -2298,11 +2259,11 @@ void scm::solve_enumeration() {
 			else {
 				MSBs_not_cut++;
 			}
-			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
 			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
 		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
+			std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
 			this->print_solution();
 		}
 		else if (current_full_adders > this->max_full_adders) {
@@ -2310,7 +2271,7 @@ void scm::solve_enumeration() {
 			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
 		}
 		else {
-			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
+			std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
 			this->print_solution();
 		}
 		// no full adder limitation since we are interested in ALL solutions
@@ -2330,9 +2291,14 @@ void scm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (!this->quiet) {
-		std::cout << "trying to solve SCM problem for following constants: ";
-		for (auto &c : this->C) {
-			std::cout << "  " << c << std::endl;
+		if (this->C.size() == 1) {
+			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
+		}
+		else {
+			std::cout << "Trying to solve MCM problem for following constants: ";
+			for (auto &c : this->C) {
+				std::cout << "  " << c << std::endl;
+			}
 		}
 		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
 	}
@@ -2404,11 +2370,11 @@ void scm::solve_standard() {
 			else {
 				MSBs_not_cut++;
 			}
-			std::cout << "FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
 			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
 		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			std::cout << "Initial solution needs " << current_full_adders << " full adders" << std::endl;
+			std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
 			this->print_solution();
 		}
 		else if (current_full_adders > this->max_full_adders) {
@@ -2416,7 +2382,7 @@ void scm::solve_standard() {
 			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
 		}
 		else {
-			std::cout << "Current solution needs " << current_full_adders << " full adders" << std::endl;
+			std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
 			this->print_solution();
 		}
 		// must add the number of MSBs that could not be cut because the SAT solver allocs an extra LUT for each of them
