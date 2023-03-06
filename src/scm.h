@@ -645,7 +645,11 @@ private:
 	void create_full_adder_result_constraints();
 	void prohibit_current_solution();
 
-	// helper function to create a bitheap in SAT ...
+	/*!
+	 * helper function to create a bitheap in SAT
+	 * @param x with size [a][b_a] were a is the bit position and b_a is the bitheap height at position a
+	 * @return the resulting bitvector after compression
+	 */
 	std::vector<int> create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x);
 
 	///////////////////////////////////
