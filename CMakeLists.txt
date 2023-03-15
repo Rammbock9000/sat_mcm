@@ -1,24 +1,16 @@
 cmake_minimum_required (VERSION 2.8)
 project (satscm)
 
-# find ScaLP
-find_library(SCALP_LIB
-        NAMES libScaLP.so libScaLP.dylib
-        DOC "Directory of the ScaLP library")
-FIND_PATH(SCALP_H
-        ScaLP/Solver.h
-        DOC "Path to main ScaLP header file Solver.h"
-        )
-IF (SCALP_LIB AND SCALP_H)
-    message(STATUS "Found ScaLP: ${SCALP_LIB} and ${SCALP_H}")
-    add_definitions(-DUSE_SCALP)
-ELSE (SCALP_LIB AND SCALP_H)
-    message(STATUS "Could not find ScaLP (${SCALP_LIB} and ${SCALP_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
-ENDIF (SCALP_LIB AND SCALP_H)
+# setup for correctly linking to shared libraries
+SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
 # find Z3
 find_library(Z3_LIB
-        NAMES libz3.so libz3.a libz3.dylib
+        NAMES libz3.a libz3.so libz3.dylib
         DOC "Directory of the Z3 library")
 FIND_PATH(Z3_H
         z3.h
@@ -99,41 +91,35 @@ add_library(satscm-lib ${lib_sources})
 set_target_properties(satscm-lib PROPERTIES OUTPUT_NAME "satscm")
 
 # include directories
-include_directories(${CMAKE_SOURCE_DIR}/src)
-if(SCALP_H)
-    include_directories(${SCALP_H})
-ENDIF(SCALP_H)
+target_include_directories(satscm-lib PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(Z3_H)
-    include_directories(${Z3_H})
+    target_include_directories(satscm-lib PUBLIC ${Z3_H})
 ENDIF(Z3_H)
 if(CADICAL_H)
-    include_directories(${CADICAL_H})
+    target_include_directories(satscm-lib PUBLIC ${CADICAL_H})
 ENDIF(CADICAL_H)
 if(SYRUP_H)
-    include_directories(${SYRUP_H})
+    target_include_directories(satscm-lib PUBLIC ${SYRUP_H})
 ENDIF(SYRUP_H)
 
 # link libraries
-if(SCALP_LIB)
-    target_link_libraries(satscm-lib ${SCALP_LIB})
-ENDIF(SCALP_LIB)
 if(Z3_LIB)
-    target_link_libraries(satscm-lib ${Z3_LIB})
+    target_link_libraries(satscm-lib PUBLIC ${Z3_LIB})
 ENDIF(Z3_LIB)
 if(CADICAL_LIB)
-    target_link_libraries(satscm-lib ${CADICAL_LIB})
+    target_link_libraries(satscm-lib PUBLIC ${CADICAL_LIB})
 ENDIF(CADICAL_LIB)
 if(PTHREAD_LIB)
-    target_link_libraries(satscm-lib ${PTHREAD_LIB})
+    target_link_libraries(satscm-lib PUBLIC ${PTHREAD_LIB})
 ENDIF(PTHREAD_LIB)
 if(SYRUP_LIB)
-    target_link_libraries(satscm-lib ${SYRUP_LIB})
+    target_link_libraries(satscm-lib PUBLIC ${SYRUP_LIB})
 ENDIF(SYRUP_LIB)
 
 # create executable, set name and link it to library
 add_executable(satscm-bin main.cpp)
 set_target_properties(satscm-bin PROPERTIES OUTPUT_NAME "satscm")
-target_link_libraries(satscm-bin satscm-lib)
+target_link_libraries(satscm-bin PUBLIC satscm-lib)
 
 # define install paths
 set(bin_dest "bin/")

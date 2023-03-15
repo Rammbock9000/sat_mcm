@@ -20,17 +20,20 @@ public:
 	enum input_direction {
 		left, right
 	};
+	const std::set<input_direction> input_directions = {left, right};
 	enum formulation_mode {
 		reset_all, all_FA_clauses, only_FA_limit
 	};
-	const std::set<input_direction> input_directions = {left, right};
+	enum verbosity_mode {
+		debug_mode, normal_mode, quiet_mode
+	};
 	/*!
 	 * constructor
 	 * @param C the constant we want to compute
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf);
+	scm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
 	/*!
 	 * define the minimum number of needed adders to help the algorithm converge faster
 	 * @param new_min_add value
@@ -458,9 +461,9 @@ protected:
 	 */
 	int fa_minimization_timeout;
 	/*!
-	 * suppress debug outputs if quiet = true
+	 * define cout level
 	 */
-	bool quiet;
+	verbosity_mode verbosity;
 	/*!
 	 * the number of CPU threads the backend is allowed to use
 	 */

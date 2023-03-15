@@ -19,7 +19,7 @@
 
 class scm_syrup : public scm {
 public:
-	scm_syrup(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf);
+	scm_syrup(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
 
 protected:
 	std::pair<bool, bool> check() override;

@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 	std::unique_ptr<scm> solver;
 	std::vector<int> C;
 	int timeout = 300;
-	bool quiet = true;
+	scm::verbosity_mode verbosity = scm::verbosity_mode::quiet_mode;
 	bool allow_negative_numbers = false;
 	std::string solver_name = "no_solver";
 	int threads = 1;
@@ -104,7 +104,13 @@ int main(int argc, char** argv) {
 	if (argc > 5) {
 		std::string s(argv[5]);
 		try {
-			quiet = (bool)std::stoi(s);
+			auto quiet = (bool)std::stoi(s);
+			if (quiet) {
+				verbosity = scm::verbosity_mode::quiet_mode;
+			}
+			else {
+				verbosity = scm::verbosity_mode::debug_mode;
+			}
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -197,21 +203,21 @@ int main(int argc, char** argv) {
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL
-		solver = std::make_unique<scm_cadical>(C, timeout, quiet, allow_negative_numbers, write_cnf);
+		solver = std::make_unique<scm_cadical>(C, timeout, verbosity, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
 #endif
 	}
 	else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
 #ifdef USE_SYRUP
-		solver = std::make_unique<scm_syrup>(C, timeout, quiet, threads, allow_negative_numbers, write_cnf);
+		solver = std::make_unique<scm_syrup>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Glucose-Syrup lib to use syrup backend");
 #endif
 	}
 	else if (solver_name == "z3") {
 #ifdef USE_Z3
-		solver = std::make_unique<scm_z3>(C, timeout, quiet, threads, allow_negative_numbers, write_cnf);
+		solver = std::make_unique<scm_z3>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif

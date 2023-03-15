@@ -9,8 +9,8 @@
 #include <cstdlib>
 #include <mtl/Vec.h>
 
-scm_syrup::scm_syrup(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
-	: scm(C, timeout, quiet, threads, allow_negative_numbers, write_cnf) {}
+scm_syrup::scm_syrup(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+	: scm(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf) {}
 
 void *scm_syrup::timeout_thread(std::pair<int, pthread_t*>* p) {
 	sleep(p->first); // first argument: timeout
@@ -41,7 +41,7 @@ void scm_syrup::reset_backend(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	this->glucoseVariableCounter = 0;
 	this->solver = std::make_unique<Glucose::MultiSolvers>(this->threads);
-	if (this->quiet) this->solver->setVerbosity(0);
+	if (this->verbosity != scm::verbosity_mode::debug_mode) this->solver->setVerbosity(0);
 	else this->solver->setVerbosity(2);
 }
 

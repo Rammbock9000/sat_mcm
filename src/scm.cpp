@@ -13,8 +13,8 @@
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
 #define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
 
-scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool allow_negative_numbers, bool write_cnf)
-	:	C(C), timeout(timeout), quiet(quiet), threads(threads), write_cnf(write_cnf) {
+scm::scm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+	:	C(C), timeout(timeout), verbosity(verbosity), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
 	this->calc_twos_complement = allow_negative_numbers;
 	for (auto &c : this->C) {
@@ -49,7 +49,9 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 	}
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
 	this->num_adders = (int)non_one_unique_constants.size()-1;
-	std::cout << "Min num adders = " << this->num_adders+1 << std::endl;
+	if (this->verbosity != verbosity_mode::quiet_mode) {
+		std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
+	}
 	// set constants vector
 	this->C.clear();
 	for (auto &c : non_one_unique_constants) {
@@ -58,33 +60,33 @@ scm::scm(const std::vector<int> &C, int timeout, bool quiet, int threads, bool a
 }
 
 void scm::optimization_loop(formulation_mode mode) {
-	if (!this->quiet) std::cout << "  Starting optimization loop (mode = " << mode << ")" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Starting optimization loop (mode = " << mode << ")" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
-	if (!this->quiet) std::cout << "  Resetting backend now" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Resetting backend now" << std::endl;
 	this->reset_backend(mode);
-	if (!this->quiet) std::cout << "  Constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
 	this->construct_problem(mode);
-	if (!this->quiet) std::cout << "  Start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	this->fa_minimization_timeout -= elapsed_time;
 	this->found_solution = a;
 	this->ran_into_timeout = b;
 	if (this->found_solution) {
-		std::cout << "  Found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
+		if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "  Found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
 		this->get_solution_from_backend();
 		if (this->solution_is_valid()) {
-			std::cout << "Solution is verified :-)" << std::endl;
+			if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "Solution is verified :-)" << std::endl;
 		}
 		else {
 			throw std::runtime_error("Solution is invalid (found bug) :-(");
 		}
 	}
 	else if (this->ran_into_timeout) {
-		std::cout << "  Ran into timeout for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
+		if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "  Ran into timeout for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds :-(" << std::endl;
 	}
 	else {
-		std::cout << "  Problem for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?"":"keep trying :-)") << std::endl;
+		if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "  Problem for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " is proven to be infeasible after " << elapsed_time << " seconds... " << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?"":"keep trying :-)") << std::endl;
 	}
 }
 
@@ -107,50 +109,50 @@ void scm::reset_backend(formulation_mode mode) {
 void scm::construct_problem(formulation_mode mode) {
 	if (mode == formulation_mode::reset_all) {
 		// only construct new variables in non-incremental mode
-		if (!this->quiet) std::cout << "    creating variables now" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating variables now" << std::endl;
 		this->create_variables();
 	}
-	if (!this->quiet) std::cout << "    creating constraints now" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating constraints now" << std::endl;
 	this->create_constraints(mode);
 	if (this->write_cnf) {
-		if (!this->quiet) std::cout << "    creating cnf file now" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating cnf file now" << std::endl;
 		this->create_cnf_file();
 	}
 }
 
 void scm::create_variables() {
-	if (!this->quiet) std::cout << "      creating input node variables" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating input node variables" << std::endl;
 	this->create_input_node_variables();
 	for (int i=1; i<=this->num_adders; i++) {
-		if (!this->quiet) std::cout << "      creating variables for node " << i << std::endl;
-		if (!this->quiet) std::cout << "        create_input_select_mux_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating variables for node " << i << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_mux_variables" << std::endl;
 		this->create_input_select_mux_variables(i);
-		if (!this->quiet) std::cout << "        create_input_select_selection_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_selection_variables" << std::endl;
 		this->create_input_select_selection_variables(i);
-		if (!this->quiet) std::cout << "        create_input_shift_value_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_shift_value_variables" << std::endl;
 		this->create_input_shift_value_variables(i);
-		if (!this->quiet) std::cout << "        create_shift_internal_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_shift_internal_variables" << std::endl;
 		this->create_shift_internal_variables(i);
-		if (!this->quiet) std::cout << "        create_input_negate_select_variable" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_negate_select_variable" << std::endl;
 		this->create_input_negate_select_variable(i);
-		if (!this->quiet) std::cout << "        create_negate_select_output_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_negate_select_output_variables" << std::endl;
 		this->create_negate_select_output_variables(i);
-		if (!this->quiet) std::cout << "        create_input_negate_value_variable" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_negate_value_variable" << std::endl;
 		this->create_input_negate_value_variable(i);
-		if (!this->quiet) std::cout << "        create_xor_output_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_xor_output_variables" << std::endl;
 		this->create_xor_output_variables(i);
-		if (!this->quiet) std::cout << "        create_adder_internal_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_internal_variables" << std::endl;
 		this->create_adder_internal_variables(i);
 		if (this->enable_node_output_shift) {
-			if (!this->quiet) std::cout << "        create_post_adder_input_shift_value_variables" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_input_shift_value_variables" << std::endl;
 			this->create_post_adder_input_shift_value_variables(i);
-			if (!this->quiet) std::cout << "        create_post_adder_shift_variables" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_variables" << std::endl;
 			this->create_post_adder_shift_variables(i);
 		}
-		if (!this->quiet) std::cout << "        create_output_value_variables" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
 		if (this->C.size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0]])) {
-			if (!this->quiet) std::cout << "        create_mcm_output_variables" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
 		// full adder variables are constructed "on the fly" and put into their containers
@@ -158,53 +160,53 @@ void scm::create_variables() {
 }
 
 void scm::create_constraints(formulation_mode mode) {
-	if (!this->quiet) std::cout << "      create_input_output_constraints" << std::endl;
+	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      create_input_output_constraints" << std::endl;
 	this->create_input_output_constraints(mode);
 	for (int i=1; i<=this->num_adders; i++) {
-		if (!this->quiet) std::cout << "      creating constraints for node " << i << std::endl;
-		if (!this->quiet) std::cout << "        create_input_select_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating constraints for node " << i << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_constraints" << std::endl;
 		this->create_input_select_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_input_select_limitation_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_limitation_constraints" << std::endl;
 		this->create_input_select_limitation_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_shift_limitation_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_shift_limitation_constraints" << std::endl;
 		this->create_shift_limitation_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_shift_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_shift_constraints" << std::endl;
 		this->create_shift_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_negate_select_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_negate_select_constraints" << std::endl;
 		this->create_negate_select_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_xor_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_xor_constraints" << std::endl;
 		this->create_xor_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_adder_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_constraints" << std::endl;
 		this->create_adder_constraints(i, mode);
-		if (!this->quiet) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_odd_fundamentals_constraints" << std::endl;
 		this->create_odd_fundamentals_constraints(i, mode);
 		if (this->enable_node_output_shift) {
-			if (!this->quiet) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_limitation_constraints" << std::endl;
 			this->create_post_adder_shift_limitation_constraints(i, mode);
-			if (!this->quiet) std::cout << "        create_post_adder_shift_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_constraints" << std::endl;
 			this->create_post_adder_shift_constraints(i, mode);
 		}
 		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_coeff_word_size_constraints" << std::endl;
 			this->create_full_adder_coeff_word_size_constraints(i, mode);
-			if (!this->quiet) std::cout << "        create_full_adder_msb_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_msb_constraints" << std::endl;
 			this->create_full_adder_msb_constraints(i, mode);
-			if (!this->quiet) std::cout << "        create_full_adder_coeff_word_size_sum_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_coeff_word_size_sum_constraints" << std::endl;
 			this->create_full_adder_coeff_word_size_sum_constraints(i, mode);
-			if (!this->quiet) std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
 			this->create_full_adder_shift_gain_constraints(i, mode);
-			if (!this->quiet) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
 			this->create_full_adder_shift_sum_constraints(i, mode);
 		}
 	}
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-		if (!this->quiet) std::cout << "        create_full_adder_msb_sum_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_msb_sum_constraints" << std::endl;
 		this->create_full_adder_msb_sum_constraints(mode);
-		if (!this->quiet) std::cout << "        create_full_adder_add_subtract_inputs_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_add_subtract_inputs_constraints" << std::endl;
 		this->create_full_adder_add_subtract_inputs_constraints(mode);
-		if (!this->quiet) std::cout << "        create_full_adder_cpa_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_cpa_constraints" << std::endl;
 		this->create_full_adder_cpa_constraints(mode);
-		if (!this->quiet) std::cout << "        create_full_adder_result_constraints" << std::endl;
+		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_result_constraints" << std::endl;
 		this->create_full_adder_result_constraints();
 	}
 }
@@ -648,7 +650,7 @@ void scm::create_input_select_constraints(int idx, formulation_mode mode) {
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
 	// create constraints for all muxs
-	if (!this->quiet) {
+	if (this->verbosity == verbosity_mode::debug_mode) {
 		std::cout << "creating input select constraints for node #" << idx << std::endl;
 	}
 	auto select_word_size = this->ceil_log2(idx);
@@ -1042,6 +1044,7 @@ void scm::get_solution_from_backend() {
 	// get solution
 	for (int idx = 0; idx <= this->num_adders; idx++) {
 		// output_values
+		this->output_values[idx] = 0;
 		for (int w = 0; w < this->word_size; w++) {
 			this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w})) << w);
 		}
@@ -1051,12 +1054,18 @@ void scm::get_solution_from_backend() {
 				// input_select
 				for (auto &dir : this->input_directions) {
 					auto input_select_width = this->ceil_log2(idx);
+					this->input_select[{idx, dir}] = 0;
 					for (auto w = 0; w < input_select_width; w++) {
 						this->input_select[{idx, dir}] += (this->get_result_value(this->input_select_selection_variables[{idx, dir, w}]) << w);
 					}
 				}
 			}
+			else {
+				this->input_select[{idx, input_direction::left}] = 0;
+				this->input_select[{idx, input_direction::right}] = 0;
+			}
 			// shift_value
+			this->shift_value[idx] = 0;
 			for (auto w = 0; w < this->shift_word_size; w++) {
 				this->shift_value[idx] += (this->get_result_value(this->input_shift_value_variables[{idx, w}]) << w);
 			}
@@ -1066,11 +1075,13 @@ void scm::get_solution_from_backend() {
 			this->subtract[idx] = this->get_result_value(this->input_negate_value_variables[idx]);
 			// output shift
 			if (this->enable_node_output_shift) {
+				this->post_adder_shift_value[idx] = 0;
 				for (auto w = 0; w < this->shift_word_size; w++) {
 					this->post_adder_shift_value[idx] += (this->get_result_value(this->input_post_adder_shift_value_variables[{idx, w}]) << w);
 				}
 			}
 			// add result
+			this->add_result_values[idx] = 0;
 			for (auto w = 0; w < this->word_size; w++) {
 				this->add_result_values[idx] += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 			}
@@ -1182,7 +1193,7 @@ bool scm::solution_is_valid() {
 		}
 		int64_t left_input_value = this->output_values[input_node_idx_l];
 		int64_t right_input_value = this->output_values[input_node_idx_r];
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " left input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_l << std::endl;
 			std::cout << "  value = " << actual_input_value_l << std::endl;
@@ -1201,7 +1212,7 @@ bool scm::solution_is_valid() {
 			}
 			valid = false;
 		}
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " right input" << std::endl;
 			std::cout << "  input select = " << input_node_idx_r << std::endl;
 			std::cout << "  value = " << actual_input_value_r << std::endl;
@@ -1228,7 +1239,7 @@ bool scm::solution_is_valid() {
 			actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w}]) << w);
 		}
 		if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " shift output" << std::endl;
 			std::cout << "  input value = " << left_input_value << std::endl;
 			std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
@@ -1257,7 +1268,7 @@ bool scm::solution_is_valid() {
 		}
 		if (this->calc_twos_complement) actual_negate_mux_output[scm::left] = sign_extend(actual_negate_mux_output[scm::left], this->word_size);
 		if (this->calc_twos_complement) actual_negate_mux_output[scm::right] = sign_extend(actual_negate_mux_output[scm::right], this->word_size);
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " left negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
 			std::cout << "  output value = " <<  actual_negate_mux_output[scm::left] << std::endl;
@@ -1269,7 +1280,7 @@ bool scm::solution_is_valid() {
 			std::cout << "  expected value = " << negate_mux_output_l << std::endl;
 			valid = false;
 		}
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " right negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
 			std::cout << "  output value = " <<  actual_negate_mux_output[scm::right] << std::endl;
@@ -1290,7 +1301,7 @@ bool scm::solution_is_valid() {
 			actual_xor_output += (this->get_result_value(this->xor_output_variables[{idx, w}]) << w);
 		}
 		if (this->calc_twos_complement) actual_xor_output = sign_extend(actual_xor_output, this->word_size);
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " xor output" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
 			std::cout << "  input value = " << negate_mux_output_r << std::endl;
@@ -1312,7 +1323,7 @@ bool scm::solution_is_valid() {
 			actual_adder_output += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
 		}
 		if (this->calc_twos_complement) actual_adder_output = sign_extend(actual_adder_output, this->word_size);
-		if (!this->quiet) {
+		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " adder output value" << std::endl;
 			std::cout << "  sub = " << sub << std::endl;
 			std::cout << "  left input value = " << negate_mux_output_l << std::endl;
@@ -1337,7 +1348,7 @@ bool scm::solution_is_valid() {
 				actual_post_adder_shift_output += (this->get_result_value(this->post_adder_shift_output_variables[{idx, w}]) << w);
 			}
 			if (this->calc_twos_complement) actual_post_adder_shift_output = sign_extend(actual_post_adder_shift_output, this->word_size);
-			if (!this->quiet) {
+			if (this->verbosity == verbosity_mode::debug_mode) {
 				std::cout << "node #" << idx << " post adder shift output value" << std::endl;
 				std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
 				std::cout << "  input value = " << actual_adder_output << std::endl;
@@ -1357,7 +1368,7 @@ bool scm::solution_is_valid() {
 			auto add_result = this->add_result_values.at(idx);
 			auto expected_add_result_word_size = this->ceil_log2(std::abs(add_result)+1);
 			auto actual_add_result_word_size = this->coeff_word_size_values.at(idx);
-			if (!this->quiet) {
+			if (this->verbosity == verbosity_mode::debug_mode) {
 				std::cout << "node #" << idx << " add result word size" << std::endl;
 				std::cout << "  add result = " << add_result << std::endl;
 				std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
@@ -1375,7 +1386,7 @@ bool scm::solution_is_valid() {
 				expected_sum += this->coeff_word_size_values.at(prev_idx);
 			}
 			auto actual_sum = this->coeff_word_size_sum_values.at(idx);
-			if (!this->quiet) {
+			if (this->verbosity == verbosity_mode::debug_mode) {
 				std::cout << "node #" << idx << " add result word size sum" << std::endl;
 				for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
 					std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx) << std::endl;
@@ -2183,7 +2194,7 @@ void scm::set_enumerate_all(bool new_enumerate_all) {
 void scm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
-	if (!this->quiet) {
+	if (this->verbosity == verbosity_mode::debug_mode) {
 		if (this->C.size() == 1) {
 			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
 		}
@@ -2259,20 +2270,28 @@ void scm::solve_enumeration() {
 			else {
 				MSBs_not_cut++;
 			}
-			std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			}
 			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
 		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
+				this->print_solution();
+			}
 		}
 		else if (current_full_adders > this->max_full_adders) {
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				this->print_solution();
+			}
 			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
 		}
 		else {
-			std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
+				this->print_solution();
+			}
 		}
 		// no full adder limitation since we are interested in ALL solutions
 		this->max_full_adders = FULL_ADDERS_UNLIMITED;
@@ -2290,7 +2309,7 @@ void scm::solve_enumeration() {
 void scm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
-	if (!this->quiet) {
+	if (this->verbosity == verbosity_mode::debug_mode) {
 		if (this->C.size() == 1) {
 			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
 		}
@@ -2370,20 +2389,26 @@ void scm::solve_standard() {
 			else {
 				MSBs_not_cut++;
 			}
-			std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
+			if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "Additional FAs for node " << idx << " = " << (can_cut_MSB?FAs_for_this_node-1:FAs_for_this_node) << std::endl;
 			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
 		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
+				this->print_solution();
+			}
 		}
 		else if (current_full_adders > this->max_full_adders) {
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				this->print_solution();
+			}
 			throw std::runtime_error("SAT solver exceeded full adder limit! Limit was "+std::to_string(this->max_full_adders)+" but solver returned solution with "+std::to_string(current_full_adders)+" FAs!");
 		}
 		else {
-			std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
-			this->print_solution();
+			if (this->verbosity != verbosity_mode::quiet_mode) {
+				std::cout << "Current solution needs " << current_full_adders << " additional full adders" << std::endl;
+				this->print_solution();
+			}
 		}
 		// must add the number of MSBs that could not be cut because the SAT solver allocs an extra LUT for each of them
 		this->max_full_adders = current_full_adders - 1;
