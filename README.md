@@ -27,7 +27,7 @@ Once a solution is found, sat_scm prints a description of the resulting SCM circ
 
 make install
 
-Step 4) likely makes sense if you want to use our project as a library. 
+Step 4 likely makes sense if you want to use our project as a library. 
 
 You can also specify another install dir in step 1) via
 
