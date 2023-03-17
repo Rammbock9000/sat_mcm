@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 	std::unique_ptr<scm> solver;
 	std::vector<int> C;
 	int timeout = 300;
-	scm::verbosity_mode verbosity = scm::verbosity_mode::quiet_mode;
+	scm::verbosity_mode verbosity = scm::verbosity_mode::normal_mode;
 	bool allow_negative_numbers = false;
 	std::string solver_name = "no_solver";
 	int threads = 1;
@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
 		std::cout << "  => allow negative coefficients: <0/1>: allow the use of negative coefficients to decrease the FA count" << std::endl;
 		std::cout << "  => write cnf files: <0/1>: write all SAT programs to CNF files" << std::endl;
 		std::cout << "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it" << std::endl;
-		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
 		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
+		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
 				verbosity = scm::verbosity_mode::quiet_mode;
 			}
 			else {
-				verbosity = scm::verbosity_mode::debug_mode;
+				verbosity = scm::verbosity_mode::normal_mode;
 			}
 		}
 		catch (...) {
