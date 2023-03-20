@@ -44,7 +44,7 @@ def get_setup(bench_type):
     return filename, name_tag
 
 def main():
-    bench_type_tuples = [("scm_lagoon_metodi",0,0), ("scm_reduced",0,0), ("scm_reduced",1,1), ("scm",0,0), ("scm",0,1), ("mcm",0,0), ("mcm",1,0), ("unsigned_mcm",1,0), ("enumerate_unsigned",0,1), ("enumerate_signed_negative",0,1), ("enumerate_signed_all",0,1)]
+    bench_type_tuples = [("mcm",0,0), ("mcm",1,0), ("unsigned_mcm",1,0), ("scm_lagoon_metodi",0,0), ("scm_reduced",0,0), ("scm_reduced",1,1), ("scm",0,0), ("scm",0,1), ("enumerate_unsigned",0,1), ("enumerate_signed_negative",0,1), ("enumerate_signed_all",0,1)]
     for bench_type_tuple in bench_type_tuples:
         do_it(bench_type_tuple)
         bit_str = "with bit-level cost minimization" if bench_type_tuple[1] == 1 else "without bit-level cost minimization"
