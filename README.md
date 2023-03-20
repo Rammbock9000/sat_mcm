@@ -36,3 +36,13 @@ cmake -DCMAKE_PREFIX_PATH="/path/to/backend/install/dir/" -DCMAKE_INSTALL_PREFIX
 e.g.
 
 cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" -DCMAKE_INSTALL_PREFIX="/opt/mcm/" .
+
+To reproduce all our experiments do the following:
+
+1) get a working python 3 environment
+
+2) go to the repository root directory (where e.g. the CMakeLists.txt and the binary are located)
+
+3) call "python benchmark/scripts/start_benchmark.py" (this took approx. 1 month of compute time on our machines...)
+
+4) call "python benchmark/scripts/create_vhdl_code.py" (this finishes within a few seconds)
