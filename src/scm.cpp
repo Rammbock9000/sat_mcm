@@ -2275,13 +2275,7 @@ void scm::solve_enumeration() {
 			}
 			current_full_adders += (FAs_for_this_node - ((int)can_cut_MSB));
 		}
-		if (this->max_full_adders == FULL_ADDERS_UNLIMITED) {
-			if (this->verbosity != verbosity_mode::quiet_mode) {
-				std::cout << "Initial solution needs " << current_full_adders << " additional full adders" << std::endl;
-				this->print_solution();
-			}
-		}
-		else if (current_full_adders > this->max_full_adders) {
+		if (current_full_adders > this->max_full_adders and this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 			if (this->verbosity != verbosity_mode::quiet_mode) {
 				this->print_solution();
 			}

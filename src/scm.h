@@ -13,7 +13,7 @@
 #include <limits>
 
 #define SHIFT_SELECT_OLD 0
-#define FULL_ADDERS_UNLIMITED std::numeric_limits<long int>::min()
+#define FULL_ADDERS_UNLIMITED std::numeric_limits<long>::min()
 
 class scm {
 public:

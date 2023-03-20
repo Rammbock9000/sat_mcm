@@ -106,10 +106,10 @@ int main(int argc, char** argv) {
 		try {
 			auto quiet = (bool)std::stoi(s);
 			if (quiet) {
-				verbosity = scm::verbosity_mode::quiet_mode;
+				verbosity = scm::verbosity_mode::normal_mode;
 			}
 			else {
-				verbosity = scm::verbosity_mode::normal_mode;
+				verbosity = scm::verbosity_mode::debug_mode;
 			}
 		}
 		catch (...) {
