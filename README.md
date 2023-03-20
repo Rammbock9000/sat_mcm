@@ -5,7 +5,7 @@ CaDiCaL, Glucose-Syrup and Z3 are currently supported.
 
 0) Go to the repository directory via
 
-cd sat_scm
+cd sat_mcm
 
 1) Link backends using cmake via
 
@@ -19,9 +19,9 @@ cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" .
 
 make
 
-3) call satscm binary without arguments to see command line arguments.
+3) call satmcm binary without arguments to see command line arguments.
 
-Once a solution is found, sat_scm prints a description of the resulting SCM circuit on the console.
+Once a solution is found, sat_scm prints a description of the resulting MCM circuit on the console.
 
 4) (optional) install everything (to default location) via
 
@@ -35,4 +35,4 @@ cmake -DCMAKE_PREFIX_PATH="/path/to/backend/install/dir/" -DCMAKE_INSTALL_PREFIX
 
 e.g.
 
-cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" -DCMAKE_INSTALL_PREFIX="/opt/scm/" .
+cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" -DCMAKE_INSTALL_PREFIX="/opt/mcm/" .
