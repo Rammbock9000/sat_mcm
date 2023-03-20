@@ -65,61 +65,61 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 # specify sources
 file(GLOB lib_sources
         # base class
-        src/scm.cpp
+        src/mcm.cpp
 
         # derived classes
-        src/scm_cadical.cpp
-        src/scm_z3.cpp
-        src/scm_syrup.cpp
+        src/mcm_cadical.cpp
+        src/mcm_z3.cpp
+        src/mcm_syrup.cpp
         )
 
 file(GLOB header_sources
         # base class
-        src/scm.h
+        src/mcm.h
 
         # derived classes
-        src/scm_cadical.h
-        src/scm_z3.h
-        src/scm_syrup.h
+        src/mcm_cadical.h
+        src/mcm_z3.h
+        src/mcm_syrup.h
         )
 
 # compilation settings
 add_compile_options(-O3)
 
 # create library
-add_library(satscm-lib ${lib_sources})
-set_target_properties(satscm-lib PROPERTIES OUTPUT_NAME "satscm")
+add_library(satmcm-lib ${lib_sources})
+set_target_properties(satmcm-lib PROPERTIES OUTPUT_NAME "satmcm")
 
 # include directories
-target_include_directories(satscm-lib PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(satmcm-lib PUBLIC ${CMAKE_SOURCE_DIR}/src)
 if(Z3_H)
-    target_include_directories(satscm-lib PUBLIC ${Z3_H})
+    target_include_directories(satmcm-lib PUBLIC ${Z3_H})
 ENDIF(Z3_H)
 if(CADICAL_H)
-    target_include_directories(satscm-lib PUBLIC ${CADICAL_H})
+    target_include_directories(satmcm-lib PUBLIC ${CADICAL_H})
 ENDIF(CADICAL_H)
 if(SYRUP_H)
-    target_include_directories(satscm-lib PUBLIC ${SYRUP_H})
+    target_include_directories(satmcm-lib PUBLIC ${SYRUP_H})
 ENDIF(SYRUP_H)
 
 # link libraries
 if(Z3_LIB)
-    target_link_libraries(satscm-lib PUBLIC ${Z3_LIB})
+    target_link_libraries(satmcm-lib PUBLIC ${Z3_LIB})
 ENDIF(Z3_LIB)
 if(CADICAL_LIB)
-    target_link_libraries(satscm-lib PUBLIC ${CADICAL_LIB})
+    target_link_libraries(satmcm-lib PUBLIC ${CADICAL_LIB})
 ENDIF(CADICAL_LIB)
 if(PTHREAD_LIB)
-    target_link_libraries(satscm-lib PUBLIC ${PTHREAD_LIB})
+    target_link_libraries(satmcm-lib PUBLIC ${PTHREAD_LIB})
 ENDIF(PTHREAD_LIB)
 if(SYRUP_LIB)
-    target_link_libraries(satscm-lib PUBLIC ${SYRUP_LIB})
+    target_link_libraries(satmcm-lib PUBLIC ${SYRUP_LIB})
 ENDIF(SYRUP_LIB)
 
 # create executable, set name and link it to library
-add_executable(satscm-bin main.cpp)
-set_target_properties(satscm-bin PROPERTIES OUTPUT_NAME "satscm")
-target_link_libraries(satscm-bin PUBLIC satscm-lib)
+add_executable(satmcm-bin main.cpp)
+set_target_properties(satmcm-bin PROPERTIES OUTPUT_NAME "satmcm")
+target_link_libraries(satmcm-bin PUBLIC satmcm-lib)
 
 # define install paths
 set(bin_dest "bin/")
@@ -127,10 +127,10 @@ set(include_dest "include/")
 set(lib_dest "lib/")
 
 # install binary
-install(TARGETS satscm-bin DESTINATION "${bin_dest}")
+install(TARGETS satmcm-bin DESTINATION "${bin_dest}")
 
 # install lib
-install(TARGETS satscm-lib DESTINATION "${lib_dest}")
+install(TARGETS satmcm-lib DESTINATION "${lib_dest}")
 
 # install header files
 install(FILES ${header_sources} DESTINATION "${include_dest}")

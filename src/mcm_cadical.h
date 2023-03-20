@@ -2,12 +2,12 @@
 // Created by nfiege on 9/26/22.
 //
 
-#ifndef SATSCM_SCM_CADICAL_H
-#define SATSCM_SCM_CADICAL_H
+#ifndef SATMCM_SCM_CADICAL_H
+#define SATMCM_SCM_CADICAL_H
 
 #ifdef USE_CADICAL
 
-#include <scm.h>
+#include <mcm.h>
 #include <cadical.hpp>
 #include <chrono>
 #include <memory>
@@ -24,13 +24,13 @@ private:
 	std::chrono::steady_clock::time_point timer_start;
 };
 
-class scm_cadical : public scm {
+class mcm_cadical : public mcm {
 
 #define CADICAL_SAT 10
 #define CADICAL_UNSAT 20
 
 public:
-	scm_cadical(const std::vector<int> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf);
+	mcm_cadical(const std::vector<int> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf);
 
 protected:
 	std::pair<bool, bool> check() override;
@@ -46,4 +46,4 @@ private:
 
 #endif //USE_CADICAL
 
-#endif //SATSCM_SCM_CADICAL_H
+#endif //SATMCM_SCM_CADICAL_H

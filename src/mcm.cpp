@@ -2,7 +2,7 @@
 // Created by nfiege on 9/26/22.
 //
 
-#include "scm.h"
+#include "mcm.h"
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
@@ -13,7 +13,7 @@
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
 #define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
 
-scm::scm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+mcm::mcm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), verbosity(verbosity), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
 	this->calc_twos_complement = allow_negative_numbers;
@@ -59,7 +59,7 @@ scm::scm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int t
 	}
 }
 
-void scm::optimization_loop(formulation_mode mode) {
+void mcm::optimization_loop(formulation_mode mode) {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Starting optimization loop (mode = " << mode << ")" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Resetting backend now" << std::endl;
@@ -90,7 +90,7 @@ void scm::optimization_loop(formulation_mode mode) {
 	}
 }
 
-void scm::solve() {
+void mcm::solve() {
 	if (this->enumerate_all) {
 		this->solve_enumeration();
 	}
@@ -99,14 +99,14 @@ void scm::solve() {
 	}
 }
 
-void scm::reset_backend(formulation_mode mode) {
+void mcm::reset_backend(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
 }
 
-void scm::construct_problem(formulation_mode mode) {
+void mcm::construct_problem(formulation_mode mode) {
 	if (mode == formulation_mode::reset_all) {
 		// only construct new variables in non-incremental mode
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating variables now" << std::endl;
@@ -120,7 +120,7 @@ void scm::construct_problem(formulation_mode mode) {
 	}
 }
 
-void scm::create_variables() {
+void mcm::create_variables() {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating input node variables" << std::endl;
 	this->create_input_node_variables();
 	for (int i=1; i<=this->num_adders; i++) {
@@ -159,7 +159,7 @@ void scm::create_variables() {
 	}
 }
 
-void scm::create_constraints(formulation_mode mode) {
+void mcm::create_constraints(formulation_mode mode) {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      create_input_output_constraints" << std::endl;
 	this->create_input_output_constraints(mode);
 	for (int i=1; i<=this->num_adders; i++) {
@@ -211,14 +211,14 @@ void scm::create_constraints(formulation_mode mode) {
 	}
 }
 
-void scm::create_input_node_variables() {
+void mcm::create_input_node_variables() {
 	for (int i=0; i<this->word_size; i++) {
 		this->output_value_variables[{0, i}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 	}
 }
 
-void scm::create_input_select_mux_variables(int idx) {
+void mcm::create_input_select_mux_variables(int idx) {
 	if (idx < 2) return;
 	auto select_word_size = this->ceil_log2(idx);
 #if INPUT_SELECT_MUX_OPT
@@ -245,7 +245,7 @@ void scm::create_input_select_mux_variables(int idx) {
 	}
 }
 
-void scm::create_input_select_selection_variables(int idx) {
+void mcm::create_input_select_selection_variables(int idx) {
 	if (idx == 1) return;
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir : input_directions) {
@@ -256,14 +256,14 @@ void scm::create_input_select_selection_variables(int idx) {
 	}
 }
 
-void scm::create_input_shift_value_variables(int idx) {
+void mcm::create_input_shift_value_variables(int idx) {
 	for (int w = 0; w < this->shift_word_size; w++) {
 		this->input_shift_value_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 	}
 }
 
-void scm::create_shift_internal_variables(int idx) {
+void mcm::create_shift_internal_variables(int idx) {
 	for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
 		for (int w = 0; w < this->word_size; w++) {
 			this->shift_internal_mux_output_variables[{idx, mux_stage, w}] = ++this->variable_counter;
@@ -275,14 +275,14 @@ void scm::create_shift_internal_variables(int idx) {
 	}
 }
 
-void scm::create_post_adder_input_shift_value_variables(int idx) {
+void mcm::create_post_adder_input_shift_value_variables(int idx) {
 	for (int w = 0; w < this->shift_word_size; w++) {
 		this->input_post_adder_shift_value_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 	}
 }
 
-void scm::create_post_adder_shift_variables(int idx) {
+void mcm::create_post_adder_shift_variables(int idx) {
 	for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
 		for (int w = 0; w < this->word_size; w++) {
 			this->post_adder_shift_internal_mux_output_variables[{idx, mux_stage, w}] = ++this->variable_counter;
@@ -294,12 +294,12 @@ void scm::create_post_adder_shift_variables(int idx) {
 	}
 }
 
-void scm::create_input_negate_select_variable(int idx) {
+void mcm::create_input_negate_select_variable(int idx) {
 	this->input_negate_select_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
 }
 
-void scm::create_negate_select_output_variables(int idx) {
+void mcm::create_negate_select_output_variables(int idx) {
 	for (auto &dir : input_directions) {
 		for (int w = 0; w < this->word_size; w++) {
 			this->negate_select_output_variables[{idx, dir, w}] = ++this->variable_counter;
@@ -308,19 +308,19 @@ void scm::create_negate_select_output_variables(int idx) {
 	}
 }
 
-void scm::create_input_negate_value_variable(int idx) {
+void mcm::create_input_negate_value_variable(int idx) {
 	this->input_negate_value_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
 }
 
-void scm::create_xor_output_variables(int idx) {
+void mcm::create_xor_output_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
 		this->xor_output_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
 	}
 }
 
-void scm::create_adder_internal_variables(int idx) {
+void mcm::create_adder_internal_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
 		this->adder_carry_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -333,7 +333,7 @@ void scm::create_adder_internal_variables(int idx) {
 	}
 }
 
-void scm::create_output_value_variables(int idx) {
+void mcm::create_output_value_variables(int idx) {
 	for (int w = 0; w < this->word_size; w++) {
 		if (this->enable_node_output_shift) {
 			this->output_value_variables[{idx, w}] = this->post_adder_shift_output_variables.at({idx, w});
@@ -344,7 +344,7 @@ void scm::create_output_value_variables(int idx) {
 	}
 }
 
-int scm::ceil_log2(int n) {
+int mcm::ceil_log2(int n) {
 	try {
 		return this->ceil_log2_cache.at(n);
 	}
@@ -356,7 +356,7 @@ int scm::ceil_log2(int n) {
 	}
 }
 
-int scm::floor_log2(int n) {
+int mcm::floor_log2(int n) {
 	try {
 		return this->floor_log2_cache.at(n);
 	}
@@ -368,11 +368,11 @@ int scm::floor_log2(int n) {
 	}
 }
 
-void scm::create_new_variable(int idx) {
+void mcm::create_new_variable(int idx) {
 	(void) idx; // just do nothing -> should be overloaded by backend if a variable must be explicitly created
 }
 
-void scm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
+void mcm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
 	this->constraint_counter++;
 	if (!this->write_cnf) return;
 	for (const auto &it : a) {
@@ -381,14 +381,14 @@ void scm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
 	this->cnf_clauses << " 0" << std::endl;
 }
 
-void scm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
+void mcm::create_signed_shift_overflow_protection(int sel, int s_a, int a) {
 	// 1)
 	this->create_arbitrary_clause({{sel, true}, {s_a, true}, {a, false}});
 	// 2)
 	this->create_arbitrary_clause({{sel, true}, {s_a, false}, {a, true}});
 }
 
-void scm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) {
+void mcm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y) {
 	// 1)
 	this->create_arbitrary_clause({{sub, false}, {s_a, false}, {s_b, false}, {s_y, true}});
 	// 2)
@@ -399,7 +399,7 @@ void scm::create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s
 	this->create_arbitrary_clause({{sub, true}, {s_a, true}, {s_b, false}, {s_y, false}});
 }
 
-void scm::create_or(std::vector<int> &x) {
+void mcm::create_or(std::vector<int> &x) {
 	std::vector<std::pair<int, bool>> v(x.size());
 	for (auto i=0; i<x.size(); i++) {
 		auto &val = x[i];
@@ -409,19 +409,19 @@ void scm::create_or(std::vector<int> &x) {
 	this->create_arbitrary_clause(v);
 }
 
-void scm::create_1x1_implication(int a, int b) {
+void mcm::create_1x1_implication(int a, int b) {
 	this->create_arbitrary_clause({{a, true}, {b, false}});
 }
 
-void scm::create_1x1_negated_implication(int a, int b) {
+void mcm::create_1x1_negated_implication(int a, int b) {
 	this->create_arbitrary_clause({{a, true}, {b, true}});
 }
 
-void scm::create_1x1_reversed_negated_implication(int a, int b) {
+void mcm::create_1x1_reversed_negated_implication(int a, int b) {
 	this->create_arbitrary_clause({{a, false}, {b, false}});
 }
 
-void scm::create_1xN_implication(int a, const std::vector<int> &b) {
+void mcm::create_1xN_implication(int a, const std::vector<int> &b) {
 	std::vector<std::pair<int, bool>> v(b.size()+1);
 	for (auto i=0; i<b.size(); i++) {
 		v[i] = {b[i], false};
@@ -430,7 +430,7 @@ void scm::create_1xN_implication(int a, const std::vector<int> &b) {
 	this->create_arbitrary_clause(v);
 }
 
-void scm::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
+void mcm::create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b) {
 	std::vector<std::pair<int, bool>> v(b.size()+a.size());
 	for (auto i=0; i<a.size(); i++) {
 		v[i] = {a[i], true};
@@ -441,14 +441,14 @@ void scm::create_MxN_implication(const std::vector<int> &a, const std::vector<in
 	this->create_arbitrary_clause(v);
 }
 
-void scm::create_1x1_equivalence(int x, int y) {
+void mcm::create_1x1_equivalence(int x, int y) {
 	// 1)
 	this->create_arbitrary_clause({{x, true}, {y, false}});
 	// 2)
 	this->create_arbitrary_clause({{x, false}, {y, true}});
 }
 
-void scm::create_2x1_mux(int a, int b, int s, int y) {
+void mcm::create_2x1_mux(int a, int b, int s, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, true}, {s, false}, {y, false}});
 	// 2)
@@ -463,7 +463,7 @@ void scm::create_2x1_mux(int a, int b, int s, int y) {
 	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
 }
 
-void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
+void mcm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, true}, {y, false}});
 	// 2)
@@ -478,7 +478,7 @@ void scm::create_2x1_mux_shift_disallowed(int a, int b, int s, int y) {
 	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
 }
 
-void scm::create_2x1_mux_zero_const(int a, int s, int y) {
+void mcm::create_2x1_mux_zero_const(int a, int s, int y) {
 	// 1)
 	this->create_arbitrary_clause({{s, true}, {y, true}});
 	// 2)
@@ -487,7 +487,7 @@ void scm::create_2x1_mux_zero_const(int a, int s, int y) {
 	this->create_arbitrary_clause({{a, true}, {s, false}, {y, false}});
 }
 
-void scm::create_2x1_xor(int a, int b, int y) {
+void mcm::create_2x1_xor(int a, int b, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, false}, {b, false}, {y, true}});
 	// 2)
@@ -498,7 +498,7 @@ void scm::create_2x1_xor(int a, int b, int y) {
 	this->create_arbitrary_clause({{a, true}, {b, true}, {y, true}});
 }
 
-void scm::create_2x1_equiv(int a, int b, int y) {
+void mcm::create_2x1_equiv(int a, int b, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, false}, {b, false}, {y, false}});
 	// 2)
@@ -509,7 +509,7 @@ void scm::create_2x1_equiv(int a, int b, int y) {
 	this->create_arbitrary_clause({{a, true}, {b, true}, {y, false}});
 }
 
-void scm::create_2x1_or(int a, int b, int y) {
+void mcm::create_2x1_or(int a, int b, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, false},{b, false},{y, true}});
 	// 2)
@@ -518,7 +518,7 @@ void scm::create_2x1_or(int a, int b, int y) {
 	this->create_arbitrary_clause({{b, true},{y, false}});
 }
 
-void scm::create_2x1_and(int a, int b, int y) {
+void mcm::create_2x1_and(int a, int b, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, true},{b, true},{y, false}});
 	// 2)
@@ -527,7 +527,7 @@ void scm::create_2x1_and(int a, int b, int y) {
 	this->create_arbitrary_clause({{b, false},{y, true}});
 }
 
-void scm::create_2x1_and_b_inv(int a, int b, int y) {
+void mcm::create_2x1_and_b_inv(int a, int b, int y) {
 	// 1)
 	this->create_arbitrary_clause({{a, true},{b, false},{y, false}});
 	// 2)
@@ -536,7 +536,7 @@ void scm::create_2x1_and_b_inv(int a, int b, int y) {
 	this->create_arbitrary_clause({{b, true},{y, true}});
 }
 
-void scm::create_add_sum(int a, int b, int c_i, int s) {
+void mcm::create_add_sum(int a, int b, int c_i, int s) {
 	// 1)
 	this->create_arbitrary_clause({{a, false}, {b, true}, {c_i, false}, {s, false}});
 	// 2)
@@ -555,7 +555,7 @@ void scm::create_add_sum(int a, int b, int c_i, int s) {
 	this->create_arbitrary_clause({{a, true}, {b, true}, {c_i, true}, {s, false}});
 }
 
-void scm::create_add_carry(int a, int b, int c_i, int c_o) {
+void mcm::create_add_carry(int a, int b, int c_i, int c_o) {
 	// 1)
 	this->create_arbitrary_clause({{a, true}, {b, true}, {c_o, false}});
 	// 2)
@@ -570,7 +570,7 @@ void scm::create_add_carry(int a, int b, int c_i, int c_o) {
 	this->create_arbitrary_clause({{a, true}, {c_i, true}, {c_o, false}});
 }
 
-void scm::create_add_redundant(int a, int b, int c_i, int s, int c_o) {
+void mcm::create_add_redundant(int a, int b, int c_i, int s, int c_o) {
 	// 1)
 	this->create_arbitrary_clause({{a, false}, {s, true}, {c_o, true}});
 	// 2)
@@ -585,11 +585,11 @@ void scm::create_add_redundant(int a, int b, int c_i, int s, int c_o) {
 	this->create_arbitrary_clause({{c_i, true}, {s, false}, {c_o, false}});
 }
 
-void scm::force_bit(int x, int val) {
+void mcm::force_bit(int x, int val) {
 	this->create_arbitrary_clause({{x, val != 1}});
 }
 
-void scm::forbid_number(const std::vector<int> &x, int val) {
+void mcm::forbid_number(const std::vector<int> &x, int val) {
 	auto num_bits = (int)x.size();
 	std::vector<std::pair<int, bool>> v(num_bits);
 	for (int i=0; i<num_bits; i++) {
@@ -604,7 +604,7 @@ void scm::forbid_number(const std::vector<int> &x, int val) {
 	this->create_arbitrary_clause(v);
 }
 
-void scm::force_number(const std::vector<int> &x, int val) {
+void mcm::force_number(const std::vector<int> &x, int val) {
 	auto num_bits = (int)x.size();
 	for (int i=0; i<num_bits; i++) {
 		auto bit = (val >> i) & 1;
@@ -617,15 +617,15 @@ void scm::force_number(const std::vector<int> &x, int val) {
 	}
 }
 
-std::pair<bool, bool> scm::check() {
+std::pair<bool, bool> mcm::check() {
 	throw std::runtime_error("check is impossible in base class");
 }
 
-int scm::get_result_value(int var_idx) {
+int mcm::get_result_value(int var_idx) {
 	throw std::runtime_error("get_result_value is impossible in base class");
 }
 
-void scm::create_input_output_constraints(formulation_mode mode) {
+void mcm::create_input_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
@@ -645,7 +645,7 @@ void scm::create_input_output_constraints(formulation_mode mode) {
 	}
 }
 
-void scm::create_input_select_constraints(int idx, formulation_mode mode) {
+void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
@@ -744,7 +744,7 @@ void scm::create_input_select_constraints(int idx, formulation_mode mode) {
 	}
 }
 
-void scm::create_shift_constraints(int idx, formulation_mode mode) {
+void mcm::create_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
@@ -769,10 +769,10 @@ void scm::create_shift_constraints(int idx, formulation_mode mode) {
 				}
 				else {
 					// shifter input is the left input value
-					zero_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::left, w});
-					zero_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
+					zero_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w});
+					zero_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
 					if (!connect_zero_const) {
-						one_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::left, w_prev});
+						one_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w_prev});
 					}
 				}
 			}
@@ -828,14 +828,14 @@ void scm::create_shift_constraints(int idx, formulation_mode mode) {
 				shift_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
 			}
 			else {
-				shift_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
+				shift_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
 			}
 			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
 		}
 	}
 }
 
-void scm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
+void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for (auto stage = 0; stage < this->shift_word_size; stage++) {
 		auto shift_width = (1 << stage);
@@ -907,7 +907,7 @@ void scm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 	}
 }
 
-void scm::create_negate_select_constraints(int idx, formulation_mode mode) {
+void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
@@ -919,11 +919,11 @@ void scm::create_negate_select_constraints(int idx, formulation_mode mode) {
 		}
 		else {
 			// right input is the output of the right input select mux
-			right_input_var_idx = this->input_select_mux_output_variables.at({idx, scm::right, w});
+			right_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::right, w});
 		}
 		for (auto &dir : this->input_directions) {
 			auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w});
-			if (dir == scm::left) {
+			if (dir == mcm::left) {
 				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var_idx, mux_output_var_idx);
 			}
 			else {
@@ -933,17 +933,17 @@ void scm::create_negate_select_constraints(int idx, formulation_mode mode) {
 	}
 }
 
-void scm::create_xor_constraints(int idx, formulation_mode mode) {
+void mcm::create_xor_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
 	for (int w = 0; w < this->word_size; w++) {
-		auto input_var_idx = this->negate_select_output_variables.at({idx, scm::right, w});
+		auto input_var_idx = this->negate_select_output_variables.at({idx, mcm::right, w});
 		auto output_var_idx = this->xor_output_variables.at({idx, w});
 		this->create_2x1_xor(negate_var_idx, input_var_idx, output_var_idx);
 	}
 }
 
-void scm::create_adder_constraints(int idx, formulation_mode mode) {
+void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for (int w = 0; w < this->word_size; w++) {
 		int c_i;
@@ -956,7 +956,7 @@ void scm::create_adder_constraints(int idx, formulation_mode mode) {
 			c_i = this->adder_carry_variables.at({idx, w - 1});
 		}
 		// in/out variables
-		int a = this->negate_select_output_variables.at({idx, scm::left, w});
+		int a = this->negate_select_output_variables.at({idx, mcm::left, w});
 		int b = this->xor_output_variables.at({idx, w});
 		int s = this->adder_output_value_variables.at({idx, w});
 		int c_o = this->adder_carry_variables.at({idx, w});
@@ -980,14 +980,14 @@ void scm::create_adder_constraints(int idx, formulation_mode mode) {
 	}
 	// disallow overflows
 	if (this->calc_twos_complement) {
-		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, scm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, scm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
+		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, mcm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, mcm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
 	}
 	else {
 		this->create_1x1_equivalence(this->adder_carry_variables.at({idx, this->word_size - 1}), this->input_negate_value_variables.at(idx));
 	}
 }
 
-void scm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
+void mcm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
@@ -1002,7 +1002,7 @@ void scm::create_input_select_limitation_constraints(int idx, formulation_mode m
 	}
 }
 
-void scm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
+void mcm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
@@ -1014,7 +1014,7 @@ void scm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
 	}
 }
 
-void scm::create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode) {
+void mcm::create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
@@ -1026,7 +1026,7 @@ void scm::create_post_adder_shift_limitation_constraints(int idx, formulation_mo
 	}
 }
 
-void scm::get_solution_from_backend() {
+void mcm::get_solution_from_backend() {
 	// clear containers
 	this->input_select.clear();
 	this->input_select_mux_output.clear();
@@ -1137,7 +1137,7 @@ void scm::get_solution_from_backend() {
 	}
 }
 
-void scm::print_solution() {
+void mcm::print_solution() {
 	if (this->found_solution) {
 		std::cout << "Solution for constants" << std::endl;
 		for (auto &c : this->C) {
@@ -1147,8 +1147,8 @@ void scm::print_solution() {
 		std::cout << "  node #0 = " << (this->calc_twos_complement?sign_extend(this->output_values[0], this->word_size):this->output_values[0]) << std::endl;
 		for (auto idx = 1; idx <= this->num_adders; idx++) {
 			std::cout << "  node #" << idx << " = " << (this->calc_twos_complement?sign_extend((int64_t)this->output_values[idx], this->word_size):this->output_values[idx]) << std::endl;
-			std::cout << "    left input: node " << this->input_select[{idx, scm::left}] << std::endl;
-			std::cout << "    right input: node " << this->input_select[{idx, scm::right}] << std::endl;
+			std::cout << "    left input: node " << this->input_select[{idx, mcm::left}] << std::endl;
+			std::cout << "    right input: node " << this->input_select[{idx, mcm::right}] << std::endl;
 			std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
 			std::cout << "    negate select: " << this->negate_select[idx] << (this->negate_select[idx]==1?" (non-shifted)":" (shifted)") << std::endl;
 			std::cout << "    subtract: " << this->subtract[idx] << std::endl;
@@ -1166,7 +1166,7 @@ void scm::print_solution() {
 	}
 }
 
-bool scm::solution_is_valid() {
+bool mcm::solution_is_valid() {
 	bool valid = true;
 	for (int idx = 1; idx <= this->num_adders; idx++) {
 		// verify node inputs
@@ -1181,15 +1181,15 @@ bool scm::solution_is_valid() {
 						this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w}]) << w);
 				}
 			}
-			if (this->calc_twos_complement) this->input_select_mux_output[{idx, scm::left}] = sign_extend(this->input_select_mux_output[{idx, scm::left}], this->word_size);
-			if (this->calc_twos_complement) this->input_select_mux_output[{idx, scm::right}] = sign_extend(this->input_select_mux_output[{idx, scm::right}], this->word_size);
-			input_node_idx_l = this->input_select[{idx, scm::left}];
-			input_node_idx_r = this->input_select[{idx, scm::right}];
-			actual_input_value_l = this->input_select_mux_output[{idx, scm::left}];
-			actual_input_value_r = this->input_select_mux_output[{idx, scm::right}];
+			if (this->calc_twos_complement) this->input_select_mux_output[{idx, mcm::left}] = sign_extend(this->input_select_mux_output[{idx, mcm::left}], this->word_size);
+			if (this->calc_twos_complement) this->input_select_mux_output[{idx, mcm::right}] = sign_extend(this->input_select_mux_output[{idx, mcm::right}], this->word_size);
+			input_node_idx_l = this->input_select[{idx, mcm::left}];
+			input_node_idx_r = this->input_select[{idx, mcm::right}];
+			actual_input_value_l = this->input_select_mux_output[{idx, mcm::left}];
+			actual_input_value_r = this->input_select_mux_output[{idx, mcm::right}];
 		}
 		else {
-			this->input_select_mux_output[{idx, scm::left}] = this->input_select_mux_output[{idx, scm::right}] = 1;
+			this->input_select_mux_output[{idx, mcm::left}] = this->input_select_mux_output[{idx, mcm::right}] = 1;
 		}
 		int64_t left_input_value = this->output_values[input_node_idx_l];
 		int64_t right_input_value = this->output_values[input_node_idx_r];
@@ -1206,7 +1206,7 @@ bool scm::solution_is_valid() {
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int64_t mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
-					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::left, mux_idx, w}]) << w);
+					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, mcm::left, mux_idx, w}]) << w);
 				}
 				std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
 			}
@@ -1225,7 +1225,7 @@ bool scm::solution_is_valid() {
 			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
 				int64_t mux_output = 0;
 				for (auto w = 0; w < this->word_size; w++) {
-					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, scm::right, mux_idx, w}]) << w);
+					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, mcm::right, mux_idx, w}]) << w);
 				}
 				std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
 			}
@@ -1260,35 +1260,35 @@ bool scm::solution_is_valid() {
 			negate_mux_output_l = right_input_value;
 			negate_mux_output_r = actual_shift_output;
 		}
-		std::map<scm::input_direction, int> actual_negate_mux_output;
+		std::map<mcm::input_direction, int> actual_negate_mux_output;
 		for (auto &dir : this->input_directions) {
 			for (auto w = 0; w < this->word_size; w++) {
 				actual_negate_mux_output[dir] += (this->get_result_value(this->negate_select_output_variables[{idx, dir, w}]) << w);
 			}
 		}
-		if (this->calc_twos_complement) actual_negate_mux_output[scm::left] = sign_extend(actual_negate_mux_output[scm::left], this->word_size);
-		if (this->calc_twos_complement) actual_negate_mux_output[scm::right] = sign_extend(actual_negate_mux_output[scm::right], this->word_size);
+		if (this->calc_twos_complement) actual_negate_mux_output[mcm::left] = sign_extend(actual_negate_mux_output[mcm::left], this->word_size);
+		if (this->calc_twos_complement) actual_negate_mux_output[mcm::right] = sign_extend(actual_negate_mux_output[mcm::right], this->word_size);
 		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " left negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  output value = " <<  actual_negate_mux_output[scm::left] << std::endl;
+			std::cout << "  output value = " <<  actual_negate_mux_output[mcm::left] << std::endl;
 		}
-		if (negate_mux_output_l != actual_negate_mux_output[scm::left]) {
+		if (negate_mux_output_l != actual_negate_mux_output[mcm::left]) {
 			std::cout << "node #" << idx << " has invalid left negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  actual value = " <<  actual_negate_mux_output[scm::left] << std::endl;
+			std::cout << "  actual value = " <<  actual_negate_mux_output[mcm::left] << std::endl;
 			std::cout << "  expected value = " << negate_mux_output_l << std::endl;
 			valid = false;
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) {
 			std::cout << "node #" << idx << " right negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  output value = " <<  actual_negate_mux_output[scm::right] << std::endl;
+			std::cout << "  output value = " <<  actual_negate_mux_output[mcm::right] << std::endl;
 		}
-		if (negate_mux_output_r != actual_negate_mux_output[scm::right]) {
+		if (negate_mux_output_r != actual_negate_mux_output[mcm::right]) {
 			std::cout << "node #" << idx << " has invalid right negate select mux output" << std::endl;
 			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  actual value = " <<  actual_negate_mux_output[scm::right] << std::endl;
+			std::cout << "  actual value = " <<  actual_negate_mux_output[mcm::right] << std::endl;
 			std::cout << "  expected value = " << negate_mux_output_r << std::endl;
 			valid = false;
 		}
@@ -1407,7 +1407,7 @@ bool scm::solution_is_valid() {
 	return valid;
 }
 
-void scm::create_cnf_file() {
+void mcm::create_cnf_file() {
 	std::ofstream f;
 	std::stringstream constants;
 	for (int i=0; i<this->C.size(); i++) {
@@ -1427,7 +1427,7 @@ void scm::create_cnf_file() {
 	f.close();
 }
 
-void scm::create_mcm_output_constraints(formulation_mode mode) {
+void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for (auto &c : this->C) {
 		std::vector<int> or_me;
@@ -1460,7 +1460,7 @@ void scm::create_mcm_output_constraints(formulation_mode mode) {
 	}
 }
 
-void scm::create_mcm_output_variables(int idx) {
+void mcm::create_mcm_output_variables(int idx) {
 	for (auto &c : this->C) {
 		this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -1471,12 +1471,12 @@ void scm::create_mcm_output_variables(int idx) {
 	}
 }
 
-void scm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
+void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	this->force_bit(this->output_value_variables.at({idx,0}), 1);
 }
 
-int64_t scm::sign_extend(int64_t x, int w) {
+int64_t mcm::sign_extend(int64_t x, int w) {
 	auto sign_bit = (x >> (w-1)) & 1;
 	if (sign_bit == 0) return x; // x >= 0 -> no conversion needed
 	auto mask = (1 << w) - 1;
@@ -1485,7 +1485,7 @@ int64_t scm::sign_extend(int64_t x, int w) {
 	return x;
 }
 
-std::string scm::get_adder_graph_description() {
+std::string mcm::get_adder_graph_description() {
 	std::stringstream s;
 	if (!this->found_solution) return s.str();
 	s << "{";
@@ -1501,8 +1501,8 @@ std::string scm::get_adder_graph_description() {
 		int right_input;
 		int left_shift;
 		int right_shift;
-		left_idx = this->input_select.at({idx, scm::left});
-		right_idx = this->input_select.at({idx, scm::right});
+		left_idx = this->input_select.at({idx, mcm::left});
+		right_idx = this->input_select.at({idx, mcm::right});
 		left_input = this->output_values.at(left_idx);
 		right_input = this->output_values.at(right_idx);
 		left_shift = this->shift_value.at(idx);
@@ -1544,24 +1544,24 @@ std::string scm::get_adder_graph_description() {
 	return s.str();
 }
 
-void scm::set_min_add(int new_min_add) {
+void mcm::set_min_add(int new_min_add) {
 	this->num_adders = std::max(this->num_adders, new_min_add-1);
 	this->num_adders = std::max(this->num_adders, 0);
 }
 
-void scm::also_minimize_full_adders() {
+void mcm::also_minimize_full_adders() {
 	this->minimize_full_adders = true;
 }
 
-void scm::allow_node_output_shift() {
+void mcm::allow_node_output_shift() {
 	this->enable_node_output_shift = true;
 }
 
-std::pair<int, int> scm::solution_is_optimal() {
+std::pair<int, int> mcm::solution_is_optimal() {
 	return {this->num_add_opt, this->num_FA_opt};
 }
 
-void scm::ignore_sign(bool only_apply_to_negative_coefficients) {
+void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
 	for (auto &c : this->C) {
 		if (only_apply_to_negative_coefficients) {
 			// only allow sign inversion for negative coefficients
@@ -1576,7 +1576,7 @@ void scm::ignore_sign(bool only_apply_to_negative_coefficients) {
 	}
 }
 
-void scm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
+void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	std::vector<int> abs_coeff_bits(this->word_size);
 	if (this->calc_twos_complement) {
@@ -1686,7 +1686,7 @@ void scm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
 	}
 }
 
-void scm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
+void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	if (!this->calc_twos_complement) {
 		// can always cut MSB because all coefficients are positive
@@ -1704,8 +1704,8 @@ void scm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 		this->create_1x1_reversed_negated_implication(s_c, m);
 		return;
 	}
-	int s_x = this->input_select_mux_output_variables.at({idx, scm::left, this->word_size-1});
-	int s_y = this->input_select_mux_output_variables.at({idx, scm::right, this->word_size-1});
+	int s_x = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
+	int s_y = this->input_select_mux_output_variables.at({idx, mcm::right, this->word_size-1});
 	// create clauses to decide whether the sign m can be copied from one of the inputs
 	// 1)
 	this->create_arbitrary_clause({
@@ -1744,7 +1744,7 @@ void scm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 																});
 }
 
-void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
+void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
 	if (idx == 1) {
@@ -1776,7 +1776,7 @@ void scm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation
 	}
 }
 
-void scm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mode) {
+void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	for (int w = 0; w < this->shift_word_size; w++) {
 		auto var = this->full_adder_shift_gain_variables[{idx, w}] = ++this->variable_counter;
@@ -1824,7 +1824,7 @@ void scm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 	}
 }
 
-void scm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
+void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
 	if (idx == 1) {
@@ -1855,7 +1855,7 @@ void scm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode
 	}
 }
 
-void scm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
+void mcm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	if (this->num_adders == 1) {
 		// no addition necessary -> just set container with variable
@@ -1874,7 +1874,7 @@ void scm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
 	}
 }
 
-void scm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mode) {
+void mcm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	// result = shift_result[last_stage] + msb_sum
 	auto word_size_left_input = this->ceil_log2(this->num_adders * this->max_shift + 1);
@@ -1896,7 +1896,7 @@ void scm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mod
 	}
 }
 
-void scm::create_full_adder_cpa_constraints(formulation_mode mode) {
+void mcm::create_full_adder_cpa_constraints(formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	// result = num_bits[last_stage] - (shift_result[last_stage] + msb_sum)
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
@@ -1931,7 +1931,7 @@ void scm::create_full_adder_cpa_constraints(formulation_mode mode) {
 	}
 }
 
-void scm::create_full_adder_result_constraints() {
+void mcm::create_full_adder_result_constraints() {
 	// force num_full_adders <= max_full_adders
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
 	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
@@ -1995,7 +1995,7 @@ void scm::create_full_adder_result_constraints() {
 	}
 }
 
-void scm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
+void mcm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
 	//this->create_add_sum(a, b, c_i, sum);
 	// 1)
 	this->create_arbitrary_clause({{a.first, a.second}, {b.first, not b.second}, {c_i.first, c_i.second}, {sum.first, sum.second}});
@@ -2030,7 +2030,7 @@ void scm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std:
 	this->create_arbitrary_clause({{a.first, not a.second}, {c_i.first, not c_i.second}, {c_o.first, c_o.second}});
 }
 
-void scm::create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
+void mcm::create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum, std::pair<int, bool> c_o) {
 	//this->create_2x1_xor(a, b, sum);
 	// 1) a b -sum
 	this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {sum.first, not sum.second}});
@@ -2051,7 +2051,7 @@ void scm::create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std:
 	this->create_arbitrary_clause({{b.first, b.second},{c_o.first, not c_o.second}});
 }
 
-int scm::init_const_one_bit() {
+int mcm::init_const_one_bit() {
 	if (this->const_one_bit < 1) {
 		this->const_one_bit = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -2060,7 +2060,7 @@ int scm::init_const_one_bit() {
 	return this->const_one_bit;
 }
 
-int scm::init_const_zero_bit() {
+int mcm::init_const_zero_bit() {
 	if (this->const_zero_bit < 1) {
 		this->const_zero_bit = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -2069,7 +2069,7 @@ int scm::init_const_zero_bit() {
 	return this->const_zero_bit;
 }
 
-std::vector<int> scm::create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x) {
+std::vector<int> mcm::create_bitheap(const std::vector<std::pair<std::vector<int>, bool>> &x) {
 	std::vector<int> result_variables;
 	std::map<int, std::vector<std::pair<int, bool>>> y;
 	int num_bits = 0;
@@ -2150,19 +2150,19 @@ std::vector<int> scm::create_bitheap(const std::vector<std::pair<std::vector<int
 	return result_variables;
 }
 
-void scm::prohibit_current_solution() {
+void mcm::prohibit_current_solution() {
 	std::vector<std::pair<int, bool>> clause;
 	int v; // variable buffer
 	for (int i=1; i<=this->num_adders; i++) {
 		auto mux_word_size = this->ceil_log2(i);
 		// left input mux
 		for (int s=0; s<mux_word_size; s++) {
-			v = this->input_select_selection_variables.at({i, scm::left, s});
+			v = this->input_select_selection_variables.at({i, mcm::left, s});
 			clause.emplace_back(v, this->get_result_value(v));
 		}
 		// right input mux
 		for (int s=0; s<mux_word_size; s++) {
-			v = this->input_select_selection_variables.at({i, scm::right, s});
+			v = this->input_select_selection_variables.at({i, mcm::right, s});
 			clause.emplace_back(v, this->get_result_value(v));
 		}
 		// pre add shift
@@ -2187,11 +2187,11 @@ void scm::prohibit_current_solution() {
 	this->create_arbitrary_clause(clause);
 }
 
-void scm::set_enumerate_all(bool new_enumerate_all) {
+void mcm::set_enumerate_all(bool new_enumerate_all) {
 	this->enumerate_all = new_enumerate_all;
 }
 
-void scm::solve_enumeration() {
+void mcm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
@@ -2247,7 +2247,7 @@ void scm::solve_enumeration() {
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
 			if (idx > 1) {
-				shifter_input = this->input_select_mux_output.at({idx, scm::left});
+				shifter_input = this->input_select_mux_output.at({idx, mcm::left});
 			}
 			while ((shifter_input & 1) == 0) {
 				shifter_input = shifter_input >> 1;
@@ -2260,10 +2260,10 @@ void scm::solve_enumeration() {
 				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
 			}
 
-			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
-												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
+			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, mcm::left}]  >= 0) or
+												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, mcm::right}] >= 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, mcm::left}]   < 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, mcm::right}]  < 0);
 			if (can_cut_MSB) {
 				MSBs_cut++;
 			}
@@ -2300,7 +2300,7 @@ void scm::solve_enumeration() {
 	this->found_solution = true;
 }
 
-void scm::solve_standard() {
+void mcm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
@@ -2360,7 +2360,7 @@ void scm::solve_standard() {
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
 			if (idx > 1) {
-				shifter_input = this->input_select_mux_output.at({idx, scm::left});
+				shifter_input = this->input_select_mux_output.at({idx, mcm::left});
 			}
 			while ((shifter_input & 1) == 0) {
 				shifter_input = shifter_input >> 1;
@@ -2373,10 +2373,10 @@ void scm::solve_standard() {
 				FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
 			}
 
-			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::left}]  >= 0) or
-												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, scm::right}] >= 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::left}]   < 0) or
-												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, scm::right}]  < 0);
+			auto can_cut_MSB = (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, mcm::left}]  >= 0) or
+												 (this->output_values.at(idx) >= 0 and this->input_select_mux_output[{idx, mcm::right}] >= 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, mcm::left}]   < 0) or
+												 (this->output_values.at(idx)  < 0 and this->input_select_mux_output[{idx, mcm::right}]  < 0);
 			if (can_cut_MSB) {
 				MSBs_cut++;
 			}

@@ -60,7 +60,7 @@ def do_it(bench_type_tuple):
     filename, name_tag = get_setup(bench_type)
     # paths
     result_dir = "benchmark/results"
-    binary = "./satscm"
+    binary = "./satmcm"
     solver = "CaDiCaL"
     # timeout
     timeout_mul = 1 # standard timeout: 1h
@@ -122,6 +122,7 @@ def do_it(bench_type_tuple):
         command = f"{binary} {constant} {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} 1>log.txt 2>>{result_filename}"
         print(f"  -> executing '{command}'")
         os.system(command)
+        break
     
 if __name__=="__main__":
     main()

@@ -2,8 +2,8 @@
 // Created by nfiege on 9/26/22.
 //
 
-#ifndef SATSCM_SCM_H
-#define SATSCM_SCM_H
+#ifndef SATMCM_MCM_H
+#define SATMCM_MCM_H
 
 #include <map>
 #include <set>
@@ -15,7 +15,7 @@
 #define SHIFT_SELECT_OLD 0
 #define FULL_ADDERS_UNLIMITED std::numeric_limits<long>::min()
 
-class scm {
+class mcm {
 public:
 	enum input_direction {
 		left, right
@@ -33,7 +33,7 @@ public:
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	scm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
+	mcm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
 	/*!
 	 * define the minimum number of needed adders to help the algorithm converge faster
 	 * @param new_min_add value
@@ -810,4 +810,4 @@ private:
 };
 
 
-#endif //SATSCM_SCM_H
+#endif //SATMCM_MCM_H

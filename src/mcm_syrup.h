@@ -2,12 +2,12 @@
 // Created by nfiege on 10/21/22.
 //
 
-#ifndef SATSCM_SCM_SYRUP_H
-#define SATSCM_SCM_SYRUP_H
+#ifndef SATMCM_MCM_SYRUP_H
+#define SATMCM_MCM_SYRUP_H
 
 #ifdef USE_SYRUP
 
-#include <scm.h>
+#include <mcm.h>
 #include <parallel/MultiSolvers.h>
 #include <core/SolverTypes.h>
 #include <chrono>
@@ -17,9 +17,9 @@
 #include <pthread.h>
 
 
-class scm_syrup : public scm {
+class mcm_syrup : public mcm {
 public:
-	scm_syrup(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
+	mcm_syrup(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
 
 protected:
 	std::pair<bool, bool> check() override;
@@ -34,7 +34,7 @@ private:
 	int glucoseVariableCounter = -1;
 
 	static void* timeout_thread(std::pair<int, pthread_t*>* p);
-	static void* worker_thread(std::pair<scm_syrup*, pthread_t*>* p);
+	static void* worker_thread(std::pair<mcm_syrup*, pthread_t*>* p);
 	pthread_t worker_thread_id = 0;
 	pthread_t timeout_thread_id = 0;
 
@@ -43,4 +43,4 @@ private:
 };
 
 #endif //USE_SYRUP
-#endif //SATSCM_SCM_SYRUP_H
+#endif //SATMCM_MCM_SYRUP_H
