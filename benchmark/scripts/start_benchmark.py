@@ -16,25 +16,28 @@ def read_constants(filename):
 
 def get_setup(bench_type):
     if bench_type == "scm_reduced":
-        filename = "benchmark/scm/scm_cost_20_reduced.csv"
+        filename = "benchmark/inputs/scm/scm_reduced.csv"
         name_tag = "constant"
     elif bench_type == "scm":
-        filename = "benchmark/scm/scm_cost_20.csv"
+        filename = "benchmark/inputs/scm/scm.csv"
+        name_tag = "constant"
+    elif bench_type == "scm_lagoon_metodi":
+        filename = "benchmark/inputs/scm/scm_lagoon_metodi.csv"
         name_tag = "constant"
     elif bench_type == "mcm":
-        filename = "benchmark/mcm/benchmarkfilter2d_cost.csv"
+        filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     elif bench_type == "unsigned_mcm":
-        filename = "benchmark/mcm/benchmarkfilter2d_cost.csv"
+        filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     elif bench_type == "enumerate_unsigned":
-        filename = "benchmark/mcm/benchmarkfilter2d_cost.csv"
+        filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     elif bench_type == "enumerate_signed_negative":
-        filename = "benchmark/mcm/benchmarkfilter2d_cost.csv"
+        filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     elif bench_type == "enumerate_signed_all":
-        filename = "benchmark/mcm/benchmarkfilter2d_cost.csv"
+        filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     else:
         raise Exception(f"invalid benchmark specified: {bench_type}")
@@ -53,10 +56,11 @@ def do_it(bench_type_tuple):
     bench_type = bench_type_tuple[0]
     also_minimize_full_adders = bench_type_tuple[1]
     allow_post_add_right_shift = bench_type_tuple[2]
+    print(f"executing experiment '{bench_type}' ({also_minimize_full_adders}/{allow_post_add_right_shift}) now")
     filename, name_tag = get_setup(bench_type)
     # paths
     result_dir = "benchmark/results"
-    binary = "satscm"
+    binary = "./satscm"
     solver = "CaDiCaL"
     # timeout
     timeout_mul = 1 # standard timeout: 1h
@@ -85,7 +89,7 @@ def do_it(bench_type_tuple):
             allow_sign_inversion = -1
             allow_negative_numbers = 1
         else: # bench_type == "enumerate_signed_negative"
-            enumerate_signed_all = 1
+            allow_sign_inversion = 1
             allow_negative_numbers = 1
     # create directories if they don't already exist
     if not os.path.exists(f"{result_dir}/"):
@@ -115,9 +119,10 @@ def do_it(bench_type_tuple):
         fa_min_str = "without FA minimization"
         if also_minimize_full_adders:
             fa_min_str = "with FA minimization"
-        print(f"C = '{constant}' expected #adders = '{costs}' {fa_min_str}")
         command = f"{binary} {constant} {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} 1>log.txt 2>>{result_filename}"
+        print(f"  -> executing '{command}'")
         os.system(command)
+        break
     
 if __name__=="__main__":
     main()
