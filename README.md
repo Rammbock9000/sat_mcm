@@ -21,7 +21,7 @@ make
 
 3) call satmcm binary without arguments to see command line arguments.
 
-Once a solution is found, sat_scm prints a description of the resulting MCM circuit on the console.
+Once a solution is found, sat_mcm prints a description of the resulting MCM circuit on the console.
 
 4) (optional) install everything (to default location) via
 
