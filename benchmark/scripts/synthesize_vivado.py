@@ -12,39 +12,9 @@ import argparse
 def report(text):
     print("vivado_runsyn: " + text)
 
-
-if __name__ == '__main__':
-
-
-    parser = argparse.ArgumentParser(description='This is an helper script that launches Xilinx Vivado synthesis and extracts resource consumption and critical path information')
-    parser.add_argument('-i', '--implement', action='store_true', help='Go all the way to implementation (default stops after synthesis)')
-    parser.add_argument('-v', '--vhdl', help='VHDL file names (default flopoco.vhdl) - pass multiple files as colon-separated list, with the toplevel being the first file')
-    parser.add_argument('-e', '--entity', help='Entity name (default is last entity of the toplevel VHDL file)')
-    parser.add_argument('-t', '--target', help='Target name (default is read from the toplevel VHDL file)')
-    parser.add_argument('-f', '--frequency', help='Objective frequency (default is read from the VHDL file)')
-    parser.add_argument('-j', '--jobs', help='Number of threads that vivado is allowed to use for synthesis and implementation')
-    parser.add_argument('-s', '--standard', help='VHDL standard (can be "VHDL" or "VHDL 2008", default is "VHDL")')
-    parser.add_argument('-d', '--disable_flatten_hierarchy', action='store_true', help='Disable flattening hierarchy to disable optimizations beyond entity borders (default is "True")')
-
-    options=parser.parse_args()
-    
-    disable_flatten = options.disable_flatten_hierarchy
-    if disable_flatten == None:
-        disable_flatten = True
-
-    if options.implement==True:
-        synthesis_only=False
-    else:
-        synthesis_only=True
-
-    if options.vhdl==None:
-        filenames_str = "flopoco.vhdl"
-    else:
-        filenames_str = options.vhdl
-    
+def run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disable_flatten, synthesis_only):
     found_vhdl = False
     found_vhd = False
-    filenames = filenames_str.split(":")
     for filename in filenames:
         if ".vhdl" in filename:
             found_vhdl = True
@@ -64,36 +34,6 @@ if __name__ == '__main__':
         exit()
     toplevel_filename = filenames[0]
     
-    if options.jobs==None:
-        print("using 1 thread for synth+impl; use argument --jobs (-j) to define the number of available threads")
-        jobs = 1
-    else:
-        try:
-            jobs = int(options.jobs)
-        except:
-            jobs = 1
-            print("failed to convert arguments for number of jobs to integer; using default value jobs=1")
-    
-    if options.standard == None:
-        print("did not set vhdl standard, using default (VHDL) set to VHDL 2008 to enable newer standard")
-        standard = "VHDL"
-    elif options.standard=="VHDL 2008" or "2008":
-        standard = "VHDL 2008"
-    else:
-        standard = "VHDL"
-        if options.standard!="VHDL":
-            print("unrecognized vhdl standard (" + options.standard + "), using default (VHDL)")
-
-    entity = options.entity
-    if entity == None:
-        raise Exception("need toplevel entity name")
-    target = options.target
-    if target == None:
-        raise Exception("need target FPGA name")
-    frequency = options.frequency
-    if frequency == None:
-        raise Exception("need frequency")
-
     if target.lower()=="kintex7":
         part="xc7k70tfbv484-3"
     elif target.lower()=="virtex7":
@@ -224,3 +164,102 @@ if __name__ == '__main__':
     os.system("cat " + utilization_report_file)
     report("cat " + timing_report_file)
     os.system("cat " + timing_report_file)
+
+
+def main2():
+    parser = argparse.ArgumentParser(description='This is an helper script that launches Xilinx Vivado synthesis and extracts resource consumption and critical path information')
+    parser.add_argument('-i', '--implement', action='store_true', help='Go all the way to implementation (default stops after synthesis)')
+    parser.add_argument('-v', '--vhdl', help='VHDL file names (default flopoco.vhdl) - pass multiple files as colon-separated list, with the toplevel being the first file')
+    parser.add_argument('-e', '--entity', help='Entity name (default is last entity of the toplevel VHDL file)')
+    parser.add_argument('-t', '--target', help='Target name (default is read from the toplevel VHDL file)')
+    parser.add_argument('-f', '--frequency', help='Objective frequency (default is read from the VHDL file)')
+    parser.add_argument('-j', '--jobs', help='Number of threads that vivado is allowed to use for synthesis and implementation')
+    parser.add_argument('-s', '--standard', help='VHDL standard (can be "VHDL" or "VHDL 2008", default is "VHDL")')
+    parser.add_argument('-d', '--disable_flatten_hierarchy', action='store_true', help='Disable flattening hierarchy to disable optimizations beyond entity borders (default is "True")')
+
+    options=parser.parse_args()
+    
+    disable_flatten = options.disable_flatten_hierarchy
+    if disable_flatten == None:
+        disable_flatten = True
+
+    if options.implement==True:
+        synthesis_only=False
+    else:
+        synthesis_only=True
+
+    if options.vhdl==None:
+        filenames_str = "flopoco.vhdl"
+    else:
+        filenames_str = options.vhdl
+    filenames = filenames_str.split(":")
+    
+    if options.jobs==None:
+        print("using 1 thread for synth+impl; use argument --jobs (-j) to define the number of available threads")
+        jobs = 1
+    else:
+        try:
+            jobs = int(options.jobs)
+        except:
+            jobs = 1
+            print("failed to convert arguments for number of jobs to integer; using default value jobs=1")
+    
+    if options.standard == None:
+        print("did not set vhdl standard, using default (VHDL) set to VHDL 2008 to enable newer standard")
+        standard = "VHDL"
+    elif options.standard=="VHDL 2008" or "2008":
+        standard = "VHDL 2008"
+    else:
+        standard = "VHDL"
+        if options.standard!="VHDL":
+            print("unrecognized vhdl standard (" + options.standard + "), using default (VHDL)")
+
+    entity = options.entity
+    if entity == None:
+        raise Exception("need toplevel entity name")
+    target = options.target
+    if target == None:
+        raise Exception("need target FPGA name")
+    frequency = options.frequency
+    if frequency == None:
+        raise Exception("need frequency")
+    
+    run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disable_flatten, synthesis_only)
+
+def main():
+    vhdl_basepath = "benchmark/vhdl"
+    synth_basepath = "benchmark/synth"
+    add_node_file_name = f"../../add_node_v3.vhd"
+    if not os.path.exists(synth_basepath):
+        os.makedirs(synth_basepath)
+    for bench_type in os.scandir(vhdl_basepath):
+        if not bench_type.is_dir():
+            continue
+        if not os.path.exists(f"{synth_basepath}/{bench_type.name}"):
+            os.makedirs(f"{synth_basepath}/{bench_type.name}")
+        for subdir in os.scandir(f"{vhdl_basepath}/{bench_type.name}"):
+            if not subdir.is_dir():
+                continue
+            if not os.path.exists(f"{synth_basepath}/{bench_type.name}/{subdir.name}"):
+                os.makedirs(f"{synth_basepath}/{bench_type.name}/{subdir.name}")
+            for vhdl_file in os.scandir(f"{vhdl_basepath}/{bench_type.name}/{subdir.name}"):
+                vhdl_file_name = vhdl_file.name
+                if not (vhdl_file_name.endswith(".vhd") or vhdl_file_name.endswith(".vhdl")):
+                    continue
+                if "_tb." in vhdl_file_name:
+                    continue # do not synthesize testbenches
+                cwd = os.getcwd()
+                os.chdir(f"{vhdl_basepath}/{bench_type.name}/{subdir.name}")
+                run_vivado_synth(
+                    filenames=[vhdl_file_name, add_node_file_name], 
+                    entity="mcm", 
+                    target="ultrascale2", 
+                    frequency="250", 
+                    jobs="1", 
+                    standard="VHDL", 
+                    disable_flatten=True, 
+                    synthesis_only=False)
+                os.chdir(cwd)
+
+if __name__ == '__main__':
+    main()
