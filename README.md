@@ -43,6 +43,12 @@ To reproduce all our experiments do the following:
 
 2) go to the repository root directory (where e.g. the CMakeLists.txt and the binary are located)
 
-3) call "python benchmark/scripts/start_benchmark.py" (this took approx. 1 month of compute time on our machines...)
+3) call "python benchmark/scripts/start_benchmark.py" to start the experiments (this took approx. 1 month of compute time on our machines...)
 
-4) call "python benchmark/scripts/create_vhdl_code.py" (this finishes within a few seconds)
+4) call "python benchmark/scripts/create_vhdl_code.py" to generate vhdl code (this finishes within a few seconds)
+
+5) call "python benchmark/scripts/analyze.py" to analyze experimental results (this might take a few minutes)
+
+6) call "python benchmark/scripts/synthesize_vivado.py" to generate synthesis results with vivado (this might take an hour or two)
+
+Now, you should find pre-synthesis results summarized in "benchmark/results/results.csv" and post-place-and-route results (timing, area, power consumption) in the respective vivado project directories at location "benchmark/vhdl/*experiment_type*/*setting*/*vivado_project*/"
