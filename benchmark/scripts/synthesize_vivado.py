@@ -8,6 +8,7 @@ import sys
 import re
 import string
 import argparse
+import shutil
 
 def report(text):
     print("vivado_runsyn: " + text)
@@ -28,10 +29,10 @@ def run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disab
         ending = ".vhd"
     else:
         print("corrupt vhdl filenames")
-        exit()
+        return
     if len(filenames) < 1:
         print("did not pass any vhdl filenames")
-        exit()
+        return
     toplevel_filename = filenames[0]
     
     if target.lower()=="kintex7":
@@ -69,14 +70,17 @@ def run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disab
     
     if os.path.exists(workdir):
     	report("Skipping "+workdir+" (already exists)")
-    	exit()
+    	return
 
     report("Working dir: "+workdir)
-    report("Synthesizing "+filename)
+    report("Start synthesis")
 
     report("   entity:       " +  entity)
     report("   target:       " +  target)
     report("   frequency:    " +  frequency + " MHz")
+    report("   source files:")
+    for filename in filenames:
+        report("       "+filename)
 
 
     os.mkdir(workdir)
@@ -85,9 +89,9 @@ def run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disab
         filename_abs = os.path.abspath(filename)
         report("   design file:    " +  filename_abs)
         filenames_abs.append(filename_abs)
+        shutil.copy(filename_abs, workdir) # copy source file into project dir
 
     os.chdir(workdir)
-    
 
     # Create the clock.xdc file. For this we use the previous frequency,
     # but since I am too lazy to parse the VHDL to find inouts and output names, I copy the set_input_delay etc from the FloPoCo generated file
@@ -166,70 +170,11 @@ def run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disab
     os.system("cat " + timing_report_file)
 
 
-def main2():
-    parser = argparse.ArgumentParser(description='This is an helper script that launches Xilinx Vivado synthesis and extracts resource consumption and critical path information')
-    parser.add_argument('-i', '--implement', action='store_true', help='Go all the way to implementation (default stops after synthesis)')
-    parser.add_argument('-v', '--vhdl', help='VHDL file names (default flopoco.vhdl) - pass multiple files as colon-separated list, with the toplevel being the first file')
-    parser.add_argument('-e', '--entity', help='Entity name (default is last entity of the toplevel VHDL file)')
-    parser.add_argument('-t', '--target', help='Target name (default is read from the toplevel VHDL file)')
-    parser.add_argument('-f', '--frequency', help='Objective frequency (default is read from the VHDL file)')
-    parser.add_argument('-j', '--jobs', help='Number of threads that vivado is allowed to use for synthesis and implementation')
-    parser.add_argument('-s', '--standard', help='VHDL standard (can be "VHDL" or "VHDL 2008", default is "VHDL")')
-    parser.add_argument('-d', '--disable_flatten_hierarchy', action='store_true', help='Disable flattening hierarchy to disable optimizations beyond entity borders (default is "True")')
-
-    options=parser.parse_args()
-    
-    disable_flatten = options.disable_flatten_hierarchy
-    if disable_flatten == None:
-        disable_flatten = True
-
-    if options.implement==True:
-        synthesis_only=False
-    else:
-        synthesis_only=True
-
-    if options.vhdl==None:
-        filenames_str = "flopoco.vhdl"
-    else:
-        filenames_str = options.vhdl
-    filenames = filenames_str.split(":")
-    
-    if options.jobs==None:
-        print("using 1 thread for synth+impl; use argument --jobs (-j) to define the number of available threads")
-        jobs = 1
-    else:
-        try:
-            jobs = int(options.jobs)
-        except:
-            jobs = 1
-            print("failed to convert arguments for number of jobs to integer; using default value jobs=1")
-    
-    if options.standard == None:
-        print("did not set vhdl standard, using default (VHDL) set to VHDL 2008 to enable newer standard")
-        standard = "VHDL"
-    elif options.standard=="VHDL 2008" or "2008":
-        standard = "VHDL 2008"
-    else:
-        standard = "VHDL"
-        if options.standard!="VHDL":
-            print("unrecognized vhdl standard (" + options.standard + "), using default (VHDL)")
-
-    entity = options.entity
-    if entity == None:
-        raise Exception("need toplevel entity name")
-    target = options.target
-    if target == None:
-        raise Exception("need target FPGA name")
-    frequency = options.frequency
-    if frequency == None:
-        raise Exception("need frequency")
-    
-    run_vivado_synth(filenames, entity, target, frequency, jobs, standard, disable_flatten, synthesis_only)
 
 def main():
     vhdl_basepath = "benchmark/vhdl"
     synth_basepath = "benchmark/synth"
-    add_node_file_name = f"../../add_node_v3.vhd"
+    add_node_file_name = f"../../../vhdl/add_node_v3.vhd"
     if not os.path.exists(synth_basepath):
         os.makedirs(synth_basepath)
     for bench_type in os.scandir(vhdl_basepath):
@@ -249,9 +194,9 @@ def main():
                 if "_tb." in vhdl_file_name:
                     continue # do not synthesize testbenches
                 cwd = os.getcwd()
-                os.chdir(f"{vhdl_basepath}/{bench_type.name}/{subdir.name}")
+                os.chdir(f"{synth_basepath}/{bench_type.name}/{subdir.name}")
                 run_vivado_synth(
-                    filenames=[vhdl_file_name, add_node_file_name], 
+                    filenames=[f"../../../vhdl/{bench_type.name}/{subdir.name}/{vhdl_file_name}", add_node_file_name], 
                     entity="mcm", 
                     target="ultrascale2", 
                     frequency="250", 
