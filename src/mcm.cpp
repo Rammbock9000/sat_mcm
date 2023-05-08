@@ -2343,6 +2343,7 @@ void mcm::solve_standard() {
 		this->num_FA_opt = false; // don't know if solution is optimal w.r.t. full adders
 		return;
 	}
+
 	mode = formulation_mode::all_FA_clauses;
 	while (this->found_solution) {
 		this->timeout = this->fa_minimization_timeout;
