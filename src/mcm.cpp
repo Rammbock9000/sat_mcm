@@ -9,6 +9,7 @@
 #include <chrono>
 #include <fstream>
 #include <algorithm>
+#include <numeric>
 
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
 #define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
@@ -53,8 +54,14 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	// set word sizes & track unique constants
 	this->word_size = 1;
 	std::set<std::vector<int>> non_one_unique_vectors;
+	std::vector<int> absV;
 	for (auto &v : this->C) {
-        if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and !(std::all_of(v.begin(), v.end(), [](int i) { return i==1; }))) non_one_unique_vectors.insert(v); // ignore all 0 and all 1 vectors what about mixed?
+	    for (int i = 0; i< v.size(); i++){
+            absV[i] = abs(v[i]);
+	    }
+        //ignore all vector that contain only 0's and the unit vector where the sum of the absolute vector is 1
+        if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
+            std::accumulate(absV.begin(), absV.end(), 0) != 1) non_one_unique_vectors.insert(v);
 		//calculate ceiling over all values
 		for (auto &c : v) {
             auto w = this->ceil_log2(std::abs(c)) + 1;
@@ -170,7 +177,7 @@ void mcm::create_variables() {
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
-		if (this->C.size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0]])) {
+		if (this->C.size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0][0]])) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
