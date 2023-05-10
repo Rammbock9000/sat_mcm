@@ -29,11 +29,11 @@ public:
 	};
 	/*!
 	 * constructor
-	 * @param C the constant we want to compute
+	 * @param C the vector of constants we want to compute
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	mcm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
+	mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
 	/*!
 	 * define the minimum number of needed adders to help the algorithm converge faster
 	 * @param new_min_add value
@@ -401,11 +401,11 @@ protected:
 	/*!
 	 * the constant by which we want to multiply
 	 */
-	std::vector<int> C;
+	std::vector<std::vector<int>> C;
 	/*!
 	 * store info whether or not the negative version of a coefficient was requested by the user
 	 */
-	std::map<int, bool> negative_coeff_requested;
+	std::map<std::vector<int>, bool> negative_coeff_requested;
 	/*!
 	 * store info whether the solver can decide to implement C or -C
 	 * this is only relevant when ...
@@ -435,7 +435,7 @@ protected:
 	 * requested constant -> < adder node output, number of shifted bits >
 	 * e.g. "18 -> < 9, 1 >" because 18 is computed from 9 left-shifted by 1 bit
 	 */
-	std::map<int, std::pair<int, int>> requested_constants;
+	std::map<std::vector<int>, std::pair<std::vector<int>, int>> requested_vectors;
 	/*!
 	 * if we found a solution, yet
 	 */
@@ -471,6 +471,7 @@ protected:
 	/*!
 	 * also write the corresponding cnf files for all solving attempts
 	 * e.g. 521_2.cnf for C = 521 and #adders = 2
+	 * e.g. 412_532_2.cnf for V = <412,532> and #adders  = 2
 	 */
 	bool write_cnf;
 	/*!

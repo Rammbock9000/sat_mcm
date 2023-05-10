@@ -13,34 +13,53 @@
 #define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
 #define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
 
-mcm::mcm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), verbosity(verbosity), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
 	this->calc_twos_complement = allow_negative_numbers;
-	for (auto &c : this->C) {
-		// ignore 0
-		if (c == 0) continue;
-		auto original_number = c;
-		int shifted_bits = 0;
-		// handle negative numbers
-		if (c < 0) {
-			c = -c;
-			this->negative_coeff_requested[c] = true;
-		}
-		// right shift until odd
-		while ((c & 1) == 0) {
-			c = c / 2; // do not use shift operation because it is not uniquely defined for negative numbers
-			shifted_bits++;
-		}
-		this->requested_constants[original_number] = {c, shifted_bits};
+	for (auto &v : this->C) {
+	    // ignore 0
+	    if (std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) continue; // c==0 before now all values in v == 0
+	    auto original_vector = v;
+	    int shifted_bits = 0;
+	    // right shift until odd
+	    while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) { //needs to be tested for sure
+            for (auto &c : v) {
+                if (c == 0) continue;
+                c = c / 2; // do not use shift operation because it is not uniquely defined for negative number
+            }
+            shifted_bits++;
+        }
+	    //look for first non zero value in vector and check if its > or < 0
+        for (auto &c : v) {
+            if (c > 0) {
+                this->negative_coeff_requested[v] = false;
+                break;
+            }else if (c < 0) {
+                this->negative_coeff_requested[v] = true;
+                break;
+            }else {
+                continue;
+            }
+        }
+        //flip the sign of all values in the vector if its a negative number
+        if(this->negative_coeff_requested[v])
+            for (auto &c : v) {
+                if(c==0) continue;
+                c = -c;
+            }
+        this->requested_vectors[original_vector] = {v, shifted_bits};
 	}
 	// set word sizes & track unique constants
 	this->word_size = 1;
-	std::set<int> non_one_unique_constants;
-	for (auto &c : this->C) {
-		if (c != 1 and c != 0) non_one_unique_constants.insert(c);
-		auto w = this->ceil_log2(std::abs(c))+1;
-		if (w > this->word_size) this->word_size = w;
+	std::set<std::vector<int>> non_one_unique_vectors;
+	for (auto &v : this->C) {
+        if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and !(std::all_of(v.begin(), v.end(), [](int i) { return i==1; }))) non_one_unique_vectors.insert(v); // ignore all 0 and all 1 vectors what about mixed?
+		//calculate ceiling over all values
+		for (auto &c : v) {
+            auto w = this->ceil_log2(std::abs(c)) + 1;
+            if (w > this->word_size) this->word_size = w;
+        }
 	}
 	this->max_shift = this->word_size-1;
 	if (this->calc_twos_complement) {
@@ -48,14 +67,14 @@ mcm::mcm(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int t
 		this->word_size++;
 	}
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
-	this->num_adders = (int)non_one_unique_constants.size()-1;
+	this->num_adders = (int)non_one_unique_vectors.size()-1;
 	if (this->verbosity != verbosity_mode::quiet_mode) {
 		std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
 	}
-	// set constants vector
+	// set constants matrix
 	this->C.clear();
-	for (auto &c : non_one_unique_constants) {
-		this->C.emplace_back(c);
+	for (auto &v : non_one_unique_vectors) {
+		this->C.emplace_back(v);
 	}
 }
 
