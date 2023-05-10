@@ -661,12 +661,12 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 	}
 	// force input to 1 and output to C
 	this->force_number(input_bits, 1);
-	if (this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0]])) {
+	if (this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
 		// SCM
-		this->force_number(output_bits, this->C[0]);
+		this->force_number(output_bits, this->C[0][0]);
 	}
-	else {
-		// MCM
+	else{
+		// MCM // CMM
 		this->create_mcm_output_constraints(mode);
 	}
 }
@@ -1165,9 +1165,13 @@ void mcm::get_solution_from_backend() {
 
 void mcm::print_solution() {
 	if (this->found_solution) {
-		std::cout << "Solution for constants" << std::endl;
-		for (auto &c : this->C) {
-			std::cout << "  C = " << c << std::endl;
+		std::cout << "Solution for vectors" << std::endl;
+		for (auto &v : this->C) {
+            std::cout << "  V = <";
+		    for (auto c : v){
+                std::cout << " " << c;
+		    }
+			std::cout << " >" <<std::endl;
 		}
 		std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
 		std::cout << "  node #0 = " << (this->calc_twos_complement?sign_extend(this->output_values[0], this->word_size):this->output_values[0]) << std::endl;
@@ -1185,9 +1189,13 @@ void mcm::print_solution() {
 		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 	}
 	else {
-		for (auto &c : this->C) {
-			std::cout << "Failed to find solution for constants" << std::endl;
-			std::cout << "  C = " << c << std::endl;
+        std::cout << "Failed to find solution for vectors" << std::endl;
+	    for (auto &v : this->C) {
+	        std::cout << "  V = <";
+	        for (auto c : v){
+	            std::cout << " " << c;
+	        }
+	        std::cout << " >" <<std::endl;
 		}
 	}
 }
@@ -1438,7 +1446,8 @@ void mcm::create_cnf_file() {
 	std::stringstream constants;
 	for (int i=0; i<this->C.size(); i++) {
 		if (i != 0) constants << "_";
-		constants << this->C[i];
+		constants << this->C[i][0];
+		// note Christoph: take a look later
 	}
 	std::string filename;
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
@@ -1455,46 +1464,52 @@ void mcm::create_cnf_file() {
 
 void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	for (auto &c : this->C) {
-		std::vector<int> or_me;
-		for (int idx = 1; idx <= this->num_adders; idx++) {
-			or_me.emplace_back(this->mcm_output_variables[{idx, c}]);
-			for (int w = 0; w < this->word_size; w++) {
-				if (((c >> w) & 1) == 1) {
-					this->create_1x1_implication(this->mcm_output_variables[{idx, c}], this->output_value_variables[{idx, w}]);
-				}
-				else {
-					this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c}], this->output_value_variables[{idx, w}]);
-				}
-			}
-		}
-		if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
-			// also allow the solver to choose -c instead of c if it's easier to implement
-			for (int idx = 1; idx <= this->num_adders; idx++) {
-				or_me.emplace_back(this->mcm_output_variables[{idx, -c}]);
-				for (int w = 0; w < this->word_size; w++) {
-					if ((((-c) >> w) & 1) == 1) {
-						this->create_1x1_implication(this->mcm_output_variables[{idx, -c}], this->output_value_variables[{idx, w}]);
-					}
-					else {
-						this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c}], this->output_value_variables[{idx, w}]);
-					}
-				}
-			}
-		}
-		this->create_or(or_me);
-	}
+	for (auto &v : this->C) {
+        for (auto &c : v) {
+            std::vector<int> or_me;
+            for (int idx = 1; idx <= this->num_adders; idx++) {
+                or_me.emplace_back(this->mcm_output_variables[{idx, c}]);
+                for (int w = 0; w < this->word_size; w++) {
+                    if (((c >> w) & 1) == 1) {
+                        this->create_1x1_implication(this->mcm_output_variables[{idx, c}],
+                                                     this->output_value_variables[{idx, w}]);
+                    } else {
+                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c}],
+                                                             this->output_value_variables[{idx, w}]);
+                    }
+                }
+            }
+            if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
+                // also allow the solver to choose -c instead of c if it's easier to implement
+                for (int idx = 1; idx <= this->num_adders; idx++) {
+                    or_me.emplace_back(this->mcm_output_variables[{idx, -c}]);
+                    for (int w = 0; w < this->word_size; w++) {
+                        if ((((-c) >> w) & 1) == 1) {
+                            this->create_1x1_implication(this->mcm_output_variables[{idx, -c}],
+                                                         this->output_value_variables[{idx, w}]);
+                        } else {
+                            this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c}],
+                                                                 this->output_value_variables[{idx, w}]);
+                        }
+                    }
+                }
+            }
+            this->create_or(or_me);
+        }
+    }
 }
 
 void mcm::create_mcm_output_variables(int idx) {
-	for (auto &c : this->C) {
-		this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-		if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
-			this->mcm_output_variables[{idx, -c}] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-		}
-	}
+	for (auto &v : this->C) {
+        for (auto &c : v) {
+            this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+            if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
+                this->mcm_output_variables[{idx, -c}] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+            }
+        }
+    }
 }
 
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
@@ -1588,17 +1603,18 @@ std::pair<int, int> mcm::solution_is_optimal() {
 }
 
 void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
-	for (auto &c : this->C) {
-		if (only_apply_to_negative_coefficients) {
-			// only allow sign inversion for negative coefficients
-			if (this->negative_coeff_requested[c]) {
-				this->sign_inversion_allowed[c] = true;
-			}
-		}
-		else {
-			// only the solver to choose sign for all coefficients
-			this->sign_inversion_allowed[c] = true;
-		}
+	for (auto &v : this->C) {
+        for (auto &c : v) {
+            if (only_apply_to_negative_coefficients) {
+                // only allow sign inversion for negative coefficients
+                if (this->negative_coeff_requested[v]) {
+                    this->sign_inversion_allowed[c] = true;
+                }
+            } else {
+                // only the solver to choose sign for all coefficients
+                this->sign_inversion_allowed[c] = true;
+            }
+        }
 	}
 }
 
@@ -2221,24 +2237,38 @@ void mcm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
-		if (this->C.size() == 1) {
-			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
+		if (this->C[0].size() == 1) {
+			std::cout << "Trying to solve SCM problem for constant " << this->C[0].front() << std::endl;
 		}
-		else {
+		else if (this->C.size() == 1){
 			std::cout << "Trying to solve MCM problem for following constants: ";
-			for (auto &c : this->C) {
-				std::cout << "  " << c << std::endl;
+			for (auto &v : this->C) {
+			    for (auto &c : v)
+				std::cout << "  " << c;
 			}
+			std::cout << std::endl;
 		}
+		else{
+            std::cout << "Trying to solve CMM problem for following vectors: ";
+            for (auto &v : this->C) {
+                std::cout << "<";
+                for (auto &c : v) {
+                    std::cout << "  " << c;
+                }
+                std::cout << " >";
+            }
+        }
 		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
 	}
 	bool trivial = true;
-	for (auto &c : this->C) {
-		if (c != 1) {
-			trivial = false;
-			break;
-		}
-	}
+    std::vector<int> absV;
+    //unit vectors are trivial
+    for (auto &v : this->C) {
+        if (std::accumulate(absV.begin(), absV.end(), 0) != 1) {
+            trivial = false;
+            break;
+        }
+    }
 	if (trivial) {
 		this->found_solution = true;
 		this->ran_into_timeout = false;
@@ -2329,25 +2359,39 @@ void mcm::solve_enumeration() {
 void mcm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
-	if (this->verbosity == verbosity_mode::debug_mode) {
-		if (this->C.size() == 1) {
-			std::cout << "Trying to solve SCM problem for constant " << this->C.front() << std::endl;
-		}
-		else {
-			std::cout << "Trying to solve MCM problem for following constants: ";
-			for (auto &c : this->C) {
-				std::cout << "  " << c << std::endl;
-			}
-		}
-		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
-	}
-	bool trivial = true;
-	for (auto &c : this->C) {
-		if (c != 1) {
-			trivial = false;
-			break;
-		}
-	}
+    if (this->verbosity == verbosity_mode::debug_mode) {
+        if (this->C[0].size() == 1) {
+            std::cout << "Trying to solve SCM problem for constant " << this->C[0].front() << std::endl;
+        }
+        else if (this->C.size() == 1){
+            std::cout << "Trying to solve MCM problem for following constants: ";
+            for (auto &v : this->C) {
+                for (auto &c : v)
+                    std::cout << "  " << c;
+            }
+            std::cout << std::endl;
+        }
+        else{
+            std::cout << "Trying to solve CMM problem for following vectors: ";
+            for (auto &v : this->C) {
+                std::cout << "<";
+                for (auto &c : v) {
+                    std::cout << "  " << c;
+                }
+                std::cout << " >";
+            }
+        }
+        std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
+    }
+    bool trivial = true;
+    std::vector<int> absV;
+    //unit vectors are trivial
+    for (auto &v : this->C) {
+        if (std::accumulate(absV.begin(), absV.end(), 0) != 1) {
+            trivial = false;
+            break;
+        }
+    }
 	if (trivial) {
 		this->found_solution = true;
 		this->ran_into_timeout = false;
