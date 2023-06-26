@@ -227,11 +227,11 @@ int main(int argc, char** argv) {
 		}
 	}
 
-    if (C[0].size() == 1) {
-        std::cout << "Starting CMM for constant(s) " << C[0].front() << std::endl;
+    if (C[0].size() == 1 and C.size() == 1 ) {
+        std::cout << "Starting SCM for constant(s) " << C[0].front() << std::endl;
     }
-    else if (C.size() == 1){
-        std::cout << "Starting CMM for constant(s)" << std::endl;
+    else if (C[0].size() == 1){
+        std::cout << "Starting MCM for constant(s)" << std::endl;
         for (auto &v : C) {
             for (auto &c : v)
                 std::cout << c << std::endl;

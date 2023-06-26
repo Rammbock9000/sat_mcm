@@ -19,25 +19,31 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	// make it even and count shift
     this->calc_twos_complement = allow_negative_numbers;
 	for (auto &v : this->C) {
-        // ignore 0
+        // ignore 0 vector
         if (std::all_of(v.begin(), v.end(), [](int i) { return i == 0; }))
-            continue; // c==0 before now all values in v == 0
+            continue; // c==0 before, now all values in v == 0
         auto original_vector = v;
         int shifted_bits = 0;
         // right shift until odd
-        while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) { //needs to be tested for sure
+        std::cout << "entry of vector has no odd value: " << std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); }) << std::endl;
+        while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) {
             for (auto &c : v) {
+                std::cout << "entry of vector: " << c << std::endl;
                 if (c == 0) continue;
                 c = c / 2; // do not use shift operation because it is not uniquely defined for negative number
+                std::cout << "entry of vector after shift: " << c << std::endl;
             }
             shifted_bits++;
         }
         //look for first non zero value in vector and check if its > or < 0
         for (auto &c : v) {
+            std::cout << "found entry: " << c << std::endl;
             if (c > 0) {
+                std::cout << "first non zero entry of vector is: " << c << std::endl;
                 this->negative_coeff_requested[v] = false;
                 break;
             } else if (c < 0) {
+                std::cout << "first non zero entry of vector is: " << c << std::endl;
                 this->negative_coeff_requested[v] = true;
                 break;
             } else {
@@ -47,8 +53,10 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
         //flip the sign of all values in the vector if its requested
         if (this->negative_coeff_requested[v]) {
         for (auto &c : v) {
+            std::cout << "flipping sign of entry  " << c ;
             if (c == 0) continue;
             c = -c;
+            std::cout << " ----> " << c << std::endl;
             }
         }
         this->requested_vectors[original_vector] = {v, shifted_bits};
@@ -60,8 +68,13 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	for (auto &v : this->C) {
 	    for (int i = 0; i < v.size(); i++){
             absV.emplace_back(abs(v[i]));
+            std::cout << "abs constant: " << abs(v[i]) << std::endl;
 	    }
+        std::cout << "abs accumulate: " << std::accumulate(absV.begin(), absV.end(),0) << std::endl;
         //ignore all vector that contain only 0's and the unit vector where the sum of the absolute vector is 1
+        std::cout << "return value 'not only contain 0's': " << !(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) << std::endl;
+        std::cout << "return value 'sum of absolute vector is not 1': " << (std::accumulate(absV.begin(), absV.end(), 0) != 1)  << std::endl;
+
         if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
             std::accumulate(absV.begin(), absV.end(), 0) != 1) non_one_unique_vectors.insert(v);
 		//calculate ceiling over all values
@@ -69,12 +82,15 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
             auto w = this->ceil_log2(std::abs(c)) + 1;
             if (w > this->word_size) this->word_size = w;
         }
+		absV.clear();
 	}
+
 	this->max_shift = this->word_size-1;
 	if (this->calc_twos_complement) {
 		// account for sign bit
 		this->word_size++;
 	}
+
 	this->shift_word_size = this->ceil_log2(this->max_shift+1);
 	this->num_adders = (int)non_one_unique_vectors.size()-1;
 	if (this->verbosity != verbosity_mode::quiet_mode) {
@@ -85,6 +101,21 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	for (auto &v : non_one_unique_vectors) {
 		this->C.emplace_back(v);
 	}
+    std::cout << "---------------" << std::endl;
+    std::cout << "optimized input" << std::endl;
+    for (auto &v : this->C) {
+        std::cout << "|";
+        for(auto &c : v){
+            std::cout << "  " << c;
+        }
+        std::cout << " |" << std::endl;
+    }
+    std::cout << "---------------" << std::endl;
+    std::cout << "word size: " << this->word_size-1  << std::endl;
+    std::cout << "max shift: " << this->max_shift  << std::endl;
+    std::cout << "number of adders: " << this->num_adders  << std::endl;
+    std::cout << "shift word size: " << this->shift_word_size  << std::endl;
+	//exit(0);
 }
 
 void mcm::optimization_loop(formulation_mode mode) {
@@ -663,13 +694,16 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 	}
 	// force input to 1 and output to C
 	this->force_number(input_bits, 1);
-	if (this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
+	if (this->C[0].size() == 1 and this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
 		// SCM
 		this->force_number(output_bits, this->C[0][0]);
 	}
-	else{
-		// MCM // CMM
-		this->create_mcm_output_constraints(mode);
+	else {
+	    if(C[0].size() == 1) {
+            // MCM
+            this->create_mcm_output_constraints(mode);
+        }
+	    // CMM
 	}
 }
 
@@ -2239,10 +2273,10 @@ void mcm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
-		if (this->C[0].size() == 1) {
+		if (this->C[0].size() == 1 and this->C.size() == 1) {
 			std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
 		}
-		else if (this->C.size() == 1){
+		else if (this->C[0].size() == 1){
 			std::cout << "Trying to solve MCM problem for following constants: ";
 			for (auto &v : this->C) {
 			    for (auto &c : v)
@@ -2362,10 +2396,10 @@ void mcm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
     if (this->verbosity == verbosity_mode::debug_mode) {
-        if (this->C[0].size() == 1) {
+        if (this->C[0].size() == 1 and this->C.size() == 1) {
             std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
         }
-        else if (this->C.size() == 1){
+        else if (this->C[0].size() == 1){
             std::cout << "Trying to solve MCM problem for following constants: ";
             for (auto &v : this->C) {
                 for (auto &c : v)
