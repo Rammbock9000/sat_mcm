@@ -30,7 +30,7 @@ class mcm_cadical : public mcm {
 #define CADICAL_UNSAT 20
 
 public:
-	mcm_cadical(const std::vector<int> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf);
+	mcm_cadical(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf);
 
 protected:
 	std::pair<bool, bool> check() override;

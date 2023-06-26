@@ -6,7 +6,7 @@
 
 #ifdef USE_Z3
 
-mcm_z3::mcm_z3(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+mcm_z3::mcm_z3(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	mcm(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf), solver(this->context) {}
 
 std::pair<bool, bool> mcm_z3::check() {

@@ -667,71 +667,87 @@ private:
 	std::map<std::tuple<int, input_direction, int, int>, int> input_select_mux_variables;
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
+	 * /l(i) and r(i)
 	 */
 	std::map<std::tuple<int, input_direction, int>, int> input_select_mux_output_variables;
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
+	 * /alpha(i)
 	 */
 	std::map<std::tuple<int, input_direction, int>, int> input_select_selection_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
+	 * /gamma(i)
 	 */
 	std::map<std::pair<int, int>, int> input_shift_value_variables;
 	/*!
 	 * < node idx, mux stage, bit > -> variable idx
+	 * /s(i)
 	 */
 	std::map<std::tuple<int, int, int>, int> shift_internal_mux_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! identical to the last MUX stage of shift_internal_mux_output_variables
+	 * /s(i)
 	 */
 	std::map<std::pair<int, int>, int> shift_output_variables;
 	/*!
 	 * node idx -> variable idx
+	 * /delta(i)
 	 */
 	std::map<int, int> input_negate_select_variables;
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
+	 * /x(i) and w(i)
 	 */
 	std::map<std::tuple<int, input_direction, int>, int> negate_select_output_variables;
 	/*!
 	 * node idx -> variable idx
+	 * /epsilon(i)
 	 */
 	std::map<int, int> input_negate_value_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
+	 * /y(i)
 	 */
 	std::map<std::pair<int, int>, int> xor_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
+	 * /C_in
 	 */
 	std::map<std::pair<int, int>, int> adder_carry_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * used for optimized adder clauses
+	 * /no use
 	 */
 	std::map<std::pair<int, int>, int> adder_XOR_internal_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0
+	 * /z(i)
 	 */
 	std::map<std::pair<int, int>, int> adder_output_value_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
+	 * /zeta(i)
 	 */
 	std::map<std::pair<int, int>, int> input_post_adder_shift_value_variables;
 	/*!
 	 * < node idx, mux stage, bit > -> variable idx
+	 * /c(i) mux
 	 */
 	std::map<std::tuple<int, int, int>, int> post_adder_shift_internal_mux_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! identical to the last MUX stage of shift_internal_mux_output_variables
+	 * /c(i)
 	 */
 	std::map<std::pair<int, int>, int> post_adder_shift_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0
+	 * /z(i) or c(i)
 	 */
 	std::map<std::pair<int, int>, int> output_value_variables;
 	/*!

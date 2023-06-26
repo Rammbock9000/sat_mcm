@@ -22,7 +22,7 @@
 
 int main(int argc, char** argv) {
 	std::unique_ptr<mcm> solver;
-	std::vector<int> C;
+	std::vector<std::vector<int>> C;
 	int timeout = 300;
 	mcm::verbosity_mode verbosity = mcm::verbosity_mode::normal_mode;
 	bool allow_negative_numbers = false;
@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 #endif
 	if (argc == 1) {
 		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all>" << std::endl;
-		std::cout << "  => constant(s): <int:int:...>: colon-separated list of integers that should be computed" << std::endl;
+		std::cout << "  => constant(s): <int:int:int>;<...>: colon-separated list of integers that should be computed" << std::endl;
 		std::cout << "  => solver name: <string>: cadical, z3, syrup are supported" << std::endl;
 		std::cout << "  => timeout: <uint>: number of seconds allowed per SAT instance" << std::endl;
 		std::cout << "  => threads: <uint>: number of threads allowed to use" << std::endl;
@@ -63,9 +63,33 @@ int main(int argc, char** argv) {
 		std::string s(argv[1]);
 		try {
 			std::stringstream c_str(s);
+            std::stringstream s_str;
+			std::string vector_buff;
 			std::string buff;
-			while(std::getline(c_str, buff, ':')) {
-				C.emplace_back(std::stoi(buff));
+			std::vector<std::string> v;
+			while(std::getline(c_str, vector_buff, ';')) {
+			    v.emplace_back(vector_buff);
+			}
+			for(auto entry : v){
+			    std::cout << entry << std::endl;
+			}
+			for(int i = 0; i < v.size(); i++){
+                s_str << v[i];
+                std::cout << v[i] << std::endl;
+                std::vector<int> vector_row;
+
+                while(std::getline(s_str, buff, ':')) {
+                    std::cout << "before emplace" << std::endl;
+                    vector_row.emplace_back(std::stoi(buff));
+                    std::cout << "after emplace" << std::endl;
+                }
+                std::cout << vector_row.size() << std::endl;
+                for(int j = 0; j < vector_row.size(); j++) {
+                    std::cout << vector_row[j] << std::endl;
+                }
+                std::cout << "----"<< std::endl;
+                C.emplace_back(vector_row);
+                s_str.clear();
 			}
 		}
 		catch (...) {
@@ -74,6 +98,13 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+	//changed from constant(s): <int:int:...>: to constants(s): <int:int:int;...>
+	for(auto v : C){
+	    for(auto c : v){
+	        std::cout << c << std::endl;
+	    }
+	}
+
 	if (argc > 2) {
 		std::string s(argv[2]);
 		std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){return std::tolower(c);});
@@ -195,10 +226,35 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
-	std::cout << "Starting OMCM for constant(s)" << (C.size()>1?"s\n":" ");
-	for (auto &c : C) {
-		std::cout << (C.size()>1?"  ":"") << c << (C.size()>1?"\n":" ");
+
+    if (C[0].size() == 1) {
+        std::cout << "Starting CMM for constant(s) " << C[0].front() << std::endl;
+    }
+    else if (C.size() == 1){
+        std::cout << "Starting CMM for constant(s)" << std::endl;
+        for (auto &v : C) {
+            for (auto &c : v)
+                std::cout << c << std::endl;
+        }
+    }
+    else{
+        std::cout << "Starting CMM for constant(s)" << std::endl;
+        for (auto &v : C) {
+            std::cout << "<";
+            for (auto &c : v) {
+                std::cout << "  " << c;
+            }
+            std::cout << " >" << std::endl;
+        }
+    }
+    /* old console output for SCM and MCM
+	std::cout << "Starting CMM for constant(s)" << (C.size()>1?"s\n":" ");
+	for (auto &v : C) {
+	    for (auto &c : v) {
+            std::cout << (C.size() > 1 ? "  " : "") << c << (C.size() > 1 ? "\n" : " ");
+        }
 	}
+	*/
 	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {

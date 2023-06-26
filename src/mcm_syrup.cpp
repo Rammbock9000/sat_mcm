@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <mtl/Vec.h>
 
-mcm_syrup::mcm_syrup(const std::vector<int> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
+mcm_syrup::mcm_syrup(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	: mcm(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf) {}
 
 void *mcm_syrup::timeout_thread(std::pair<int, pthread_t*>* p) {

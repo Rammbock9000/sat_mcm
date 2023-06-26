@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-mcm_cadical::mcm_cadical(const std::vector<int> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf)
+mcm_cadical::mcm_cadical(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, bool allow_negative_numbers, bool write_cnf)
 	: mcm(C, timeout, verbosity, 1, allow_negative_numbers, write_cnf) {}
 
 void mcm_cadical::reset_backend(formulation_mode mode) {

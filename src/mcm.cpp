@@ -17,38 +17,40 @@
 mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), verbosity(verbosity), threads(threads), write_cnf(write_cnf) {
 	// make it even and count shift
-	this->calc_twos_complement = allow_negative_numbers;
+    this->calc_twos_complement = allow_negative_numbers;
 	for (auto &v : this->C) {
-	    // ignore 0
-	    if (std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) continue; // c==0 before now all values in v == 0
-	    auto original_vector = v;
-	    int shifted_bits = 0;
-	    // right shift until odd
-	    while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) { //needs to be tested for sure
+        // ignore 0
+        if (std::all_of(v.begin(), v.end(), [](int i) { return i == 0; }))
+            continue; // c==0 before now all values in v == 0
+        auto original_vector = v;
+        int shifted_bits = 0;
+        // right shift until odd
+        while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) { //needs to be tested for sure
             for (auto &c : v) {
                 if (c == 0) continue;
                 c = c / 2; // do not use shift operation because it is not uniquely defined for negative number
             }
             shifted_bits++;
         }
-	    //look for first non zero value in vector and check if its > or < 0
+        //look for first non zero value in vector and check if its > or < 0
         for (auto &c : v) {
             if (c > 0) {
                 this->negative_coeff_requested[v] = false;
                 break;
-            }else if (c < 0) {
+            } else if (c < 0) {
                 this->negative_coeff_requested[v] = true;
                 break;
-            }else {
+            } else {
                 continue;
             }
         }
-        //flip the sign of all values in the vector if its a negative number
-        if(this->negative_coeff_requested[v])
-            for (auto &c : v) {
-                if(c==0) continue;
-                c = -c;
+        //flip the sign of all values in the vector if its requested
+        if (this->negative_coeff_requested[v]) {
+        for (auto &c : v) {
+            if (c == 0) continue;
+            c = -c;
             }
+        }
         this->requested_vectors[original_vector] = {v, shifted_bits};
 	}
 	// set word sizes & track unique constants
@@ -56,8 +58,8 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	std::set<std::vector<int>> non_one_unique_vectors;
 	std::vector<int> absV;
 	for (auto &v : this->C) {
-	    for (int i = 0; i< v.size(); i++){
-            absV[i] = abs(v[i]);
+	    for (int i = 0; i < v.size(); i++){
+            absV.emplace_back(abs(v[i]));
 	    }
         //ignore all vector that contain only 0's and the unit vector where the sum of the absolute vector is 1
         if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
@@ -1165,7 +1167,7 @@ void mcm::get_solution_from_backend() {
 
 void mcm::print_solution() {
 	if (this->found_solution) {
-		std::cout << "Solution for vectors" << std::endl;
+		std::cout << "Solution for Vector" << std::endl;
 		for (auto &v : this->C) {
             std::cout << "  V = <";
 		    for (auto c : v){
@@ -1189,7 +1191,7 @@ void mcm::print_solution() {
 		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
 	}
 	else {
-        std::cout << "Failed to find solution for vectors" << std::endl;
+        std::cout << "Failed to find solution for Vector" << std::endl;
 	    for (auto &v : this->C) {
 	        std::cout << "  V = <";
 	        for (auto c : v){
@@ -2238,7 +2240,7 @@ void mcm::solve_enumeration() {
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
 		if (this->C[0].size() == 1) {
-			std::cout << "Trying to solve SCM problem for constant " << this->C[0].front() << std::endl;
+			std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
 		}
 		else if (this->C.size() == 1){
 			std::cout << "Trying to solve MCM problem for following constants: ";
@@ -2257,14 +2259,14 @@ void mcm::solve_enumeration() {
                 }
                 std::cout << " >";
             }
+            std::cout << std::endl;
         }
 		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
 	}
 	bool trivial = true;
-    std::vector<int> absV;
     //unit vectors are trivial
     for (auto &v : this->C) {
-        if (std::accumulate(absV.begin(), absV.end(), 0) != 1) {
+        if (std::accumulate(v.begin(), v.end(), 0) != 1) {
             trivial = false;
             break;
         }
@@ -2361,7 +2363,7 @@ void mcm::solve_standard() {
 	this->num_add_opt = true;
     if (this->verbosity == verbosity_mode::debug_mode) {
         if (this->C[0].size() == 1) {
-            std::cout << "Trying to solve SCM problem for constant " << this->C[0].front() << std::endl;
+            std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
         }
         else if (this->C.size() == 1){
             std::cout << "Trying to solve MCM problem for following constants: ";
@@ -2380,14 +2382,14 @@ void mcm::solve_standard() {
                 }
                 std::cout << " >";
             }
+            std::cout << std::endl;
         }
         std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
     }
     bool trivial = true;
-    std::vector<int> absV;
     //unit vectors are trivial
     for (auto &v : this->C) {
-        if (std::accumulate(absV.begin(), absV.end(), 0) != 1) {
+        if (std::accumulate(v.begin(), v.end(), 0) != 1) {
             trivial = false;
             break;
         }
