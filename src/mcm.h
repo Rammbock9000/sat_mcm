@@ -663,13 +663,15 @@ private:
 	//////////////////////////////////////////////////
 	/*!
 	 * < node idx, left/right, mux idx, bit > -> variable idx
+	 * CMM Dimension
 	 */
-	std::map<std::tuple<int, input_direction, int, int>, int> input_select_mux_variables;
+	std::map<std::tuple<int, input_direction, int, int, int>, int> input_select_mux_variables;
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
 	 * /l(i) and r(i)
+	 * CMM Dimension
 	 */
-	std::map<std::tuple<int, input_direction, int>, int> input_select_mux_output_variables;
+	std::map<std::tuple<int, input_direction, int, int>, int> input_select_mux_output_variables;
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
 	 * /alpha(i)
@@ -683,14 +685,16 @@ private:
 	/*!
 	 * < node idx, mux stage, bit > -> variable idx
 	 * /s(i)
+	 * CMM dimension
 	 */
-	std::map<std::tuple<int, int, int>, int> shift_internal_mux_output_variables;
+	std::map<std::tuple<int, int, int, int>, int> shift_internal_mux_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! identical to the last MUX stage of shift_internal_mux_output_variables
 	 * /s(i)
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> shift_output_variables;
+	std::map<std::tuple<int, int, int>, int> shift_output_variables;
 	/*!
 	 * node idx -> variable idx
 	 * /delta(i)
@@ -699,8 +703,9 @@ private:
 	/*!
 	 * < node idx, left/right, bit > -> variable idx
 	 * /x(i) and w(i)
+	 * CMM dimension
 	 */
-	std::map<std::tuple<int, input_direction, int>, int> negate_select_output_variables;
+	std::map<std::tuple<int, input_direction, int, int>, int> negate_select_output_variables;
 	/*!
 	 * node idx -> variable idx
 	 * /epsilon(i)
@@ -709,13 +714,15 @@ private:
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * /y(i)
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> xor_output_variables;
+	std::map<std::tuple<int, int, int>, int> xor_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * /C_in
+	 * CMM Dimension
 	 */
-	std::map<std::pair<int, int>, int> adder_carry_variables;
+	std::map<std::tuple<int, int, int>, int> adder_carry_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * used for optimized adder clauses
@@ -726,8 +733,9 @@ private:
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0
 	 * /z(i)
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> adder_output_value_variables;
+	std::map<std::tuple<int, int, int>, int> adder_output_value_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * /zeta(i)
@@ -736,24 +744,28 @@ private:
 	/*!
 	 * < node idx, mux stage, bit > -> variable idx
 	 * /c(i) mux
+	 * CMM dimension
 	 */
-	std::map<std::tuple<int, int, int>, int> post_adder_shift_internal_mux_output_variables;
+	std::map<std::tuple<int, int, int, int>, int> post_adder_shift_internal_mux_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! identical to the last MUX stage of shift_internal_mux_output_variables
 	 * /c(i)
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> post_adder_shift_output_variables;
+	std::map<std::tuple<int, int, int>, int> post_adder_shift_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 * !!! node idx = 0 is the input node with constant value 0
 	 * /z(i) or c(i)
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> output_value_variables;
+	std::map<std::tuple<int, int, int>, int> output_value_variables;
 	/*!
 	 * < node idx, mcm constant > -> variable idx
+	 * CMM dimension
 	 */
-	std::map<std::pair<int, int>, int> mcm_output_variables;
+	std::map<std::tuple<int, int, int>, int> mcm_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 */

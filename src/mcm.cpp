@@ -271,41 +271,45 @@ void mcm::create_constraints(formulation_mode mode) {
 }
 
 void mcm::create_input_node_variables() {
-	for (int i=0; i<this->word_size; i++) {
-		this->output_value_variables[{0, i}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int i = 0; i < this->word_size; i++) {
+            this->output_value_variables[{0, i, v}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+        }
+    }
 }
 
 void mcm::create_input_select_mux_variables(int idx) {
-	if (idx < 2) return;
+	if (idx < 2) return; //TODO
 	auto select_word_size = this->ceil_log2(idx);
 #if INPUT_SELECT_MUX_OPT
 	auto num_muxs = idx-1;
 #else
 	auto num_muxs = (1 << select_word_size) - 1;
 #endif
-	for (auto &dir : input_directions) {
-		for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-			for (int w = 0; w < this->word_size; w++) {
-				this->input_select_mux_variables[{idx, dir, mux_idx, w}] = ++this->variable_counter;
-				this->create_new_variable(this->variable_counter);
+    for(int v=0; v<C[0].size(); v++) {
+        for (auto &dir : input_directions) {
+            for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
+                for (int w = 0; w < this->word_size; w++) {
+                    this->input_select_mux_variables[{idx, dir, mux_idx, w, v}] = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
 #if INPUT_SELECT_MUX_OPT
-				if (mux_idx == num_muxs-1) {
-					this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
-				}
+                    if (mux_idx == num_muxs-1) {
+                        this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
+                    }
 #else
-				if (mux_idx == 0) {
-					this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
-				}
+                    if (mux_idx == 0) {
+                        this->input_select_mux_output_variables[{idx, dir, w, v}] = this->variable_counter;
+                    }
 #endif
-			}
-		}
-	}
+                }
+            }
+        }
+    }
 }
 
 void mcm::create_input_select_selection_variables(int idx) {
-	if (idx == 1) return;
+	if (idx == 1) return; // TODO
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir : input_directions) {
 		for (int w = 0; w < select_word_size; w++) {
@@ -323,15 +327,17 @@ void mcm::create_input_shift_value_variables(int idx) {
 }
 
 void mcm::create_shift_internal_variables(int idx) {
-	for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
-		for (int w = 0; w < this->word_size; w++) {
-			this->shift_internal_mux_output_variables[{idx, mux_stage, w}] = ++this->variable_counter;
-			if (mux_stage == this->shift_word_size-1) {
-				this->shift_output_variables[{idx, w}] = this->variable_counter;
-			}
-			this->create_new_variable(this->variable_counter);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
+            for (int w = 0; w < this->word_size; w++) {
+                this->shift_internal_mux_output_variables[{idx, mux_stage, w, v}] = ++this->variable_counter;
+                if (mux_stage == this->shift_word_size - 1) {
+                    this->shift_output_variables[{idx, w, v}] = this->variable_counter;
+                }
+                this->create_new_variable(this->variable_counter);
+            }
+        }
+    }
 }
 
 void mcm::create_post_adder_input_shift_value_variables(int idx) {
@@ -342,15 +348,17 @@ void mcm::create_post_adder_input_shift_value_variables(int idx) {
 }
 
 void mcm::create_post_adder_shift_variables(int idx) {
-	for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
-		for (int w = 0; w < this->word_size; w++) {
-			this->post_adder_shift_internal_mux_output_variables[{idx, mux_stage, w}] = ++this->variable_counter;
-			if (mux_stage == this->shift_word_size-1) {
-				this->post_adder_shift_output_variables[{idx, w}] = this->variable_counter;
-			}
-			this->create_new_variable(this->variable_counter);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
+            for (int w = 0; w < this->word_size; w++) {
+                this->post_adder_shift_internal_mux_output_variables[{idx, mux_stage, w, v}] = ++this->variable_counter;
+                if (mux_stage == this->shift_word_size - 1) {
+                    this->post_adder_shift_output_variables[{idx, w, v}] = this->variable_counter;
+                }
+                this->create_new_variable(this->variable_counter);
+            }
+        }
+    }
 }
 
 void mcm::create_input_negate_select_variable(int idx) {
@@ -359,12 +367,14 @@ void mcm::create_input_negate_select_variable(int idx) {
 }
 
 void mcm::create_negate_select_output_variables(int idx) {
-	for (auto &dir : input_directions) {
-		for (int w = 0; w < this->word_size; w++) {
-			this->negate_select_output_variables[{idx, dir, w}] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (auto &dir : input_directions) {
+            for (int w = 0; w < this->word_size; w++) {
+                this->negate_select_output_variables[{idx, dir, w, v}] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+            }
+        }
+    }
 }
 
 void mcm::create_input_negate_value_variable(int idx) {
@@ -373,34 +383,39 @@ void mcm::create_input_negate_value_variable(int idx) {
 }
 
 void mcm::create_xor_output_variables(int idx) {
-	for (int w = 0; w < this->word_size; w++) {
-		this->xor_output_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            this->xor_output_variables[{idx, w, v}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+        }
+    }
 }
 
 void mcm::create_adder_internal_variables(int idx) {
-	for (int w = 0; w < this->word_size; w++) {
-		this->adder_carry_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-		this->adder_output_value_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            this->adder_carry_variables[{idx, w, v}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+            this->adder_output_value_variables[{idx, w, v}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
 #if FPGA_ADD
-		this->adder_XOR_internal_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
+            this->adder_XOR_internal_variables[{idx, w}] = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
 #endif
-	}
+        }
+    }
 }
 
 void mcm::create_output_value_variables(int idx) {
-	for (int w = 0; w < this->word_size; w++) {
-		if (this->enable_node_output_shift) {
-			this->output_value_variables[{idx, w}] = this->post_adder_shift_output_variables.at({idx, w});
-		}
-		else {
-			this->output_value_variables[{idx, w}] = this->adder_output_value_variables.at({idx, w});
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            if (this->enable_node_output_shift) {
+                this->output_value_variables[{idx, w, v}] = this->post_adder_shift_output_variables.at({idx, w, v});
+            } else {
+                this->output_value_variables[{idx, w, v}] = this->adder_output_value_variables.at({idx, w, v});
+            }
+        }
+    }
 }
 
 int mcm::ceil_log2(int n) {
@@ -688,11 +703,14 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
-	for (auto w=0; w<this->word_size; w++) {
-		input_bits[w] = this->output_value_variables.at({0, w});
-		output_bits[w] = this->output_value_variables.at({this->num_adders, w});
-	}
+    for(int v=0; v<C[0].size(); v++) { //TODO does input_bits and output_bits needs to be adjusted aswell?
+        for (auto w = 0; w < this->word_size; w++) {
+            input_bits[w] = this->output_value_variables.at({0, w, v});
+            output_bits[w] = this->output_value_variables.at({this->num_adders, w, v});
+        }
+    }
 	// force input to 1 and output to C
+	//CMM?
 	this->force_number(input_bits, 1);
 	if (this->C[0].size() == 1 and this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
 		// SCM
@@ -710,24 +728,26 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
-	if (idx < 2) return;
+	//CMM?
+	if (idx < 2) return;	//TODO
 	// create constraints for all muxs
 	if (this->verbosity == verbosity_mode::debug_mode) {
 		std::cout << "creating input select constraints for node #" << idx << std::endl;
 	}
 	auto select_word_size = this->ceil_log2(idx);
 	auto next_pow_two = (1 << select_word_size);
-	for (auto &dir : this->input_directions) {
-		int mux_idx = 0;
-		std::map<std::pair<int, int>, int> signal_variables;
-		for (int i=0; i<idx; i++) {
-			for (int w=0; w<this->word_size; w++) {
-				signal_variables[{i, w}] = this->output_value_variables.at({i, w});
-			}
-		}
-		std::map<std::pair<int, int>, int> next_signal_variables;
-		auto num_signals = idx;
-		auto next_num_signals = 0;
+    for(int v=0; v<C[0].size(); v++) {
+	    for (auto &dir : this->input_directions) {
+		    int mux_idx = 0;
+		    std::map<std::pair<int, int>, int> signal_variables;
+		    for (int i=0; i<idx; i++) {
+			    for (int w=0; w<this->word_size; w++) {
+				    signal_variables[{i, w}] = this->output_value_variables.at({i, w, v});
+			    }
+		    }
+		    std::map<std::pair<int, int>, int> next_signal_variables;
+		    auto num_signals = idx;
+		    auto next_num_signals = 0;
 #if INPUT_SELECT_MUX_OPT
 		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
 			auto num_muxs_per_stage = next_pow_two >> (mux_stage+1);
@@ -762,291 +782,305 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 			signal_variables = next_signal_variables;
 		}
 #else
-		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
-			auto num_muxs_per_stage = (1 << mux_stage);
-			auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage
-			for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
-				if (mux_stage == select_word_size-1) {
-					// connect with another node output
-					auto zero_input_node_idx = 2 * mux_idx_in_stage;
-					auto one_input_node_idx = zero_input_node_idx + 1;
-					if (zero_input_node_idx >= idx) zero_input_node_idx = idx-1;
-					if (one_input_node_idx >= idx) one_input_node_idx = idx-1;
-					for (int w = 0; w < this->word_size; w++) {
-						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
-						auto zero_input_var_idx = this->output_value_variables.at({zero_input_node_idx, w});
-						auto one_input_var_idx = this->output_value_variables.at({one_input_node_idx, w});
-						if (zero_input_node_idx == one_input_node_idx) {
-							// both inputs are equal -> mux output == mux input (select line does not matter...)
-							this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
-						}
-						else {
-							this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
-						}
-					}
-				}
-				else {
-					// connect with mux from higher stage
-					auto num_muxs_in_next_stage = (1 << (mux_stage + 1));
-					auto zero_mux_idx_in_next_stage = 2 * mux_idx_in_stage;
-					auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
-					auto one_input_mux_idx = zero_input_mux_idx + 1;
-					for (int w = 0; w < this->word_size; w++) {
-						auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
-						auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w});
-						auto one_input_var_idx = this->input_select_mux_variables.at({idx, dir, one_input_mux_idx, w});
-						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
-					}
-				}
-				// increment current mux idx
-				mux_idx++;
-			}
-		}
+		    for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
+			    auto num_muxs_per_stage = (1 << mux_stage);
+			    auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage
+			    for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
+				    if (mux_stage == select_word_size-1) {
+					    // connect with another node output
+					    auto zero_input_node_idx = 2 * mux_idx_in_stage;
+					    auto one_input_node_idx = zero_input_node_idx + 1;
+					    if (zero_input_node_idx >= idx) zero_input_node_idx = idx-1;
+					    if (one_input_node_idx >= idx) one_input_node_idx = idx-1;
+					    for (int w = 0; w < this->word_size; w++) {
+						    auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w, v});
+						    auto zero_input_var_idx = this->output_value_variables.at({zero_input_node_idx, w, v});
+						    auto one_input_var_idx = this->output_value_variables.at({one_input_node_idx, w, v});
+						    if (zero_input_node_idx == one_input_node_idx) {
+							    // both inputs are equal -> mux output == mux input (select line does not matter...)
+							    this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+						    }
+						    else {
+							    this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
+						    }
+					    }
+				    }
+				    else {
+					    // connect with mux from higher stage
+					    auto num_muxs_in_next_stage = (1 << (mux_stage + 1));
+					    auto zero_mux_idx_in_next_stage = 2 * mux_idx_in_stage;
+					    auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
+					    auto one_input_mux_idx = zero_input_mux_idx + 1;
+					    for (int w = 0; w < this->word_size; w++) {
+						    auto mux_output_var_idx = this->input_select_mux_variables.at({idx, dir, mux_idx, w, v});
+						    auto zero_input_var_idx = this->input_select_mux_variables.at({idx, dir, zero_input_mux_idx, w, v});
+						    auto one_input_var_idx = this->input_select_mux_variables.at({idx, dir, one_input_mux_idx, w, v});
+						    this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
+					    }
+				    }
+				    // increment current mux idx
+				    mux_idx++;
+			    }
+		    }
 #endif
-	}
+	    }
+    }
 }
 
 void mcm::create_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	for (auto stage = 0; stage < this->shift_word_size; stage++) {
-		auto shift_width = (1 << stage);
-		auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
-		auto first_disallowed_shift_bit = this->word_size - shift_width;
-		for (auto w = 0; w < this->word_size; w++) {
-			auto w_prev = w - shift_width;
-			auto connect_zero_const = w_prev < 0;
-			int zero_input_var_idx;
-			int zero_input_sign_bit_idx;
-			int one_input_var_idx;
-			auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w});
-			if (stage == 0) {
-				// connect shifter inputs
-				if (idx == 1) {
-					// shifter input is the output of the input node with idx = 0
-					zero_input_var_idx = this->output_value_variables.at({0, w});
-					zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
-					if (!connect_zero_const) {
-						one_input_var_idx = this->output_value_variables.at({0, w_prev});
-					}
-				}
-				else {
-					// shifter input is the left input value
-					zero_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w});
-					zero_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
-					if (!connect_zero_const) {
-						one_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w_prev});
-					}
-				}
-			}
-			else {
-				// connect output of previous stage
-				zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w});
-				zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
-				if (!connect_zero_const) {
-					one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
-				}
-			}
-			if (w >= first_disallowed_shift_bit) {
-				if (this->calc_twos_complement) {
-					if (connect_zero_const) {
-						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					}
-					else {
-						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					}
-					if (w == this->word_size-1) {
-						// these clauses are different for the sign bit
-						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, one_input_var_idx);
-					}
-					else {
-						this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx, zero_input_var_idx);
-					}
-				}
-				else {
-					if (connect_zero_const) {
-						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
-						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
-						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
-					}
-					else {
-						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					}
-				}
-			}
-			else {
-				if (connect_zero_const) {
-					this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-				}
-				else {
-					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-				}
-			}
-		}
-		// sign bits before and after shifting must be identical if calculating in 2's complement
-		if (this->calc_twos_complement) {
-			int shift_input_sign_bit_idx;
-			int shift_output_sign_bit_idx = this->shift_output_variables.at({idx, this->word_size-1});
-			if (idx == 1) {
-				shift_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size-1});
-			}
-			else {
-				shift_input_sign_bit_idx = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
-			}
-			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (auto stage = 0; stage < this->shift_word_size; stage++) {
+            auto shift_width = (1 << stage);
+            auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
+            auto first_disallowed_shift_bit = this->word_size - shift_width;
+            for (auto w = 0; w < this->word_size; w++) {
+                auto w_prev = w - shift_width;
+                auto connect_zero_const = w_prev < 0;
+                int zero_input_var_idx;
+                int zero_input_sign_bit_idx;
+                int one_input_var_idx;
+                auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w, v});
+                if (stage == 0) {
+                    // connect shifter inputs
+                    if (idx == 1) {
+                        // shifter input is the output of the input node with idx = 0 //TODO
+                        zero_input_var_idx = this->output_value_variables.at({0, w, v});
+                        zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size - 1, v});
+                        if (!connect_zero_const) {
+                            one_input_var_idx = this->output_value_variables.at({0, w_prev, v});
+                        }
+                    } else {
+                        // shifter input is the left input value
+                        zero_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w, v});
+                        zero_input_sign_bit_idx = this->input_select_mux_output_variables.at(
+                                {idx, mcm::left, this->word_size - 1, v});
+                        if (!connect_zero_const) {
+                            one_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::left, w_prev, v});
+                        }
+                    }
+                } else {
+                    // connect output of previous stage
+                    zero_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage - 1, w, v});
+                    zero_input_sign_bit_idx = this->shift_internal_mux_output_variables.at(
+                            {idx, stage - 1, this->word_size - 1, v});
+                    if (!connect_zero_const) {
+                        one_input_var_idx = this->shift_internal_mux_output_variables.at({idx, stage - 1, w_prev, v});
+                    }
+                }
+                if (w >= first_disallowed_shift_bit) {
+                    if (this->calc_twos_complement) {
+                        if (connect_zero_const) {
+                            this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx,
+                                                            mux_output_var_idx);
+                        } else {
+                            this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx,
+                                                 mux_output_var_idx);
+                        }
+                        if (w == this->word_size - 1) {
+                            // these clauses are different for the sign bit
+                            this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx,
+                                                                          one_input_var_idx);
+                        } else {
+                            this->create_signed_shift_overflow_protection(select_input_var_idx, zero_input_sign_bit_idx,
+                                                                          zero_input_var_idx);
+                        }
+                    } else {
+                        if (connect_zero_const) {
+                            this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+                            this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
+                            this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
+                        } else {
+                            this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx,
+                                                                  select_input_var_idx, mux_output_var_idx);
+                        }
+                    }
+                } else {
+                    if (connect_zero_const) {
+                        this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
+                    } else {
+                        this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx,
+                                             mux_output_var_idx);
+                    }
+                }
+            }
+            // sign bits before and after shifting must be identical if calculating in 2's complement
+            if (this->calc_twos_complement) {
+                int shift_input_sign_bit_idx;
+                int shift_output_sign_bit_idx = this->shift_output_variables.at({idx, this->word_size - 1, v});
+                if (idx == 1) {
+                    shift_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size - 1, v});
+                } else {
+                    shift_input_sign_bit_idx = this->input_select_mux_output_variables.at(
+                            {idx, mcm::left, this->word_size - 1, v});
+                }
+                this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
+            }
+        }
+    }
 }
 
 void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	for (auto stage = 0; stage < this->shift_word_size; stage++) {
-		auto shift_width = (1 << stage);
-		auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
-		auto last_disallowed_shift_bit = shift_width-1;
-		for (auto w = 0; w < this->word_size; w++) {
-			auto w_prev = w + shift_width;
-			auto connect_zero_const = w_prev >= this->word_size;
-			int zero_input_var_idx;
-			int zero_input_sign_bit_idx;
-			int one_input_var_idx;
-			auto mux_output_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage, w});
-			if (stage == 0) {
-				// connect shifter inputs
-				// shifter input is the adder output
-				zero_input_var_idx = this->adder_output_value_variables.at({idx, w});
-				zero_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
-				if (!connect_zero_const) {
-					one_input_var_idx = this->adder_output_value_variables.at({idx, w_prev});
-				}
-			}
-			else {
-				// connect output of previous stage
-				zero_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w});
-				zero_input_sign_bit_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, this->word_size-1});
-				if (!connect_zero_const) {
-					one_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage-1, w_prev});
-				}
-			}
-			if (w <= last_disallowed_shift_bit) {
-				// shifting out 1s is not allowed in these places
-				if (connect_zero_const) {
-					if (this->calc_twos_complement) {
-						// connect the sign bit instead of a constant zero
-						this->create_2x1_mux_shift_disallowed(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
-					}
-					else {
-						this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
-						this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
-						this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
-					}
-				}
-				else {
-					this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-				}
-			}
-			else {
-				// we can shift bits around however we like
-				if (connect_zero_const) {
-					if (this->calc_twos_complement) {
-						// connect the sign bit instead of a constant zero
-						this->create_2x1_mux(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx, mux_output_var_idx);
-					}
-					else {
-						this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx, mux_output_var_idx);
-					}
-				}
-				else {
-					this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx, mux_output_var_idx);
-				}
-			}
-		}
-		// sign bits before and after shifting must be identical if calculating in 2's complement
-		if (this->calc_twos_complement) {
-			int shift_output_sign_bit_idx = this->post_adder_shift_output_variables.at({idx, this->word_size-1});
-			int shift_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size-1});
-			this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (auto stage = 0; stage < this->shift_word_size; stage++) {
+            auto shift_width = (1 << stage);
+            auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
+            auto last_disallowed_shift_bit = shift_width - 1;
+            for (auto w = 0; w < this->word_size; w++) {
+                auto w_prev = w + shift_width;
+                auto connect_zero_const = w_prev >= this->word_size;
+                int zero_input_var_idx;
+                int zero_input_sign_bit_idx;
+                int one_input_var_idx;
+                auto mux_output_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage, w, v});
+                if (stage == 0) {
+                    // connect shifter inputs
+                    // shifter input is the adder output
+                    zero_input_var_idx = this->adder_output_value_variables.at({idx, w, v});
+                    zero_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
+                    if (!connect_zero_const) {
+                        one_input_var_idx = this->adder_output_value_variables.at({idx, w_prev, v});
+                    }
+                } else {
+                    // connect output of previous stage
+                    zero_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at({idx, stage - 1, w, v});
+                    zero_input_sign_bit_idx = this->post_adder_shift_internal_mux_output_variables.at(
+                            {idx, stage - 1, this->word_size - 1, v});
+                    if (!connect_zero_const) {
+                        one_input_var_idx = this->post_adder_shift_internal_mux_output_variables.at(
+                                {idx, stage - 1, w_prev, v});
+                    }
+                }
+                if (w <= last_disallowed_shift_bit) {
+                    // shifting out 1s is not allowed in these places
+                    if (connect_zero_const) {
+                        if (this->calc_twos_complement) {
+                            // connect the sign bit instead of a constant zero
+                            this->create_2x1_mux_shift_disallowed(zero_input_var_idx, zero_input_sign_bit_idx,
+                                                                  select_input_var_idx, mux_output_var_idx);
+                        } else {
+                            this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+                            this->create_1x1_negated_implication(zero_input_var_idx, select_input_var_idx);
+                            this->create_1x1_negated_implication(mux_output_var_idx, select_input_var_idx);
+                        }
+                    } else {
+                        this->create_2x1_mux_shift_disallowed(zero_input_var_idx, one_input_var_idx,
+                                                              select_input_var_idx, mux_output_var_idx);
+                    }
+                } else {
+                    // we can shift bits around however we like
+                    if (connect_zero_const) {
+                        if (this->calc_twos_complement) {
+                            // connect the sign bit instead of a constant zero
+                            this->create_2x1_mux(zero_input_var_idx, zero_input_sign_bit_idx, select_input_var_idx,
+                                                 mux_output_var_idx);
+                        } else {
+                            this->create_2x1_mux_zero_const(zero_input_var_idx, select_input_var_idx,
+                                                            mux_output_var_idx);
+                        }
+                    } else {
+                        this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, select_input_var_idx,
+                                             mux_output_var_idx);
+                    }
+                }
+            }
+            // sign bits before and after shifting must be identical if calculating in 2's complement
+            if (this->calc_twos_complement) {
+                int shift_output_sign_bit_idx = this->post_adder_shift_output_variables.at({idx, this->word_size - 1, v});
+                int shift_input_sign_bit_idx = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
+                this->create_1x1_equivalence(shift_input_sign_bit_idx, shift_output_sign_bit_idx);
+            }
+        }
+    }
 }
 
 void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
-	for (int w = 0; w < this->word_size; w++) {
-		auto left_input_var_idx = this->shift_output_variables.at({idx, w});
-		int right_input_var_idx;
-		if (idx == 1) {
-			// right input is the output of the input node with idx = 0
-			right_input_var_idx = this->output_value_variables.at({0, w});
-		}
-		else {
-			// right input is the output of the right input select mux
-			right_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::right, w});
-		}
-		for (auto &dir : this->input_directions) {
-			auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w});
-			if (dir == mcm::left) {
-				this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var_idx, mux_output_var_idx);
-			}
-			else {
-				this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var_idx, mux_output_var_idx);
-			}
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            auto left_input_var_idx = this->shift_output_variables.at({idx, w, v});
+            int right_input_var_idx;
+            if (idx == 1) {
+                // right input is the output of the input node with idx = 0 TODO
+                right_input_var_idx = this->output_value_variables.at({0, w, v});
+            } else {
+                // right input is the output of the right input select mux
+                right_input_var_idx = this->input_select_mux_output_variables.at({idx, mcm::right, w, v});
+            }
+            for (auto &dir : this->input_directions) {
+                auto mux_output_var_idx = this->negate_select_output_variables.at({idx, dir, w, v});
+                if (dir == mcm::left) {
+                    this->create_2x1_mux(right_input_var_idx, left_input_var_idx, select_var_idx, mux_output_var_idx);
+                } else {
+                    this->create_2x1_mux(left_input_var_idx, right_input_var_idx, select_var_idx, mux_output_var_idx);
+                }
+            }
+        }
+    }
 }
 
 void mcm::create_xor_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
-	for (int w = 0; w < this->word_size; w++) {
-		auto input_var_idx = this->negate_select_output_variables.at({idx, mcm::right, w});
-		auto output_var_idx = this->xor_output_variables.at({idx, w});
-		this->create_2x1_xor(negate_var_idx, input_var_idx, output_var_idx);
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            auto input_var_idx = this->negate_select_output_variables.at({idx, mcm::right, w, v});
+            auto output_var_idx = this->xor_output_variables.at({idx, w, v});
+            this->create_2x1_xor(negate_var_idx, input_var_idx, output_var_idx);
+        }
+    }
 }
 
 void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	for (int w = 0; w < this->word_size; w++) {
-		int c_i;
-		if (w == 0) {
-			// carry input = input negate value
-			c_i = this->input_negate_value_variables.at(idx);
-		}
-		else {
-			// carry input = carry output of last stage
-			c_i = this->adder_carry_variables.at({idx, w - 1});
-		}
-		// in/out variables
-		int a = this->negate_select_output_variables.at({idx, mcm::left, w});
-		int b = this->xor_output_variables.at({idx, w});
-		int s = this->adder_output_value_variables.at({idx, w});
-		int c_o = this->adder_carry_variables.at({idx, w});
+    for(int v=0; v<C[0].size(); v++) {
+        for (int w = 0; w < this->word_size; w++) {
+            int c_i;
+            if (w == 0) {
+                // carry input = input negate value
+                c_i = this->input_negate_value_variables.at(idx);
+            } else {
+                // carry input = carry output of last stage
+                c_i = this->adder_carry_variables.at({idx, w - 1, v});
+            }
+            // in/out variables
+            int a = this->negate_select_output_variables.at({idx, mcm::left, w, v});
+            int b = this->xor_output_variables.at({idx, w, v});
+            int s = this->adder_output_value_variables.at({idx, w, v});
+            int c_o = this->adder_carry_variables.at({idx, w, v});
 #if FPGA_ADD
-		int xor_int = this->adder_XOR_internal_variables.at({idx, w});
-		// build first XOR
-		this->create_2x1_xor(a, b, xor_int);
-		// build second XOR
-		this->create_2x1_xor(xor_int, c_i, s);
-		// build MUX
-		this->create_2x1_mux(a, c_i, xor_int, c_o);
+            int xor_int = this->adder_XOR_internal_variables.at({idx, w});
+            // build first XOR
+            this->create_2x1_xor(a, b, xor_int);
+            // build second XOR
+            this->create_2x1_xor(xor_int, c_i, s);
+            // build MUX
+            this->create_2x1_mux(a, c_i, xor_int, c_o);
 #else
-		// build sum
-		this->create_add_sum(a, b, c_i, s);
-		// build carry
-		this->create_add_carry(a, b, c_i, c_o);
-		// build redundant clauses to increase strength of unit propagation
-		// note (nfiege): this doesn't bring any speedup
-		//this->create_add_redundant(a, b, c_i, s, c_o);
+            // build sum
+            this->create_add_sum(a, b, c_i, s);
+            // build carry
+            this->create_add_carry(a, b, c_i, c_o);
+            // build redundant clauses to increase strength of unit propagation
+            // note (nfiege): this doesn't bring any speedup
+            //this->create_add_redundant(a, b, c_i, s, c_o);
 #endif
-	}
-	// disallow overflows
-	if (this->calc_twos_complement) {
-		this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx), this->negate_select_output_variables.at({idx, mcm::left, this->word_size-1}), this->negate_select_output_variables.at({idx, mcm::right, this->word_size-1}), this->output_value_variables.at({idx, this->word_size-1}));
-	}
-	else {
-		this->create_1x1_equivalence(this->adder_carry_variables.at({idx, this->word_size - 1}), this->input_negate_value_variables.at(idx));
-	}
+        }
+        // disallow overflows
+        if (this->calc_twos_complement) {
+            this->create_signed_add_overflow_protection(this->input_negate_value_variables.at(idx),
+                                                        this->negate_select_output_variables.at(
+                                                                {idx, mcm::left, this->word_size - 1, v}),
+                                                        this->negate_select_output_variables.at(
+                                                                {idx, mcm::right, this->word_size - 1, v}),
+                                                        this->output_value_variables.at({idx, this->word_size - 1, v}));
+        } else {
+            this->create_1x1_equivalence(this->adder_carry_variables.at({idx, this->word_size - 1, v}),
+                                         this->input_negate_value_variables.at(idx));
+        }
+    }
 }
 
 void mcm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
@@ -1104,99 +1138,111 @@ void mcm::get_solution_from_backend() {
 	this->shift_sum_values.clear();
 	this->num_FAs_value = 0;
 	// get solution
-	for (int idx = 0; idx <= this->num_adders; idx++) {
-		// output_values
-		this->output_values[idx] = 0;
-		for (int w = 0; w < this->word_size; w++) {
-			this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w})) << w);
-		}
-		if (this->calc_twos_complement) this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
-		if (idx > 0) {
-			if (idx > 1) {
-				// input_select
-				for (auto &dir : this->input_directions) {
-					auto input_select_width = this->ceil_log2(idx);
-					this->input_select[{idx, dir}] = 0;
-					for (auto w = 0; w < input_select_width; w++) {
-						this->input_select[{idx, dir}] += (this->get_result_value(this->input_select_selection_variables[{idx, dir, w}]) << w);
-					}
-				}
-			}
-			else {
-				this->input_select[{idx, input_direction::left}] = 0;
-				this->input_select[{idx, input_direction::right}] = 0;
-			}
-			// shift_value
-			this->shift_value[idx] = 0;
-			for (auto w = 0; w < this->shift_word_size; w++) {
-				this->shift_value[idx] += (this->get_result_value(this->input_shift_value_variables[{idx, w}]) << w);
-			}
-			// negate_select
-			this->negate_select[idx] = this->get_result_value(this->input_negate_select_variables[idx]);
-			// subtract
-			this->subtract[idx] = this->get_result_value(this->input_negate_value_variables[idx]);
-			// output shift
-			if (this->enable_node_output_shift) {
-				this->post_adder_shift_value[idx] = 0;
-				for (auto w = 0; w < this->shift_word_size; w++) {
-					this->post_adder_shift_value[idx] += (this->get_result_value(this->input_post_adder_shift_value_variables[{idx, w}]) << w);
-				}
-			}
-			// add result
-			this->add_result_values[idx] = 0;
-			for (auto w = 0; w < this->word_size; w++) {
-				this->add_result_values[idx] += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
-			}
-			if (this->calc_twos_complement) this->add_result_values[idx] = sign_extend(this->add_result_values[idx], this->word_size);
-			if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-				// coeff word size internal
-				for (auto w = this->word_size-1; w >= 0; w--) {
-					auto max_val = this->word_size - w;
-					auto max_val_w = this->ceil_log2(max_val + 1);
-					auto internal_val = 0;
-					for (auto x = 0; x < max_val_w; x++) {
-						auto bit_val = this->get_result_value(this->full_adder_coeff_word_size_internal_variables.at({idx, w, x}));
-						internal_val += (bit_val << x);
-					}
-				}
-				// coeff word size
-				this->coeff_word_size_values[idx] = 0;
-				auto num_bits_word_size = this->ceil_log2(this->word_size+1);
-				for (auto w = 0; w < num_bits_word_size; w++) {
-					this->coeff_word_size_values[idx] += (this->get_result_value(this->full_adder_coeff_word_size_variables.at({idx, w})) << w);
-				}
-				// cut msb
-				this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
-				// coeff word size sum
-				this->coeff_word_size_sum_values[idx] = 0;
-				auto coeff_sum_output_word_size = this->ceil_log2((idx*this->word_size)+1);
-				for (auto w = 0; w < coeff_sum_output_word_size; w++) {
-					this->coeff_word_size_sum_values[idx] += (this->get_result_value(this->full_adder_word_size_sum_variables.at({idx, w})) << w);
-				}
-				// shift gain
-				this->shift_gain_values[idx] = 0;
-				for (auto w = 0; w < this->shift_word_size; w++) {
-					this->shift_gain_values[idx] += (this->get_result_value(this->full_adder_shift_gain_variables.at({idx, w})) << w);
-				}
-				// shift sum
-				this->shift_sum_values[idx] = 0;
-				auto shift_sum_output_word_size = this->ceil_log2((idx*this->max_shift)+1);
-				for (auto w = 0; w < shift_sum_output_word_size; w++) {
-					this->shift_sum_values[idx] += (this->get_result_value(this->full_adder_shift_sum_variables.at({idx, w})) << w);
-				}
-			}
-		}
-	}
-	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-		// number of FAs
-		this->num_FAs_value = 0;
-		auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
-		auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
-		auto output_word_size = std::max(input_word_size_add, input_word_size_sub)+1;
-		for (auto w = 0; w < output_word_size; w++) {
-			this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int idx = 0; idx <= this->num_adders; idx++) {
+            // output_values
+            this->output_values[idx] = 0;
+            for (int w = 0; w < this->word_size; w++) {
+                this->output_values[idx] += (this->get_result_value(this->output_value_variables.at({idx, w, v})) << w);
+            }
+            if (this->calc_twos_complement)
+                this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
+            if (idx > 0) {
+                if (idx > 1) {
+                    // input_select
+                    for (auto &dir : this->input_directions) {
+                        auto input_select_width = this->ceil_log2(idx);
+                        this->input_select[{idx, dir}] = 0;
+                        for (auto w = 0; w < input_select_width; w++) {
+                            this->input_select[{idx, dir}] += (
+                                    this->get_result_value(this->input_select_selection_variables[{idx, dir, w}]) << w);
+                        }
+                    }
+                } else {
+                    this->input_select[{idx, input_direction::left}] = 0;
+                    this->input_select[{idx, input_direction::right}] = 0;
+                }
+                // shift_value
+                this->shift_value[idx] = 0;
+                for (auto w = 0; w < this->shift_word_size; w++) {
+                    this->shift_value[idx] += (this->get_result_value(this->input_shift_value_variables[{idx, w}])
+                            << w);
+                }
+                // negate_select
+                this->negate_select[idx] = this->get_result_value(this->input_negate_select_variables[idx]);
+                // subtract
+                this->subtract[idx] = this->get_result_value(this->input_negate_value_variables[idx]);
+                // output shift
+                if (this->enable_node_output_shift) {
+                    this->post_adder_shift_value[idx] = 0;
+                    for (auto w = 0; w < this->shift_word_size; w++) {
+                        this->post_adder_shift_value[idx] += (
+                                this->get_result_value(this->input_post_adder_shift_value_variables[{idx, w}]) << w);
+                    }
+                }
+                // add result
+                this->add_result_values[idx] = 0;
+                for (auto w = 0; w < this->word_size; w++) {
+                    this->add_result_values[idx] += (
+                            this->get_result_value(this->adder_output_value_variables[{idx, w, v}]) << w);
+                }
+                if (this->calc_twos_complement)
+                    this->add_result_values[idx] = sign_extend(this->add_result_values[idx], this->word_size);
+                if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+                    // coeff word size internal
+                    for (auto w = this->word_size - 1; w >= 0; w--) {
+                        auto max_val = this->word_size - w;
+                        auto max_val_w = this->ceil_log2(max_val + 1);
+                        auto internal_val = 0;
+                        for (auto x = 0; x < max_val_w; x++) {
+                            auto bit_val = this->get_result_value(
+                                    this->full_adder_coeff_word_size_internal_variables.at({idx, w, x}));
+                            internal_val += (bit_val << x);
+                        }
+                    }
+                    // coeff word size
+                    this->coeff_word_size_values[idx] = 0;
+                    auto num_bits_word_size = this->ceil_log2(this->word_size + 1);
+                    for (auto w = 0; w < num_bits_word_size; w++) {
+                        this->coeff_word_size_values[idx] += (
+                                this->get_result_value(this->full_adder_coeff_word_size_variables.at({idx, w})) << w);
+                    }
+                    // cut msb
+                    this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
+                    // coeff word size sum
+                    this->coeff_word_size_sum_values[idx] = 0;
+                    auto coeff_sum_output_word_size = this->ceil_log2((idx * this->word_size) + 1);
+                    for (auto w = 0; w < coeff_sum_output_word_size; w++) {
+                        this->coeff_word_size_sum_values[idx] += (
+                                this->get_result_value(this->full_adder_word_size_sum_variables.at({idx, w})) << w);
+                    }
+                    // shift gain
+                    this->shift_gain_values[idx] = 0;
+                    for (auto w = 0; w < this->shift_word_size; w++) {
+                        this->shift_gain_values[idx] += (
+                                this->get_result_value(this->full_adder_shift_gain_variables.at({idx, w})) << w);
+                    }
+                    // shift sum
+                    this->shift_sum_values[idx] = 0;
+                    auto shift_sum_output_word_size = this->ceil_log2((idx * this->max_shift) + 1);
+                    for (auto w = 0; w < shift_sum_output_word_size; w++) {
+                        this->shift_sum_values[idx] += (
+                                this->get_result_value(this->full_adder_shift_sum_variables.at({idx, w})) << w);
+                    }
+                }
+            }
+        }
+        if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+            // number of FAs
+            this->num_FAs_value = 0;
+            auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
+            auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+            auto output_word_size = std::max(input_word_size_add, input_word_size_sub) + 1;
+            for (auto w = 0; w < output_word_size; w++) {
+                this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
+            }
+        }
+    }
 }
 
 void mcm::print_solution() {
@@ -1238,242 +1284,267 @@ void mcm::print_solution() {
 
 bool mcm::solution_is_valid() {
 	bool valid = true;
-	for (int idx = 1; idx <= this->num_adders; idx++) {
-		// verify node inputs
-		int64_t input_node_idx_l = 0;
-		int64_t input_node_idx_r = 0;
-		int64_t actual_input_value_l = 1;
-		int64_t actual_input_value_r = 1;
-		if (idx > 1) {
-			for (auto &dir : this->input_directions) {
-				for (auto w = 0; w < this->word_size; w++) {
-					this->input_select_mux_output[{idx, dir}] += (
-						this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w}]) << w);
-				}
-			}
-			if (this->calc_twos_complement) this->input_select_mux_output[{idx, mcm::left}] = sign_extend(this->input_select_mux_output[{idx, mcm::left}], this->word_size);
-			if (this->calc_twos_complement) this->input_select_mux_output[{idx, mcm::right}] = sign_extend(this->input_select_mux_output[{idx, mcm::right}], this->word_size);
-			input_node_idx_l = this->input_select[{idx, mcm::left}];
-			input_node_idx_r = this->input_select[{idx, mcm::right}];
-			actual_input_value_l = this->input_select_mux_output[{idx, mcm::left}];
-			actual_input_value_r = this->input_select_mux_output[{idx, mcm::right}];
-		}
-		else {
-			this->input_select_mux_output[{idx, mcm::left}] = this->input_select_mux_output[{idx, mcm::right}] = 1;
-		}
-		int64_t left_input_value = this->output_values[input_node_idx_l];
-		int64_t right_input_value = this->output_values[input_node_idx_r];
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " left input" << std::endl;
-			std::cout << "  input select = " << input_node_idx_l << std::endl;
-			std::cout << "  value = " << actual_input_value_l << std::endl;
-		}
-		if (left_input_value != actual_input_value_l) {
-			std::cout << "node #" << idx << " has invalid left input" << std::endl;
-			std::cout << "  input select = " << input_node_idx_l << std::endl;
-			std::cout << "  expected value " << left_input_value << " but got " << actual_input_value_l << std::endl;
-			auto num_muxs = (1 << this->ceil_log2(idx))-1;
-			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-				int64_t mux_output = 0;
-				for (auto w = 0; w < this->word_size; w++) {
-					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, mcm::left, mux_idx, w}]) << w);
-				}
-				std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
-			}
-			valid = false;
-		}
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " right input" << std::endl;
-			std::cout << "  input select = " << input_node_idx_r << std::endl;
-			std::cout << "  value = " << actual_input_value_r << std::endl;
-		}
-		if (right_input_value != actual_input_value_r) {
-			std::cout << "node #" << idx << " has invalid right input" << std::endl;
-			std::cout << "  input select = " << input_node_idx_r << std::endl;
-			std::cout << "  expected value " << right_input_value << " but got " << actual_input_value_r << std::endl;
-			int64_t num_muxs = (1 << this->ceil_log2(idx))-1;
-			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-				int64_t mux_output = 0;
-				for (auto w = 0; w < this->word_size; w++) {
-					mux_output += (this->get_result_value(this->input_select_mux_variables[{idx, mcm::right, mux_idx, w}]) << w);
-				}
-				std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
-			}
-			valid = false;
-		}
-		// verify shifter output
-		int64_t expected_shift_output = (((int64_t)left_input_value) << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
-		if (this->calc_twos_complement) expected_shift_output = sign_extend(expected_shift_output, this->word_size);
-		int64_t actual_shift_output = 0;
-		for (int w = 0; w < this->word_size; w++) {
-			actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w}]) << w);
-		}
-		if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " shift output" << std::endl;
-			std::cout << "  input value = " << left_input_value << std::endl;
-			std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
-			std::cout << "  output value = " << actual_shift_output << std::endl;
-		}
-		if (expected_shift_output != actual_shift_output) {
-			std::cout << "node #" << idx << " has invalid shift output" << std::endl;
-			std::cout << "  input value = " << left_input_value << std::endl;
-			std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
-			std::cout << "  expected output value = " << expected_shift_output << std::endl;
-			std::cout << "  actual output value = " << actual_shift_output << std::endl;
-			valid = false;
-		}
-		// verify negate mux outputs
-		int64_t negate_mux_output_l = actual_shift_output;
-		int64_t negate_mux_output_r = right_input_value;
-		if (this->get_result_value(this->input_negate_select_variables[idx]) == 0) {
-			negate_mux_output_l = right_input_value;
-			negate_mux_output_r = actual_shift_output;
-		}
-		std::map<mcm::input_direction, int> actual_negate_mux_output;
-		for (auto &dir : this->input_directions) {
-			for (auto w = 0; w < this->word_size; w++) {
-				actual_negate_mux_output[dir] += (this->get_result_value(this->negate_select_output_variables[{idx, dir, w}]) << w);
-			}
-		}
-		if (this->calc_twos_complement) actual_negate_mux_output[mcm::left] = sign_extend(actual_negate_mux_output[mcm::left], this->word_size);
-		if (this->calc_twos_complement) actual_negate_mux_output[mcm::right] = sign_extend(actual_negate_mux_output[mcm::right], this->word_size);
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " left negate select mux output" << std::endl;
-			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  output value = " <<  actual_negate_mux_output[mcm::left] << std::endl;
-		}
-		if (negate_mux_output_l != actual_negate_mux_output[mcm::left]) {
-			std::cout << "node #" << idx << " has invalid left negate select mux output" << std::endl;
-			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  actual value = " <<  actual_negate_mux_output[mcm::left] << std::endl;
-			std::cout << "  expected value = " << negate_mux_output_l << std::endl;
-			valid = false;
-		}
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " right negate select mux output" << std::endl;
-			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  output value = " <<  actual_negate_mux_output[mcm::right] << std::endl;
-		}
-		if (negate_mux_output_r != actual_negate_mux_output[mcm::right]) {
-			std::cout << "node #" << idx << " has invalid right negate select mux output" << std::endl;
-			std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx]) << std::endl;
-			std::cout << "  actual value = " <<  actual_negate_mux_output[mcm::right] << std::endl;
-			std::cout << "  expected value = " << negate_mux_output_r << std::endl;
-			valid = false;
-		}
-		// verify xor output
-		int64_t sub = this->get_result_value(this->input_negate_value_variables[idx]);
-		int64_t expected_xor_output = sub==1?(~negate_mux_output_r) & ((((int64_t)1) << this->word_size) - 1):negate_mux_output_r;
-		if (this->calc_twos_complement) expected_xor_output = sign_extend(expected_xor_output, this->word_size);
-		int64_t actual_xor_output = 0;
-		for (int w = 0; w < this->word_size; w++) {
-			actual_xor_output += (this->get_result_value(this->xor_output_variables[{idx, w}]) << w);
-		}
-		if (this->calc_twos_complement) actual_xor_output = sign_extend(actual_xor_output, this->word_size);
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " xor output" << std::endl;
-			std::cout << "  sub = " << sub << std::endl;
-			std::cout << "  input value = " << negate_mux_output_r << std::endl;
-			std::cout << "  output value = " <<  actual_xor_output << std::endl;
-		}
-		if (expected_xor_output != actual_xor_output) {
-			std::cout << "node #" << idx << " has invalid xor output" << std::endl;
-			std::cout << "  sub = " << sub << std::endl;
-			std::cout << "  input value = " << negate_mux_output_r << std::endl;
-			std::cout << "  actual output value = " <<  actual_xor_output << std::endl;
-			std::cout << "  expected output value = " << expected_xor_output << std::endl;
-			valid = false;
-		}
-		// verify adder output
-		int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (negate_mux_output_l + negate_mux_output_r);
-		if (this->calc_twos_complement) expected_adder_output = sign_extend(expected_adder_output, this->word_size);
-		int64_t actual_adder_output = 0;
-		for (int w = 0; w < this->word_size; w++) {
-			actual_adder_output += (this->get_result_value(this->adder_output_value_variables[{idx, w}]) << w);
-		}
-		if (this->calc_twos_complement) actual_adder_output = sign_extend(actual_adder_output, this->word_size);
-		if (this->verbosity == verbosity_mode::debug_mode) {
-			std::cout << "node #" << idx << " adder output value" << std::endl;
-			std::cout << "  sub = " << sub << std::endl;
-			std::cout << "  left input value = " << negate_mux_output_l << std::endl;
-			std::cout << "  right input value = " << actual_xor_output << std::endl;
-			std::cout << "  actual output value = " << actual_adder_output << std::endl;
-		}
-		if (expected_adder_output != actual_adder_output) {
-			std::cout << "node #" << idx << " has invalid adder output value" << std::endl;
-			std::cout << "  sub = " << sub << std::endl;
-			std::cout << "  left input value = " << negate_mux_output_l << std::endl;
-			std::cout << "  right input value = " << actual_xor_output << std::endl;
-			std::cout << "  expected output value = " << expected_adder_output << std::endl;
-			std::cout << "  actual output value = " << actual_adder_output << std::endl;
-			valid = false;
-		}
-		if (this->enable_node_output_shift) {
-			// verify post adder shift output
-			int64_t expected_post_adder_shift_output = actual_adder_output >> this->post_adder_shift_value.at(idx);
-			if (this->calc_twos_complement) expected_post_adder_shift_output = sign_extend(expected_post_adder_shift_output, this->word_size);
-			int64_t actual_post_adder_shift_output = 0;
-			for (int w = 0; w < this->word_size; w++) {
-				actual_post_adder_shift_output += (this->get_result_value(this->post_adder_shift_output_variables[{idx, w}]) << w);
-			}
-			if (this->calc_twos_complement) actual_post_adder_shift_output = sign_extend(actual_post_adder_shift_output, this->word_size);
-			if (this->verbosity == verbosity_mode::debug_mode) {
-				std::cout << "node #" << idx << " post adder shift output value" << std::endl;
-				std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
-				std::cout << "  input value = " << actual_adder_output << std::endl;
-				std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
-			}
-			if (expected_post_adder_shift_output != actual_post_adder_shift_output)  {
-				std::cout << "node #" << idx << " has invalid post adder shift output value" << std::endl;
-				std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
-				std::cout << "  input value = " << actual_adder_output << std::endl;
-				std::cout << "  expected output value = " << expected_post_adder_shift_output << std::endl;
-				std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
-				valid = false;
-			}
-		}
-		if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-			// coeff word size
-			auto add_result = this->add_result_values.at(idx);
-			auto expected_add_result_word_size = this->ceil_log2(std::abs(add_result)+1);
-			auto actual_add_result_word_size = this->coeff_word_size_values.at(idx);
-			if (this->verbosity == verbosity_mode::debug_mode) {
-				std::cout << "node #" << idx << " add result word size" << std::endl;
-				std::cout << "  add result = " << add_result << std::endl;
-				std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
-			}
-			if (expected_add_result_word_size != actual_add_result_word_size) {
-				std::cout << "node #" << idx << " has invalid add result word size" << std::endl;
-				std::cout << "  add result = " << add_result << std::endl;
-				std::cout << "  expected word size = " << expected_add_result_word_size << std::endl;
-				std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
-				valid = false;
-			}
-			// coeff word size sum
-			auto expected_sum = 0;
-			for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
-				expected_sum += this->coeff_word_size_values.at(prev_idx);
-			}
-			auto actual_sum = this->coeff_word_size_sum_values.at(idx);
-			if (this->verbosity == verbosity_mode::debug_mode) {
-				std::cout << "node #" << idx << " add result word size sum" << std::endl;
-				for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
-					std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx) << std::endl;
-				}
-				std::cout << "  actual sum = " << actual_sum << std::endl;
-			}
-			if (expected_sum != actual_sum) {
-				std::cout << "node #" << idx << " has invalid add result word size sum" << std::endl;
-				for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
-					std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx) << std::endl;
-				}
-				std::cout << "  expected sum = " << expected_sum << std::endl;
-				std::cout << "  actual sum = " << actual_sum << std::endl;
-				valid = false;
-			}
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        for (int idx = 1; idx <= this->num_adders; idx++) {//TODO
+            // verify node inputs
+            int64_t input_node_idx_l = 0;
+            int64_t input_node_idx_r = 0;
+            int64_t actual_input_value_l = 1;
+            int64_t actual_input_value_r = 1;
+            if (idx > 1) { //TODO
+                for (auto &dir : this->input_directions) {
+                    for (auto w = 0; w < this->word_size; w++) {
+                        this->input_select_mux_output[{idx, dir}] += (
+                                this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w, v}]) << w);
+                    }
+                }
+                if (this->calc_twos_complement)
+                    this->input_select_mux_output[{idx, mcm::left}] = sign_extend(
+                            this->input_select_mux_output[{idx, mcm::left}], this->word_size);
+                if (this->calc_twos_complement)
+                    this->input_select_mux_output[{idx, mcm::right}] = sign_extend(
+                            this->input_select_mux_output[{idx, mcm::right}], this->word_size);
+                input_node_idx_l = this->input_select[{idx, mcm::left}];
+                input_node_idx_r = this->input_select[{idx, mcm::right}];
+                actual_input_value_l = this->input_select_mux_output[{idx, mcm::left}];
+                actual_input_value_r = this->input_select_mux_output[{idx, mcm::right}];
+            } else {
+                this->input_select_mux_output[{idx, mcm::left}] = this->input_select_mux_output[{idx, mcm::right}] = 1;
+            }
+            int64_t left_input_value = this->output_values[input_node_idx_l];
+            int64_t right_input_value = this->output_values[input_node_idx_r];
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " left input" << std::endl;
+                std::cout << "  input select = " << input_node_idx_l << std::endl;
+                std::cout << "  value = " << actual_input_value_l << std::endl;
+            }
+            if (left_input_value != actual_input_value_l) {
+                std::cout << "node #" << idx << " has invalid left input" << std::endl;
+                std::cout << "  input select = " << input_node_idx_l << std::endl;
+                std::cout << "  expected value " << left_input_value << " but got " << actual_input_value_l
+                          << std::endl;
+                auto num_muxs = (1 << this->ceil_log2(idx)) - 1;
+                for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
+                    int64_t mux_output = 0;
+                    for (auto w = 0; w < this->word_size; w++) {
+                        mux_output += (this->get_result_value(
+                                this->input_select_mux_variables[{idx, mcm::left, mux_idx, w, v}]) << w);
+                    }
+                    std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
+                }
+                valid = false;
+            }
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " right input" << std::endl;
+                std::cout << "  input select = " << input_node_idx_r << std::endl;
+                std::cout << "  value = " << actual_input_value_r << std::endl;
+            }
+            if (right_input_value != actual_input_value_r) {
+                std::cout << "node #" << idx << " has invalid right input" << std::endl;
+                std::cout << "  input select = " << input_node_idx_r << std::endl;
+                std::cout << "  expected value " << right_input_value << " but got " << actual_input_value_r
+                          << std::endl;
+                int64_t num_muxs = (1 << this->ceil_log2(idx)) - 1;
+                for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
+                    int64_t mux_output = 0;
+                    for (auto w = 0; w < this->word_size; w++) {
+                        mux_output += (this->get_result_value(
+                                this->input_select_mux_variables[{idx, mcm::right, mux_idx, w, v}]) << w);
+                    }
+                    std::cout << "    mux #" << mux_idx << " output: " << mux_output << std::endl;
+                }
+                valid = false;
+            }
+            // verify shifter output
+            int64_t expected_shift_output = (((int64_t) left_input_value)
+                    << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
+            if (this->calc_twos_complement) expected_shift_output = sign_extend(expected_shift_output, this->word_size);
+            int64_t actual_shift_output = 0;
+            for (int w = 0; w < this->word_size; w++) {
+                actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w, v}]) << w);
+            }
+            if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " shift output" << std::endl;
+                std::cout << "  input value = " << left_input_value << std::endl;
+                std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
+                std::cout << "  output value = " << actual_shift_output << std::endl;
+            }
+            if (expected_shift_output != actual_shift_output) {
+                std::cout << "node #" << idx << " has invalid shift output" << std::endl;
+                std::cout << "  input value = " << left_input_value << std::endl;
+                std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
+                std::cout << "  expected output value = " << expected_shift_output << std::endl;
+                std::cout << "  actual output value = " << actual_shift_output << std::endl;
+                valid = false;
+            }
+            // verify negate mux outputs
+            int64_t negate_mux_output_l = actual_shift_output;
+            int64_t negate_mux_output_r = right_input_value;
+            if (this->get_result_value(this->input_negate_select_variables[idx]) == 0) {
+                negate_mux_output_l = right_input_value;
+                negate_mux_output_r = actual_shift_output;
+            }
+            std::map<mcm::input_direction, int> actual_negate_mux_output;
+            for (auto &dir : this->input_directions) {
+                for (auto w = 0; w < this->word_size; w++) {
+                    actual_negate_mux_output[dir] += (
+                            this->get_result_value(this->negate_select_output_variables[{idx, dir, w, v}]) << w);
+                }
+            }
+            if (this->calc_twos_complement)
+                actual_negate_mux_output[mcm::left] = sign_extend(actual_negate_mux_output[mcm::left], this->word_size);
+            if (this->calc_twos_complement)
+                actual_negate_mux_output[mcm::right] = sign_extend(actual_negate_mux_output[mcm::right],
+                                                                   this->word_size);
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " left negate select mux output" << std::endl;
+                std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx])
+                          << std::endl;
+                std::cout << "  output value = " << actual_negate_mux_output[mcm::left] << std::endl;
+            }
+            if (negate_mux_output_l != actual_negate_mux_output[mcm::left]) {
+                std::cout << "node #" << idx << " has invalid left negate select mux output" << std::endl;
+                std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx])
+                          << std::endl;
+                std::cout << "  actual value = " << actual_negate_mux_output[mcm::left] << std::endl;
+                std::cout << "  expected value = " << negate_mux_output_l << std::endl;
+                valid = false;
+            }
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " right negate select mux output" << std::endl;
+                std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx])
+                          << std::endl;
+                std::cout << "  output value = " << actual_negate_mux_output[mcm::right] << std::endl;
+            }
+            if (negate_mux_output_r != actual_negate_mux_output[mcm::right]) {
+                std::cout << "node #" << idx << " has invalid right negate select mux output" << std::endl;
+                std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx])
+                          << std::endl;
+                std::cout << "  actual value = " << actual_negate_mux_output[mcm::right] << std::endl;
+                std::cout << "  expected value = " << negate_mux_output_r << std::endl;
+                valid = false;
+            }
+            // verify xor output
+            int64_t sub = this->get_result_value(this->input_negate_value_variables[idx]);
+            int64_t expected_xor_output =
+                    sub == 1 ? (~negate_mux_output_r) & ((((int64_t) 1) << this->word_size) - 1) : negate_mux_output_r;
+            if (this->calc_twos_complement) expected_xor_output = sign_extend(expected_xor_output, this->word_size);
+            int64_t actual_xor_output = 0;
+            for (int w = 0; w < this->word_size; w++) {
+                actual_xor_output += (this->get_result_value(this->xor_output_variables[{idx, w, v}]) << w);
+            }
+            if (this->calc_twos_complement) actual_xor_output = sign_extend(actual_xor_output, this->word_size);
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " xor output" << std::endl;
+                std::cout << "  sub = " << sub << std::endl;
+                std::cout << "  input value = " << negate_mux_output_r << std::endl;
+                std::cout << "  output value = " << actual_xor_output << std::endl;
+            }
+            if (expected_xor_output != actual_xor_output) {
+                std::cout << "node #" << idx << " has invalid xor output" << std::endl;
+                std::cout << "  sub = " << sub << std::endl;
+                std::cout << "  input value = " << negate_mux_output_r << std::endl;
+                std::cout << "  actual output value = " << actual_xor_output << std::endl;
+                std::cout << "  expected output value = " << expected_xor_output << std::endl;
+                valid = false;
+            }
+            // verify adder output
+            int64_t expected_adder_output = (sub == 1) ? (negate_mux_output_l - negate_mux_output_r) : (
+                    negate_mux_output_l + negate_mux_output_r);
+            if (this->calc_twos_complement) expected_adder_output = sign_extend(expected_adder_output, this->word_size);
+            int64_t actual_adder_output = 0;
+            for (int w = 0; w < this->word_size; w++) {
+                actual_adder_output += (this->get_result_value(this->adder_output_value_variables[{idx, w, v}]) << w);
+            }
+            if (this->calc_twos_complement) actual_adder_output = sign_extend(actual_adder_output, this->word_size);
+            if (this->verbosity == verbosity_mode::debug_mode) {
+                std::cout << "node #" << idx << " adder output value" << std::endl;
+                std::cout << "  sub = " << sub << std::endl;
+                std::cout << "  left input value = " << negate_mux_output_l << std::endl;
+                std::cout << "  right input value = " << actual_xor_output << std::endl;
+                std::cout << "  actual output value = " << actual_adder_output << std::endl;
+            }
+            if (expected_adder_output != actual_adder_output) {
+                std::cout << "node #" << idx << " has invalid adder output value" << std::endl;
+                std::cout << "  sub = " << sub << std::endl;
+                std::cout << "  left input value = " << negate_mux_output_l << std::endl;
+                std::cout << "  right input value = " << actual_xor_output << std::endl;
+                std::cout << "  expected output value = " << expected_adder_output << std::endl;
+                std::cout << "  actual output value = " << actual_adder_output << std::endl;
+                valid = false;
+            }
+            if (this->enable_node_output_shift) {
+                // verify post adder shift output
+                int64_t expected_post_adder_shift_output = actual_adder_output >> this->post_adder_shift_value.at(idx);
+                if (this->calc_twos_complement)
+                    expected_post_adder_shift_output = sign_extend(expected_post_adder_shift_output, this->word_size);
+                int64_t actual_post_adder_shift_output = 0;
+                for (int w = 0; w < this->word_size; w++) {
+                    actual_post_adder_shift_output += (
+                            this->get_result_value(this->post_adder_shift_output_variables[{idx, w, v}]) << w);
+                }
+                if (this->calc_twos_complement)
+                    actual_post_adder_shift_output = sign_extend(actual_post_adder_shift_output, this->word_size);
+                if (this->verbosity == verbosity_mode::debug_mode) {
+                    std::cout << "node #" << idx << " post adder shift output value" << std::endl;
+                    std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
+                    std::cout << "  input value = " << actual_adder_output << std::endl;
+                    std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
+                }
+                if (expected_post_adder_shift_output != actual_post_adder_shift_output) {
+                    std::cout << "node #" << idx << " has invalid post adder shift output value" << std::endl;
+                    std::cout << "  shift value = " << this->post_adder_shift_value.at(idx) << std::endl;
+                    std::cout << "  input value = " << actual_adder_output << std::endl;
+                    std::cout << "  expected output value = " << expected_post_adder_shift_output << std::endl;
+                    std::cout << "  actual output value = " << actual_post_adder_shift_output << std::endl;
+                    valid = false;
+                }
+            }
+            if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+                // coeff word size
+                auto add_result = this->add_result_values.at(idx);
+                auto expected_add_result_word_size = this->ceil_log2(std::abs(add_result) + 1);
+                auto actual_add_result_word_size = this->coeff_word_size_values.at(idx);
+                if (this->verbosity == verbosity_mode::debug_mode) {
+                    std::cout << "node #" << idx << " add result word size" << std::endl;
+                    std::cout << "  add result = " << add_result << std::endl;
+                    std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
+                }
+                if (expected_add_result_word_size != actual_add_result_word_size) {
+                    std::cout << "node #" << idx << " has invalid add result word size" << std::endl;
+                    std::cout << "  add result = " << add_result << std::endl;
+                    std::cout << "  expected word size = " << expected_add_result_word_size << std::endl;
+                    std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
+                    valid = false;
+                }
+                // coeff word size sum
+                auto expected_sum = 0;
+                for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+                    expected_sum += this->coeff_word_size_values.at(prev_idx);
+                }
+                auto actual_sum = this->coeff_word_size_sum_values.at(idx);
+                if (this->verbosity == verbosity_mode::debug_mode) {
+                    std::cout << "node #" << idx << " add result word size sum" << std::endl;
+                    for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+                        std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx)
+                                  << std::endl;
+                    }
+                    std::cout << "  actual sum = " << actual_sum << std::endl;
+                }
+                if (expected_sum != actual_sum) {
+                    std::cout << "node #" << idx << " has invalid add result word size sum" << std::endl;
+                    for (auto prev_idx = 1; prev_idx <= idx; prev_idx++) {
+                        std::cout << "  value " << prev_idx << " = " << this->coeff_word_size_values.at(prev_idx)
+                                  << std::endl;
+                    }
+                    std::cout << "  expected sum = " << expected_sum << std::endl;
+                    std::cout << "  actual sum = " << actual_sum << std::endl;
+                    valid = false;
+                }
+            }
+        }
+    }
 	return valid;
 }
 
@@ -1500,32 +1571,32 @@ void mcm::create_cnf_file() {
 
 void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	for (auto &v : this->C) {
-        for (auto &c : v) {
+    for(int v=0; v<C.size(); v++) {
+        for(auto &c : C[v]){
             std::vector<int> or_me;
             for (int idx = 1; idx <= this->num_adders; idx++) {
-                or_me.emplace_back(this->mcm_output_variables[{idx, c}]);
+                or_me.emplace_back(this->mcm_output_variables[{idx, c, v}]);
                 for (int w = 0; w < this->word_size; w++) {
                     if (((c >> w) & 1) == 1) {
-                        this->create_1x1_implication(this->mcm_output_variables[{idx, c}],
-                                                     this->output_value_variables[{idx, w}]);
+                        this->create_1x1_implication(this->mcm_output_variables[{idx, c, v}],
+                                                     this->output_value_variables[{idx, w, v}]);
                     } else {
-                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c}],
-                                                             this->output_value_variables[{idx, w}]);
+                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c, v}],
+                                                             this->output_value_variables[{idx, w, v}]);
                     }
                 }
             }
             if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
                 // also allow the solver to choose -c instead of c if it's easier to implement
                 for (int idx = 1; idx <= this->num_adders; idx++) {
-                    or_me.emplace_back(this->mcm_output_variables[{idx, -c}]);
+                    or_me.emplace_back(this->mcm_output_variables[{idx, -c, v}]);
                     for (int w = 0; w < this->word_size; w++) {
                         if ((((-c) >> w) & 1) == 1) {
-                            this->create_1x1_implication(this->mcm_output_variables[{idx, -c}],
-                                                         this->output_value_variables[{idx, w}]);
+                            this->create_1x1_implication(this->mcm_output_variables[{idx, -c, v}],
+                                                         this->output_value_variables[{idx, w, v}]);
                         } else {
-                            this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c}],
-                                                                 this->output_value_variables[{idx, w}]);
+                            this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c, v}],
+                                                                 this->output_value_variables[{idx, w, v}]);
                         }
                     }
                 }
@@ -1536,12 +1607,12 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 }
 
 void mcm::create_mcm_output_variables(int idx) {
-	for (auto &v : this->C) {
-        for (auto &c : v) {
-            this->mcm_output_variables[{idx, c}] = ++this->variable_counter;
+    for(int v=0; v<C.size(); v++) {
+        for(auto &c : C[v]){
+            this->mcm_output_variables[{idx, c, v}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
             if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
-                this->mcm_output_variables[{idx, -c}] = ++this->variable_counter;
+                this->mcm_output_variables[{idx, -c, v}] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
             }
         }
@@ -1550,7 +1621,9 @@ void mcm::create_mcm_output_variables(int idx) {
 
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-	this->force_bit(this->output_value_variables.at({idx,0}), 1);
+    for(int v=0; v<C[0].size(); v++) {
+        this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
+    }
 }
 
 int64_t mcm::sign_extend(int64_t x, int w) {
@@ -1657,169 +1730,174 @@ void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
 void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	std::vector<int> abs_coeff_bits(this->word_size);
-	if (this->calc_twos_complement) {
-		// compute abs(c) using a MUX and an inversion and a +1 adder
-		/*int carry_bit = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-		this->force_bit(carry_bit, 1);*/
-		int carry_bit = this->init_const_one_bit();
-		std::vector<int> inv_c_bits(this->word_size);
-		auto &sign_bit = this->adder_output_value_variables.at({idx, this->word_size-1});
-		for (int w = 0; w < this->word_size; w++) {
-			// first, implement c*(-1)
-			auto sum_bit = inv_c_bits[w] = ++this->variable_counter; // sum bit
-			this->create_new_variable(this->variable_counter);
-			auto &add_bit = this->adder_output_value_variables.at({idx, w});
-			if (w < this->word_size-1) {
-				int carry_out_bit = ++this->variable_counter;
-				this->create_new_variable(this->variable_counter);
-				// create clauses for sum and carry bits
-				//this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit, carry_out_bit);
-				this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false}, {carry_out_bit, false});
-				// pass carry bit to next stage
-				carry_bit = carry_out_bit;
-			}
-			else {
-				// only create clauses for sum bit
-				//this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit);
-				this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false});
-			}
-			// now, implement the MUX, controlled by the sign bit
-			auto mux_bit = abs_coeff_bits[w] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-			this->create_2x1_mux(add_bit, sum_bit, sign_bit, mux_bit);
-		}
-	}
-	else {
-		// abs(c) = c because c is an unsigned number
-		for (int w=0; w<this->word_size; w++) {
-			abs_coeff_bits[w] = this->adder_output_value_variables.at({idx, w});
-		}
-	}
+    for(int v=0; v<C[0].size(); v++) {
+        if (this->calc_twos_complement) {
+            // compute abs(c) using a MUX and an inversion and a +1 adder
+            /*int carry_bit = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+            this->force_bit(carry_bit, 1);*/
+            int carry_bit = this->init_const_one_bit();
+            std::vector<int> inv_c_bits(this->word_size);
+            auto &sign_bit = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
+            for (int w = 0; w < this->word_size; w++) {
+                // first, implement c*(-1)
+                auto sum_bit = inv_c_bits[w] = ++this->variable_counter; // sum bit
+                this->create_new_variable(this->variable_counter);
+                auto &add_bit = this->adder_output_value_variables.at({idx, w, v});
+                if (w < this->word_size - 1) {
+                    int carry_out_bit = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
+                    // create clauses for sum and carry bits
+                    //this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit, carry_out_bit);
+                    this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false},
+                                            {carry_out_bit, false});
+                    // pass carry bit to next stage
+                    carry_bit = carry_out_bit;
+                } else {
+                    // only create clauses for sum bit
+                    //this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit);
+                    this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false});
+                }
+                // now, implement the MUX, controlled by the sign bit
+                auto mux_bit = abs_coeff_bits[w] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                this->create_2x1_mux(add_bit, sum_bit, sign_bit, mux_bit);
+            }
+        } else {
+            // abs(c) = c because c is an unsigned number
+            for (int w = 0; w < this->word_size; w++) {
+                abs_coeff_bits[w] = this->adder_output_value_variables.at({idx, w, v});
+            }
+        }
 
-	// compute word size of abs(c)
-	// carry-input = 0
-	/*int carry_bit = ++this->variable_counter;
-	this->create_new_variable(this->variable_counter);
-	this->force_bit(carry_bit, 0);*/
-	int carry_bit = this->init_const_zero_bit();
-	// initial value = 0
-	std::vector<int> val(1);
-	/*val[0] = ++this->variable_counter;
-	this->create_new_variable(this->variable_counter);
-	this->force_bit(val[0], 0);*/
-	val[0] = this->init_const_zero_bit();
-	for (int w=this->word_size-1; w>=0; w--) {
-		this->full_adder_coeff_word_size_internal_carry_input_variables[{idx, w}] = carry_bit;
-		auto w_in = val.size();
-		auto max_val = this->word_size-w;
-		auto w_out = this->ceil_log2(max_val+1);
-		auto &bit_value = abs_coeff_bits[w];
-		// temp_or = carry OR bit_value
-		auto temp_or = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
-		this->create_2x1_or(carry_bit, bit_value, temp_or);
-		// temp_and[x] = carry AND val[x]
-		std::vector<int> temp_and(w_in);
-		for (int x = 0; x < w_in; x++) {
-			temp_and[x] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-			this->create_2x1_and(carry_bit, val[x], temp_and[x]);
-		}
-		// val_new = temp_or + temp_and
-		auto add_carry = temp_or;
-		std::vector<int> val_new(w_out);
-		for (int x = 0; x < w_in; x++) {
-			this->full_adder_coeff_word_size_internal_variables[{idx, w, x}] = val_new[x] = ++this->variable_counter;
-			this->create_new_variable(this->variable_counter);
-			if (x == w_in-1) {
-				if (w_in == w_out) {
-					// no carry output required
-					//this->create_half_adder(add_carry, val[x], val_new[x]);
-					this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false});
-				}
-				else {
-					// use carry output as sum output for result MSB
-					int carry_out = ++this->variable_counter;
-					this->create_new_variable(this->variable_counter);
-					//this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
-					this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false}, {carry_out, false});
-					this->full_adder_coeff_word_size_internal_variables[{idx, w, x+1}] = val_new[x+1] = carry_out;
-				}
-			}
-			else {
-				// normal half adder
-				int carry_out = ++this->variable_counter;
-				this->create_new_variable(this->variable_counter);
-				//this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
-				this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false}, {carry_out, false});
-				add_carry = carry_out;
-			}
-		}
-		val = val_new;
-		carry_bit = temp_or;
-	}
-	for (int w = 0; w < val.size(); w++) {
-		this->full_adder_coeff_word_size_variables[{idx, w}] = val[w];
-	}
+        // compute word size of abs(c)
+        // carry-input = 0
+        /*int carry_bit = ++this->variable_counter;
+        this->create_new_variable(this->variable_counter);
+        this->force_bit(carry_bit, 0);*/
+        int carry_bit = this->init_const_zero_bit();
+        // initial value = 0
+        std::vector<int> val(1);
+        /*val[0] = ++this->variable_counter;
+        this->create_new_variable(this->variable_counter);
+        this->force_bit(val[0], 0);*/
+        val[0] = this->init_const_zero_bit();
+        for (int w = this->word_size - 1; w >= 0; w--) {
+            this->full_adder_coeff_word_size_internal_carry_input_variables[{idx, w}] = carry_bit;
+            auto w_in = val.size();
+            auto max_val = this->word_size - w;
+            auto w_out = this->ceil_log2(max_val + 1);
+            auto &bit_value = abs_coeff_bits[w];
+            // temp_or = carry OR bit_value
+            auto temp_or = ++this->variable_counter;
+            this->create_new_variable(this->variable_counter);
+            this->create_2x1_or(carry_bit, bit_value, temp_or);
+            // temp_and[x] = carry AND val[x]
+            std::vector<int> temp_and(w_in);
+            for (int x = 0; x < w_in; x++) {
+                temp_and[x] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                this->create_2x1_and(carry_bit, val[x], temp_and[x]);
+            }
+            // val_new = temp_or + temp_and
+            auto add_carry = temp_or;
+            std::vector<int> val_new(w_out);
+            for (int x = 0; x < w_in; x++) {
+                this->full_adder_coeff_word_size_internal_variables[{idx, w,
+                                                                     x}] = val_new[x] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                if (x == w_in - 1) {
+                    if (w_in == w_out) {
+                        // no carry output required
+                        //this->create_half_adder(add_carry, val[x], val_new[x]);
+                        this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false});
+                    } else {
+                        // use carry output as sum output for result MSB
+                        int carry_out = ++this->variable_counter;
+                        this->create_new_variable(this->variable_counter);
+                        //this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
+                        this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false},
+                                                {carry_out, false});
+                        this->full_adder_coeff_word_size_internal_variables[{idx, w, x + 1}] = val_new[x +
+                                                                                                       1] = carry_out;
+                    }
+                } else {
+                    // normal half adder
+                    int carry_out = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
+                    //this->create_half_adder(add_carry, val[x], val_new[x], carry_out);
+                    this->create_half_adder({add_carry, false}, {val[x], false}, {val_new[x], false},
+                                            {carry_out, false});
+                    add_carry = carry_out;
+                }
+            }
+            val = val_new;
+            carry_bit = temp_or;
+        }
+        for (int w = 0; w < val.size(); w++) {
+            this->full_adder_coeff_word_size_variables[{idx, w}] = val[w];
+        }
+    }
 }
 
 void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
-	if (!this->calc_twos_complement) {
-		// can always cut MSB because all coefficients are positive
-		// -> just set the m to 1 and count on unit propagation within the solver :)
-		this->full_adder_msb_variables[idx] = this->init_const_one_bit();
-		this->force_bit(this->const_one_bit, 1);
-		return;
-	}
-	auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
-	this->create_new_variable(this->variable_counter);
-	int s_c = this->adder_output_value_variables.at({idx, this->word_size-1});
-	if (idx == 1) {
-		// m = not s_c
-		this->create_1x1_negated_implication(s_c, m);
-		this->create_1x1_reversed_negated_implication(s_c, m);
-		return;
-	}
-	int s_x = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size-1});
-	int s_y = this->input_select_mux_output_variables.at({idx, mcm::right, this->word_size-1});
-	// create clauses to decide whether the sign m can be copied from one of the inputs
-	// 1)
-	this->create_arbitrary_clause({
-																	{s_y, false},
-																	{s_c, false},
-																	{m,   false},
-																});
-	// 2)
-	this->create_arbitrary_clause({
-																	{s_x, false},
-																	{s_y, true},
-																	{m,   false},
-																});
-	// 3)
-	this->create_arbitrary_clause({
-																	{s_x, true},
-																	{s_c, true},
-																	{m,   false},
-																});
-	// 4) -> redundant
-	// 5) -> redundant
-	// 6) -> redundant
-	// 7)
-	this->create_arbitrary_clause({
-																	{s_x, true},
-																	{s_y, true},
-																	{s_c, false},
-																	{m,   true},
-																});
-	// 8)
-	this->create_arbitrary_clause({
-																	{s_x, false},
-																	{s_y, false},
-																	{s_c, true},
-																	{m,   true},
-																});
+    if (mode == formulation_mode::only_FA_limit) return;
+    for (int v = 0; v < C[0].size(); v++) {
+        if (!this->calc_twos_complement) {
+            // can always cut MSB because all coefficients are positive
+            // -> just set the m to 1 and count on unit propagation within the solver :)
+            this->full_adder_msb_variables[idx] = this->init_const_one_bit();
+            this->force_bit(this->const_one_bit, 1);
+            return;
+        }
+        auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
+        this->create_new_variable(this->variable_counter);
+        int s_c = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
+        if (idx == 1) {
+            // m = not s_c
+            this->create_1x1_negated_implication(s_c, m);
+            this->create_1x1_reversed_negated_implication(s_c, m);
+            return;
+        }
+        int s_x = this->input_select_mux_output_variables.at({idx, mcm::left, this->word_size - 1, v});
+        int s_y = this->input_select_mux_output_variables.at({idx, mcm::right, this->word_size - 1, v});
+        // create clauses to decide whether the sign m can be copied from one of the inputs
+        // 1)
+        this->create_arbitrary_clause({
+                                              {s_y, false},
+                                              {s_c, false},
+                                              {m,   false},
+                                      });
+        // 2)
+        this->create_arbitrary_clause({
+                                              {s_x, false},
+                                              {s_y, true},
+                                              {m,   false},
+                                      });
+        // 3)
+        this->create_arbitrary_clause({
+                                              {s_x, true},
+                                              {s_c, true},
+                                              {m,   false},
+                                      });
+        // 4) -> redundant
+        // 5) -> redundant
+        // 6) -> redundant
+        // 7)
+        this->create_arbitrary_clause({
+                                              {s_x, true},
+                                              {s_y, true},
+                                              {s_c, false},
+                                              {m,   true},
+                                      });
+        // 8)
+        this->create_arbitrary_clause({
+                                              {s_x, false},
+                                              {s_y, false},
+                                              {s_c, true},
+                                              {m,   true},
+                                      });
+    }
 }
 
 void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
