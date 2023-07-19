@@ -405,7 +405,7 @@ protected:
 	/*!
 	 * store info whether or not the negative version of a coefficient was requested by the user
 	 */
-	std::map<std::vector<int>, bool> negative_coeff_requested;
+	std::map<std::vector<int>, bool> inverted_coeff_requested;
 	/*!
 	 * store info whether the solver can decide to implement C or -C
 	 * this is only relevant when ...
@@ -595,6 +595,26 @@ private:
 	 * optimize #adders or #full_adders within this loop
 	 */
 	void optimization_loop(formulation_mode mode);
+    /*!
+     * check if vector has only positv values after they were flipped in the constructor
+     * the solver can then allow sign inversion for this vector
+     * @param v current vector to check
+     * @return true when vector is all positiv else false
+     */
+    bool vector_all_positive(const std::vector<int> v);
+    /*!
+     * @return C[0].size()
+     */
+    inline int c_row_size(){return C[0].size();}
+    /*!
+     * @return C.size()
+     */
+    inline int c_column_size(){return C.size();}
+    /*!
+     * C[0].size() idx are reserved by the inputs
+     * @return idx input buffer caused by multiple inputs in SOP and CMMM
+     */
+    inline int idx_input_buffer(){return C[0].size();}
 	/*!
 	 * cache values for ceil(log2(n))
 	 */
@@ -638,6 +658,7 @@ private:
 	void create_post_adder_shift_constraints(int idx, formulation_mode mode);
 	void create_odd_fundamentals_constraints(int idx, formulation_mode mode);
 	void create_mcm_output_constraints(formulation_mode mode);
+    void create_mcm_input_constraints(formulation_mode mode);
 	void create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode);
 	void create_full_adder_msb_constraints(int idx, formulation_mode mode);
 	void create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode);
@@ -763,9 +784,8 @@ private:
 	std::map<std::tuple<int, int, int>, int> output_value_variables;
 	/*!
 	 * < node idx, mcm constant > -> variable idx
-	 * CMM dimension
 	 */
-	std::map<std::tuple<int, int, int>, int> mcm_output_variables;
+	std::map<std::tuple<int, int>, int> mcm_output_variables;
 	/*!
 	 * < node idx, bit > -> variable idx
 	 */

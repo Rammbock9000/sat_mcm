@@ -36,22 +36,23 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
             shifted_bits++;
         }
         //look for first non zero value in vector and check if its > or < 0
+        //note: do not remove if you think it's not needed think about it twice (norm for duplicate vector)
         for (auto &c : v) {
             std::cout << "found entry: " << c << std::endl;
             if (c > 0) {
                 std::cout << "first non zero entry of vector is: " << c << std::endl;
-                this->negative_coeff_requested[v] = false;
+                this->inverted_coeff_requested[v] = false;
                 break;
             } else if (c < 0) {
                 std::cout << "first non zero entry of vector is: " << c << std::endl;
-                this->negative_coeff_requested[v] = true;
+                this->inverted_coeff_requested[v] = true;
                 break;
             } else {
                 continue;
             }
         }
         //flip the sign of all values in the vector if its requested
-        if (this->negative_coeff_requested[v]) {
+        if (this->inverted_coeff_requested[v]) {
         for (auto &c : v) {
             std::cout << "flipping sign of entry  " << c ;
             if (c == 0) continue;
@@ -210,7 +211,7 @@ void mcm::create_variables() {
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
-		if (this->C.size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0][0]])) {
+		if (this->c_column_size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0][0]])) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
 		}
@@ -271,7 +272,7 @@ void mcm::create_constraints(formulation_mode mode) {
 }
 
 void mcm::create_input_node_variables() {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int i = 0; i < this->word_size; i++) {
             this->output_value_variables[{0, i, v}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
@@ -287,7 +288,7 @@ void mcm::create_input_select_mux_variables(int idx) {
 #else
 	auto num_muxs = (1 << select_word_size) - 1;
 #endif
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (auto &dir : input_directions) {
             for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
                 for (int w = 0; w < this->word_size; w++) {
@@ -327,7 +328,7 @@ void mcm::create_input_shift_value_variables(int idx) {
 }
 
 void mcm::create_shift_internal_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
             for (int w = 0; w < this->word_size; w++) {
                 this->shift_internal_mux_output_variables[{idx, mux_stage, w, v}] = ++this->variable_counter;
@@ -348,7 +349,7 @@ void mcm::create_post_adder_input_shift_value_variables(int idx) {
 }
 
 void mcm::create_post_adder_shift_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int mux_stage = 0; mux_stage < this->shift_word_size; mux_stage++) {
             for (int w = 0; w < this->word_size; w++) {
                 this->post_adder_shift_internal_mux_output_variables[{idx, mux_stage, w, v}] = ++this->variable_counter;
@@ -367,7 +368,7 @@ void mcm::create_input_negate_select_variable(int idx) {
 }
 
 void mcm::create_negate_select_output_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (auto &dir : input_directions) {
             for (int w = 0; w < this->word_size; w++) {
                 this->negate_select_output_variables[{idx, dir, w, v}] = ++this->variable_counter;
@@ -383,7 +384,7 @@ void mcm::create_input_negate_value_variable(int idx) {
 }
 
 void mcm::create_xor_output_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             this->xor_output_variables[{idx, w, v}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
@@ -392,7 +393,7 @@ void mcm::create_xor_output_variables(int idx) {
 }
 
 void mcm::create_adder_internal_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             this->adder_carry_variables[{idx, w, v}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
@@ -407,7 +408,7 @@ void mcm::create_adder_internal_variables(int idx) {
 }
 
 void mcm::create_output_value_variables(int idx) {
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             if (this->enable_node_output_shift) {
                 this->output_value_variables[{idx, w, v}] = this->post_adder_shift_output_variables.at({idx, w, v});
@@ -701,27 +702,36 @@ int mcm::get_result_value(int var_idx) {
 
 void mcm::create_input_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
+	//inputs and outputs for SCM and MCM where input is only one  1
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
-    for(int v=0; v<C[0].size(); v++) { //TODO does input_bits and output_bits needs to be adjusted aswell?
-        for (auto w = 0; w < this->word_size; w++) {
-            input_bits[w] = this->output_value_variables.at({0, w, v});
-            output_bits[w] = this->output_value_variables.at({this->num_adders, w, v});
-        }
-    }
+	for (int v=0; v<c_row_size(); v++) {
+	    for (auto w = 0; w < this->word_size; w++) {
+	        input_bits[w] = this->output_value_variables.at({0, w, v});
+	        output_bits[w] = this->output_value_variables.at({this->num_adders, w, v});
+	    }
+	}
+
 	// force input to 1 and output to C
-	//CMM?
-	this->force_number(input_bits, 1);
-	if (this->C[0].size() == 1 and this->C.size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
+	if (this->c_row_size() == 1 and this->c_column_size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
 		// SCM
+        this->force_number(input_bits, 1);
 		this->force_number(output_bits, this->C[0][0]);
 	}
 	else {
-	    if(C[0].size() == 1) {
+	    if(this->c_row_size() == 1) {
             // MCM
+            this->force_number(input_bits, 1);
+            this->create_mcm_output_constraints(mode);
+        } else if(this->c_column_size() == 1) {
+	        // SOP
+            this->create_mcm_input_constraints(mode);
+            this->force_number(output_bits, this->C[0][0]);
+        } else {
+            // CMM
+            this->create_mcm_input_constraints(mode);
             this->create_mcm_output_constraints(mode);
         }
-	    // CMM
 	}
 }
 
@@ -736,7 +746,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	}
 	auto select_word_size = this->ceil_log2(idx);
 	auto next_pow_two = (1 << select_word_size);
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
 	    for (auto &dir : this->input_directions) {
 		    int mux_idx = 0;
 		    std::map<std::pair<int, int>, int> signal_variables;
@@ -829,7 +839,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 
 void mcm::create_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (auto stage = 0; stage < this->shift_word_size; stage++) {
             auto shift_width = (1 << stage);
             auto select_input_var_idx = this->input_shift_value_variables.at({idx, stage});
@@ -922,7 +932,7 @@ void mcm::create_shift_constraints(int idx, formulation_mode mode) {
 
 void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (auto stage = 0; stage < this->shift_word_size; stage++) {
             auto shift_width = (1 << stage);
             auto select_input_var_idx = this->input_post_adder_shift_value_variables.at({idx, stage});
@@ -998,7 +1008,7 @@ void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             auto left_input_var_idx = this->shift_output_variables.at({idx, w, v});
             int right_input_var_idx;
@@ -1024,7 +1034,7 @@ void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
 void mcm::create_xor_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             auto input_var_idx = this->negate_select_output_variables.at({idx, mcm::right, w, v});
             auto output_var_idx = this->xor_output_variables.at({idx, w, v});
@@ -1035,7 +1045,7 @@ void mcm::create_xor_constraints(int idx, formulation_mode mode) {
 
 void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             int c_i;
             if (w == 0) {
@@ -1138,7 +1148,7 @@ void mcm::get_solution_from_backend() {
 	this->shift_sum_values.clear();
 	this->num_FAs_value = 0;
 	// get solution
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int idx = 0; idx <= this->num_adders; idx++) {
             // output_values
             this->output_values[idx] = 0;
@@ -1284,7 +1294,7 @@ void mcm::print_solution() {
 
 bool mcm::solution_is_valid() {
 	bool valid = true;
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         for (int idx = 1; idx <= this->num_adders; idx++) {//TODO
             // verify node inputs
             int64_t input_node_idx_l = 0;
@@ -1551,10 +1561,10 @@ bool mcm::solution_is_valid() {
 void mcm::create_cnf_file() {
 	std::ofstream f;
 	std::stringstream constants;
-	for (int i=0; i<this->C.size(); i++) {
+	for (int i=0; i<this->c_column_size(); i++) {
 		if (i != 0) constants << "_";
 		constants << this->C[i][0];
-		// note Christoph: take a look later
+		//TODO note Christoph: take a look later
 	}
 	std::string filename;
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
@@ -1568,60 +1578,79 @@ void mcm::create_cnf_file() {
 	f << this->cnf_clauses.str();
 	f.close();
 }
+void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
+    if (mode != formulation_mode::reset_all) return;
 
+    std::vector<int> input_bits(this->word_size);
+    std::vector<int> output_bits(this->word_size);
+    for(int C=0; C<c_row_size(); C++){
+        for (int v=0; v<c_row_size(); v++) {
+            for (auto w = 0; w < this->word_size; w++) {
+                input_bits[w] = this->output_value_variables.at({C, w, v});
+                output_bits[w] = this->output_value_variables.at({this->num_adders, w, v});
+                if(C==v) {
+                    force_number(input_bits, 1);
+                }else{
+                    force_number(input_bits, 0);
+                }
+            }
+        }
+    }
+}
 void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-    for(int v=0; v<C.size(); v++) {
-        for(auto &c : C[v]){
-            std::vector<int> or_me;
-            for (int idx = 1; idx <= this->num_adders; idx++) {
-                or_me.emplace_back(this->mcm_output_variables[{idx, c, v}]);
-                for (int w = 0; w < this->word_size; w++) {
-                    if (((c >> w) & 1) == 1) {
-                        this->create_1x1_implication(this->mcm_output_variables[{idx, c, v}],
-                                                     this->output_value_variables[{idx, w, v}]);
-                    } else {
-                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, c, v}],
-                                                             this->output_value_variables[{idx, w, v}]);
-                    }
-                }
-            }
-            if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
-                // also allow the solver to choose -c instead of c if it's easier to implement
-                for (int idx = 1; idx <= this->num_adders; idx++) {
-                    or_me.emplace_back(this->mcm_output_variables[{idx, -c, v}]);
-                    for (int w = 0; w < this->word_size; w++) {
-                        if ((((-c) >> w) & 1) == 1) {
-                            this->create_1x1_implication(this->mcm_output_variables[{idx, -c, v}],
-                                                         this->output_value_variables[{idx, w, v}]);
-                        } else {
-                            this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -c, v}],
-                                                                 this->output_value_variables[{idx, w, v}]);
-                        }
-                    }
-                }
-            }
-            this->create_or(or_me);
-        }
+	for(int m=1; m<=c_column_size(); m++){
+	    std::vector<int> or_me;
+	    for (int idx = 1; idx <= this->num_adders; idx++) {
+	        //TODO <= this->num_adders + inputs
+	        or_me.emplace_back(this->mcm_output_variables[{idx, m}]);
+	        for(int v=0; v<c_row_size(); v++) {
+	            for (int w = 0; w < this->word_size; w++) {
+	                if (((C[m-1][v] >> w) & 1) == 1) {
+	                    this->create_1x1_implication(this->mcm_output_variables[{idx, m}],
+                                                  this->output_value_variables[{idx, w, v}]);
+	                } else {
+	                    this->create_1x1_negated_implication(this->mcm_output_variables[{idx, m}],
+                                                          this->output_value_variables[{idx, w, v}]);
+	                }
+	            }
+	        }
+	    }
+	    if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+	        // also allow the solver to choose -c instead of c if it's easier to implement
+	        for (int idx = 1; idx <= this->num_adders; idx++) {
+	            or_me.emplace_back(this->mcm_output_variables[{idx, -m}]);
+	            for(int v=0; v<c_row_size(); v++) {
+	                for (int w = 0; w < this->word_size; w++) {
+	                    if ((((-C[m-1][v]) >> w) & 1) == 1) {
+	                        this->create_1x1_implication(this->mcm_output_variables[{idx, -m}],
+                                                      this->output_value_variables[{idx, w, v}]);
+	                    } else {
+	                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -m}],
+                                                              this->output_value_variables[{idx, w, v}]);
+	                    }
+	                }
+	            }
+	        }
+	    }
+	    this->create_or(or_me);
     }
 }
 
 void mcm::create_mcm_output_variables(int idx) {
-    for(int v=0; v<C.size(); v++) {
-        for(auto &c : C[v]){
-            this->mcm_output_variables[{idx, c, v}] = ++this->variable_counter;
+    for(int m=1; m<=c_column_size(); m++) {
+            this->mcm_output_variables[{idx, m}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
-            if (this->calc_twos_complement and this->sign_inversion_allowed[c]) {
-                this->mcm_output_variables[{idx, -c, v}] = ++this->variable_counter;
+            if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+                this->mcm_output_variables[{idx, -m}] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
             }
-        }
     }
 }
 
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
     }
 }
@@ -1712,25 +1741,40 @@ std::pair<int, int> mcm::solution_is_optimal() {
 }
 
 void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
-	for (auto &v : this->C) {
-        for (auto &c : v) {
-            if (only_apply_to_negative_coefficients) {
-                // only allow sign inversion for negative coefficients
-                if (this->negative_coeff_requested[v]) {
-                    this->sign_inversion_allowed[c] = true;
+    for(int m=1; m<=c_column_size(); m++) {
+        if (only_apply_to_negative_coefficients) {
+            // only allow sign inversion for all negative coefficients
+            if (this->inverted_coeff_requested[C[m - 1]]) {
+                if (this->vector_all_positive(C[m - 1])) {
+                    this->sign_inversion_allowed[m] = true;
                 }
-            } else {
-                // only the solver to choose sign for all coefficients
-                this->sign_inversion_allowed[c] = true;
             }
+        } else {
+            // only the solver to choose sign for all coefficients
+            this->sign_inversion_allowed[m] = true;
         }
 	}
+}
+
+bool mcm::vector_all_positive(std::vector<int> v){
+    bool all_positive = true;
+    for(auto &c : v){
+        //skip over negative values
+        if(c>=0)continue;
+        else{
+            //break out for the first non negative value and return false
+            all_positive = false;
+            break;
+        }
+    }
+    //only negative elements => return true
+    return all_positive;
 }
 
 void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	std::vector<int> abs_coeff_bits(this->word_size);
-    for(int v=0; v<C[0].size(); v++) {
+    for(int v=0; v<c_row_size(); v++) {
         if (this->calc_twos_complement) {
             // compute abs(c) using a MUX and an inversion and a +1 adder
             /*int carry_bit = ++this->variable_counter;
@@ -1842,7 +1886,7 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
 
 void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
     if (mode == formulation_mode::only_FA_limit) return;
-    for (int v = 0; v < C[0].size(); v++) {
+    for (int v = 0; v <c_row_size(); v++) {
         if (!this->calc_twos_complement) {
             // can always cut MSB because all coefficients are positive
             // -> just set the m to 1 and count on unit propagation within the solver :)
@@ -1983,7 +2027,7 @@ void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
-	if (idx == 1) {
+	if (idx == 1) {//TODO
 		// no addition necessary -> just set container with variables
 		for (int w=0; w<num_bits_word_size; w++) {
 			this->full_adder_shift_sum_variables[{idx, w}] = this->full_adder_shift_gain_variables.at({idx, w});
@@ -2351,10 +2395,10 @@ void mcm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
 	if (this->verbosity == verbosity_mode::debug_mode) {
-		if (this->C[0].size() == 1 and this->C.size() == 1) {
+		if (this->c_row_size() == 1 and this->c_column_size() == 1) {
 			std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
 		}
-		else if (this->C[0].size() == 1){
+		else if (this->c_row_size() == 1){
 			std::cout << "Trying to solve MCM problem for following constants: ";
 			for (auto &v : this->C) {
 			    for (auto &c : v)
@@ -2474,10 +2518,10 @@ void mcm::solve_standard() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
     if (this->verbosity == verbosity_mode::debug_mode) {
-        if (this->C[0].size() == 1 and this->C.size() == 1) {
+        if (this->c_row_size() == 1 and this->c_column_size() == 1) {
             std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
         }
-        else if (this->C[0].size() == 1){
+        else if (this->c_row_size() == 1){
             std::cout << "Trying to solve MCM problem for following constants: ";
             for (auto &v : this->C) {
                 for (auto &c : v)
@@ -2604,3 +2648,4 @@ void mcm::solve_standard() {
 	}
 	this->found_solution = true;
 }
+
