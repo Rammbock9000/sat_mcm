@@ -613,8 +613,9 @@ private:
     /*!
      * C[0].size() idx are reserved by the inputs
      * @return idx input buffer caused by multiple inputs in SOP and CMMM
+     * not sure yet if the -1 is correct
      */
-    inline int idx_input_buffer(){return C[0].size();}
+    inline int idx_input_buffer(){return C[0].size()-1;}
 	/*!
 	 * cache values for ceil(log2(n))
 	 */

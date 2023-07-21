@@ -281,7 +281,7 @@ void mcm::create_input_node_variables() {
 }
 
 void mcm::create_input_select_mux_variables(int idx) {
-	if (idx < 2) return; //TODO
+	if (idx < (2 + idx_input_buffer())) return;
 	auto select_word_size = this->ceil_log2(idx);
 #if INPUT_SELECT_MUX_OPT
 	auto num_muxs = idx-1;
@@ -310,7 +310,7 @@ void mcm::create_input_select_mux_variables(int idx) {
 }
 
 void mcm::create_input_select_selection_variables(int idx) {
-	if (idx == 1) return; // TODO
+	if (idx == (1 + idx_input_buffer())) return;
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir : input_directions) {
 		for (int w = 0; w < select_word_size; w++) {
@@ -739,7 +739,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	//CMM?
-	if (idx < 2) return;	//TODO
+	if (idx < (2 + idx_input_buffer())) return;
 	// create constraints for all muxs
 	if (this->verbosity == verbosity_mode::debug_mode) {
 		std::cout << "creating input select constraints for node #" << idx << std::endl;
@@ -853,8 +853,8 @@ void mcm::create_shift_constraints(int idx, formulation_mode mode) {
                 auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w, v});
                 if (stage == 0) {
                     // connect shifter inputs
-                    if (idx == 1) {
-                        // shifter input is the output of the input node with idx = 0 //TODO
+                    if (idx == (1 + idx_input_buffer())) {
+                        // shifter input is the output of the input node with idx = 0
                         zero_input_var_idx = this->output_value_variables.at({0, w, v});
                         zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size - 1, v});
                         if (!connect_zero_const) {
@@ -1012,8 +1012,8 @@ void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
         for (int w = 0; w < this->word_size; w++) {
             auto left_input_var_idx = this->shift_output_variables.at({idx, w, v});
             int right_input_var_idx;
-            if (idx == 1) {
-                // right input is the output of the input node with idx = 0 TODO
+            if (idx == (1 + idx_input_buffer())) {
+                // right input is the output of the input node with idx = 0
                 right_input_var_idx = this->output_value_variables.at({0, w, v});
             } else {
                 // right input is the output of the right input select mux
@@ -1149,7 +1149,7 @@ void mcm::get_solution_from_backend() {
 	this->num_FAs_value = 0;
 	// get solution
     for(int v=0; v<c_row_size(); v++) {
-        for (int idx = 0; idx <= this->num_adders; idx++) {
+        for (int idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
             // output_values
             this->output_values[idx] = 0;
             for (int w = 0; w < this->word_size; w++) {
@@ -1157,8 +1157,8 @@ void mcm::get_solution_from_backend() {
             }
             if (this->calc_twos_complement)
                 this->output_values[idx] = sign_extend(this->output_values[idx], this->word_size);
-            if (idx > 0) {
-                if (idx > 1) {
+            if (idx > (0 + idx_input_buffer())) {
+                if (idx > (1 + idx_input_buffer())) {
                     // input_select
                     for (auto &dir : this->input_directions) {
                         auto input_select_width = this->ceil_log2(idx);
@@ -1267,7 +1267,7 @@ void mcm::print_solution() {
 		}
 		std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
 		std::cout << "  node #0 = " << (this->calc_twos_complement?sign_extend(this->output_values[0], this->word_size):this->output_values[0]) << std::endl;
-		for (auto idx = 1; idx <= this->num_adders; idx++) {
+		for (auto idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
 			std::cout << "  node #" << idx << " = " << (this->calc_twos_complement?sign_extend((int64_t)this->output_values[idx], this->word_size):this->output_values[idx]) << std::endl;
 			std::cout << "    left input: node " << this->input_select[{idx, mcm::left}] << std::endl;
 			std::cout << "    right input: node " << this->input_select[{idx, mcm::right}] << std::endl;
@@ -1295,13 +1295,13 @@ void mcm::print_solution() {
 bool mcm::solution_is_valid() {
 	bool valid = true;
     for(int v=0; v<c_row_size(); v++) {
-        for (int idx = 1; idx <= this->num_adders; idx++) {//TODO
+        for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
             // verify node inputs
             int64_t input_node_idx_l = 0;
             int64_t input_node_idx_r = 0;
             int64_t actual_input_value_l = 1;
             int64_t actual_input_value_r = 1;
-            if (idx > 1) { //TODO
+            if (idx > (1 + idx_input_buffer())) {
                 for (auto &dir : this->input_directions) {
                     for (auto w = 0; w < this->word_size; w++) {
                         this->input_select_mux_output[{idx, dir}] += (
@@ -1601,8 +1601,7 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for(int m=1; m<=c_column_size(); m++){
 	    std::vector<int> or_me;
-	    for (int idx = 1; idx <= this->num_adders; idx++) {
-	        //TODO <= this->num_adders + inputs
+	    for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
 	        or_me.emplace_back(this->mcm_output_variables[{idx, m}]);
 	        for(int v=0; v<c_row_size(); v++) {
 	            for (int w = 0; w < this->word_size; w++) {
@@ -1618,7 +1617,7 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	    }
 	    if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
 	        // also allow the solver to choose -c instead of c if it's easier to implement
-	        for (int idx = 1; idx <= this->num_adders; idx++) {
+	        for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
 	            or_me.emplace_back(this->mcm_output_variables[{idx, -m}]);
 	            for(int v=0; v<c_row_size(); v++) {
 	                for (int w = 0; w < this->word_size; w++) {
@@ -1670,9 +1669,9 @@ std::string mcm::get_adder_graph_description() {
 	s << "{";
 	std::map<int, int> stage;
 	stage[0] = 0;
-	for (int idx = 1; idx <= this->num_adders; idx++) {
+	for (int idx = 1; idx <= (this->num_adders +idx_input_buffer()); idx++) {
 		// insert comma if needed
-		if (idx > 1) s << ",";
+		if (idx > (1 + idx_input_buffer())) s << ",";
 		// get left and right inputs and their shift
 		int left_idx;
 		int right_idx;
@@ -1897,7 +1896,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
         auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
         this->create_new_variable(this->variable_counter);
         int s_c = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
-        if (idx == 1) {
+        if (idx == (1 + idx_input_buffer())) {
             // m = not s_c
             this->create_1x1_negated_implication(s_c, m);
             this->create_1x1_reversed_negated_implication(s_c, m);
@@ -1947,7 +1946,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
-	if (idx == 1) {
+	if (idx == (1 + idx_input_buffer())) {
 		// no addition necessary -> just set container with variables
 		for (int w=0; w<num_bits_word_size; w++) {
 			this->full_adder_word_size_sum_variables[{idx, w}] = this->full_adder_coeff_word_size_variables.at({idx, w});
@@ -2027,7 +2026,7 @@ void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
-	if (idx == 1) {//TODO
+	if (idx == (1 + idx_input_buffer())) {
 		// no addition necessary -> just set container with variables
 		for (int w=0; w<num_bits_word_size; w++) {
 			this->full_adder_shift_sum_variables[{idx, w}] = this->full_adder_shift_gain_variables.at({idx, w});
@@ -2064,7 +2063,7 @@ void mcm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
 	}
 	// sum all bits up
 	std::vector<std::pair<std::vector<int>, bool>> x(this->num_adders, std::pair<std::vector<int>, bool>(std::vector<int>(1), false));
-	for (int idx=1; idx<=this->num_adders; idx++) {
+	for (int idx=1; idx<= (this->num_adders + idx_input_buffer()); idx++) {
 		x[idx-1].first[0] = this->full_adder_msb_variables.at(idx);
 	}
 	auto output_bits = this->create_bitheap(x);
@@ -2452,7 +2451,7 @@ void mcm::solve_enumeration() {
 		int current_full_adders = 0;
 		int MSBs_cut = 0;
 		int MSBs_not_cut = 0;
-		for (int idx = 1; idx <= this->num_adders; idx++) {
+		for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
 			if (this->output_values.at(idx) == 0) {
 				// more adders allocated than necessary
 				continue;
@@ -2460,7 +2459,7 @@ void mcm::solve_enumeration() {
 			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
-			if (idx > 1) {
+			if (idx > (1 + idx_input_buffer())) {
 				shifter_input = this->input_select_mux_output.at({idx, mcm::left});
 			}
 			while ((shifter_input & 1) == 0) {
@@ -2580,7 +2579,7 @@ void mcm::solve_standard() {
 		int current_full_adders = 0;
 		int MSBs_cut = 0;
 		int MSBs_not_cut = 0;
-		for (int idx = 1; idx <= this->num_adders; idx++) {
+		for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
 			if (this->output_values.at(idx) == 0) {
 				// more adders allocated than necessary
 				continue;
@@ -2588,7 +2587,7 @@ void mcm::solve_standard() {
 			int FAs_for_this_node = (int)std::ceil(std::log2(std::abs(this->add_result_values.at(idx))));
 			int shifter_input_non_zero_LSBs = 0;
 			int shifter_input = 1;
-			if (idx > 1) {
+			if (idx > (1 + idx_input_buffer())) {
 				shifter_input = this->input_select_mux_output.at({idx, mcm::left});
 			}
 			while ((shifter_input & 1) == 0) {
