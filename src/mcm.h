@@ -526,11 +526,11 @@ private:
 	/*!
 	 * < node idx, left/right > -> int value
 	 */
-	std::map<std::pair<int, input_direction>, int> input_select;
+	std::map<std::tuple<int, input_direction>, int> input_select;
 	/*!
 	 * < node idx, left/right > -> int value
 	 */
-	std::map<std::pair<int, input_direction>, int> input_select_mux_output;
+	std::map<std::tuple<int, input_direction>, int> input_select_mux_output;
 	/*!
 	 * node idx -> int value
 	 */
@@ -545,16 +545,18 @@ private:
 	std::map<int, int> subtract;
 	/*!
 	 * node idx -> int value
+	 * CMM Dimension
 	 */
-	std::map<int, int> add_result_values;
+    std::map<std::pair<int, int>, int> add_result_values;
 	/*!
 	 * node idx -> int value
 	 */
-	std::map<int, int> post_adder_shift_value;
+    std::map<int, int> post_adder_shift_value;
 	/*!
 	 * node idx -> int value
+	 * CMM Dimension
 	 */
-	std::map<int, int> output_values;
+	std::map<std::pair<int, int>, int> output_values;
 	/*!
 	 * node idx -> int value
 	 */
@@ -629,7 +631,7 @@ private:
 	//// CREATE ALL VARIABLES ////
 	//////////////////////////////
 	void create_input_node_variables(); // idx = 0 is the input node that has a constant value 0 as output
-	void create_input_select_mux_variables(int idx);
+	void create_input_select_mux_variables(int idx); // select input variables
 	void create_input_select_selection_variables(int idx);
 	void create_input_shift_value_variables(int idx);
 	void create_shift_internal_variables(int idx);
