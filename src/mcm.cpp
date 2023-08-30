@@ -127,16 +127,17 @@ void mcm::optimization_loop(formulation_mode mode) {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Constructing problem for " << this->num_adders << " adders" << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and "+std::to_string(this->max_full_adders)+" full adders":"") << std::endl;
 	this->construct_problem(mode);
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "  Start solving with " << this->variable_counter << " variables and " << this->constraint_counter << " constraints" << std::endl;
+    //this->create_arbitrary_clause({{1, false}});
+    //this->create_arbitrary_clause({{1, true}});
 	auto [a, b] = this->check();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
+	//throw std::runtime_error("DEBUG");
 	this->fa_minimization_timeout -= elapsed_time;
 	this->found_solution = a;
 	this->ran_into_timeout = b;
 	if (this->found_solution) {
 		if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "  Found solution for #adders = " << this->num_adders << (this->max_full_adders!=FULL_ADDERS_UNLIMITED?" and max. "+std::to_string(this->max_full_adders)+" full adders":"") << " after " << elapsed_time << " seconds 8-)" << std::endl;
-		std::cout << "test1" << std::endl;
 		this->get_solution_from_backend();
-        std::cout << "test2" << std::endl;
 		if (this->solution_is_valid()) {
 			if (this->verbosity != verbosity_mode::quiet_mode) std::cout << "Solution is verified :-)" << std::endl;
 		}
@@ -492,6 +493,7 @@ void mcm::create_or(std::vector<int> &x) {
 	std::vector<std::pair<int, bool>> v(x.size());
 	for (auto i=0; i<x.size(); i++) {
 		auto &val = x[i];
+        std::cout<<"create_or val: "<< val <<std::endl;
 		if (val > 0) v[i] = {val, false};
 		else v[i] = {-val, true};
 	}
@@ -724,6 +726,8 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 	for (auto w = 0; w < this->word_size; w++) {
 	    input_bits[w] = this->output_value_variables.at({0, w, 0});
 	    output_bits[w] = this->output_value_variables.at({this->num_adders, w, 0});
+        //std::cout<<"input bits: "<< input_bits[w] <<std::endl;
+        //std::cout<<"output bits: "<< output_bits[w] <<std::endl;
 	}
 
 	// force input to 1 and output to C[0][0]
@@ -1325,8 +1329,11 @@ void mcm::print_solution() {
 bool mcm::solution_is_valid() {
 	bool valid = true;
     for(int v=0; v<c_row_size(); v++) {
-        for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+        for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
             //TODO problem here 'std::out_of_range' with range being '+ idx_input_buffer()'
+
+            std::cout << "test where I left the function 1" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
 
             // verify node inputs
             int64_t input_node_idx_l = 0;
@@ -1353,6 +1360,9 @@ bool mcm::solution_is_valid() {
             } else {
                 this->input_select_mux_output[{idx, mcm::left}] = this->input_select_mux_output[{idx, mcm::right}] = 1;
             }
+            std::cout << "test where I left the function 2" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
             int64_t left_input_value = this->output_values[{input_node_idx_l,v}];
             int64_t right_input_value = this->output_values[{input_node_idx_r,v}];
             if (this->verbosity == verbosity_mode::debug_mode) {
@@ -1397,6 +1407,10 @@ bool mcm::solution_is_valid() {
                 }
                 valid = false;
             }
+
+            std::cout << "test where I left the function 3" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
             // verify shifter output
             int64_t expected_shift_output = (((int64_t) left_input_value)
                     << this->shift_value[idx]);// % (int64_t)(1 << this->word_size);
@@ -1404,6 +1418,7 @@ bool mcm::solution_is_valid() {
             int64_t actual_shift_output = 0;
             for (int w = 0; w < this->word_size; w++) {
                 actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w, v}]) << w);
+                std::cout << "shift_output_variables[{idx, w, v}: " << shift_output_variables[{idx, w, v}] << std::endl;
             }
             if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
             if (this->verbosity == verbosity_mode::debug_mode) {
@@ -1412,6 +1427,10 @@ bool mcm::solution_is_valid() {
                 std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
                 std::cout << "  output value = " << actual_shift_output << std::endl;
             }
+            //TODO we fail here
+            std::cout << "expected_shift_output: " << expected_shift_output << std::endl;
+            std::cout << "actual_shift_output: " << actual_shift_output << std::endl;
+
             if (expected_shift_output != actual_shift_output) {
                 std::cout << "node #" << idx << " has invalid shift output" << std::endl;
                 std::cout << "  input value = " << left_input_value << std::endl;
@@ -1453,6 +1472,10 @@ bool mcm::solution_is_valid() {
                 std::cout << "  expected value = " << negate_mux_output_l << std::endl;
                 valid = false;
             }
+
+            std::cout << "test where I left the function 4" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
             if (this->verbosity == verbosity_mode::debug_mode) {
                 std::cout << "node #" << idx << " right negate select mux output" << std::endl;
                 std::cout << "  select = " << this->get_result_value(this->input_negate_select_variables[idx])
@@ -1516,6 +1539,10 @@ bool mcm::solution_is_valid() {
                 std::cout << "  actual output value = " << actual_adder_output << std::endl;
                 valid = false;
             }
+
+            std::cout << "test where I left the function 5" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
             if (this->enable_node_output_shift) {
                 // verify post adder shift output
                 int64_t expected_post_adder_shift_output = actual_adder_output >> this->post_adder_shift_value.at(idx);
@@ -1543,6 +1570,10 @@ bool mcm::solution_is_valid() {
                     valid = false;
                 }
             }
+
+            std::cout << "test where I left the function 6" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
             if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
                 // coeff word size
                 auto add_result = this->add_result_values.at({idx,v});
@@ -1585,6 +1616,9 @@ bool mcm::solution_is_valid() {
                     valid = false;
                 }
             }
+            std::cout << "test where I left the function 7" << std::endl;
+            std::cout << "valid value: " << valid << std::endl;
+
         }
     }
 	return valid;
@@ -1593,10 +1627,10 @@ bool mcm::solution_is_valid() {
 void mcm::create_cnf_file() {
 	std::ofstream f;
 	std::stringstream constants;
-	for (int i=0; i<this->c_column_size(); i++) {
-		if (i != 0) constants << "_";
-		constants << this->C[i][0];
-		//TODO note Christoph: take a look later
+	for (int i = 0; i < this->c_column_size(); i++) {
+	    if (i != 0) constants << "_";
+	    constants << this->C[i][0];
+	    //TODO note Christoph: take a look later just naming of the .cnf file
 	}
 	std::string filename;
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
@@ -1620,11 +1654,12 @@ void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
         for (int j=0; j<=c_row_size()-1; j++) {
             for (auto w = 0; w < this->word_size; w++) {
                 input_bits[w] = this->output_value_variables.at({i, w, j});
-                if(i==j) {
-                    force_number(input_bits, 1);
-                }else{
-                    force_number(input_bits, 0);
-                }
+                std::cout<<"input bits: "<< input_bits[w] <<std::endl;
+            }
+            if(i==j) {
+                force_number(input_bits, 1);
+            }else{
+                force_number(input_bits, 0);
             }
         }
     }
@@ -1633,7 +1668,8 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	for(int m=1; m<=c_column_size(); m++){
 	    std::vector<int> or_me;
-	    for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+	    for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+            std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, m}] <<std::endl;
 	        or_me.emplace_back(this->mcm_output_variables[{idx, m}]);
 	        for(int v=0; v<c_row_size(); v++) {
 	            for (int w = 0; w < this->word_size; w++) {
@@ -1649,7 +1685,8 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 	    }
 	    if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
 	        // also allow the solver to choose -c instead of c if it's easier to implement
-	        for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+	        for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+                std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, -m}] <<std::endl;
 	            or_me.emplace_back(this->mcm_output_variables[{idx, -m}]);
 	            for(int v=0; v<c_row_size(); v++) {
 	                for (int w = 0; w < this->word_size; w++) {
@@ -1670,12 +1707,12 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 
 void mcm::create_mcm_output_variables(int idx) {
     for(int m=1; m<=c_column_size(); m++) {
-            this->mcm_output_variables[{idx, m}] = ++this->variable_counter;
+        this->mcm_output_variables[{idx, m}] = ++this->variable_counter;
+        this->create_new_variable(this->variable_counter);
+        if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+            this->mcm_output_variables[{idx, -m}] = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
-            if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
-                this->mcm_output_variables[{idx, -m}] = ++this->variable_counter;
-                this->create_new_variable(this->variable_counter);
-            }
+        }
     }
 }
 
