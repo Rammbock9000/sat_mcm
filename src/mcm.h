@@ -529,8 +529,9 @@ private:
 	std::map<std::tuple<int, input_direction>, int> input_select;
 	/*!
 	 * < node idx, left/right > -> int value
+	 * //CMM Dimension
 	 */
-	std::map<std::tuple<int, input_direction>, int> input_select_mux_output;
+	std::map<std::tuple<int, input_direction, int>, int> input_select_mux_output;
 	/*!
 	 * node idx -> int value
 	 */

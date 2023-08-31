@@ -1173,8 +1173,8 @@ void mcm::get_solution_from_backend() {
 	this->shift_sum_values.clear();
 	this->num_FAs_value = 0;
 	// get solution
-    for(int v=0; v<c_row_size(); v++) {
-        for (int idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+    for(int idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+        for (int v=0; v<c_row_size(); v++) {
             // output_values
             this->output_values[{idx,v}] = 0;
             for (int w = 0; w < this->word_size; w++) {
@@ -1184,7 +1184,7 @@ void mcm::get_solution_from_backend() {
             if (this->calc_twos_complement)
                 this->output_values[{idx,v}] = sign_extend(this->output_values[{idx,v}], this->word_size);
             if (idx > (0 + idx_input_buffer())) {
-                if (idx > (1 + idx_input_buffer())) {
+                if (idx > 1 ) {
                     // input_select
                     for (auto &dir : this->input_directions) {
                         auto input_select_width = this->ceil_log2(idx);
@@ -1293,10 +1293,16 @@ void mcm::print_solution() {
 		}
         for (int v=0; v<c_row_size(); v++) {
             std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
-            std::cout << "  node #0 = "
-                      << (this->calc_twos_complement ? sign_extend(this->output_values[{0, 0}], this->word_size)
-                                                     : this->output_values[{0, 0}]) << std::endl;
-            for (auto idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+
+            //print input nodes
+            for(int i = 0; i <= idx_input_buffer(); i++){
+                std::cout << "  node #" << i << " = "
+                          << (this->calc_twos_complement ? sign_extend(this->output_values[{i, v}], this->word_size)
+                                                         : this->output_values[{i, v}]) << std::endl;
+            }
+
+            //print following nodes
+            for (auto idx = (1 + idx_input_buffer()); idx <= (this->num_adders + idx_input_buffer()); idx++) {
                 std::cout << "  node #" << idx << " = "
                           << (this->calc_twos_complement ? sign_extend((int64_t) this->output_values[{idx, v}],
                                                                        this->word_size) : this->output_values[{idx, v}])
@@ -1328,9 +1334,8 @@ void mcm::print_solution() {
 
 bool mcm::solution_is_valid() {
 	bool valid = true;
-    for(int v=0; v<c_row_size(); v++) {
-        for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
-            //TODO problem here 'std::out_of_range' with range being '+ idx_input_buffer()'
+    for(int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+        for (int v=0; v<c_row_size(); v++) {
 
             std::cout << "test where I left the function 1" << std::endl;
             std::cout << "valid value: " << valid << std::endl;
@@ -1338,30 +1343,39 @@ bool mcm::solution_is_valid() {
             // verify node inputs
             int64_t input_node_idx_l = 0;
             int64_t input_node_idx_r = 0;
+
+            //TODO doesn't matter for CMM because never default value there
             int64_t actual_input_value_l = 1;
             int64_t actual_input_value_r = 1;
-            if (idx > (1 + idx_input_buffer())) {
+
+            //select_input_constraints idx clause:
+            //if (idx < 2) return;
+            //if (idx <= idx_input_buffer()) return; 2*2 example: idx <= 1 return, 3*3 example: idx <= 2 return
+            //if (idx > 1 && idx > idx_input_buffer()) dont need this specification because > 1 always goes into selection between inputs
+            if (idx > 1 ) {//TODO look at it for 2*2 matrix it should start checking at idx 2 while not hindering the SCM and MCM case?
                 for (auto &dir : this->input_directions) {
                     for (auto w = 0; w < this->word_size; w++) {
-                        this->input_select_mux_output[{idx, dir}] += (
+                        this->input_select_mux_output[{idx, dir, v}] += (
                                 this->get_result_value(this->input_select_mux_output_variables[{idx, dir, w, v}]) << w);
                     }
                 }
                 if (this->calc_twos_complement)
-                    this->input_select_mux_output[{idx, mcm::left}] = sign_extend(
-                            this->input_select_mux_output[{idx, mcm::left}], this->word_size);
+                    this->input_select_mux_output[{idx, mcm::left, v}] = sign_extend(
+                            this->input_select_mux_output[{idx, mcm::left, v}], this->word_size);
                 if (this->calc_twos_complement)
-                    this->input_select_mux_output[{idx, mcm::right}] = sign_extend(
-                            this->input_select_mux_output[{idx, mcm::right}], this->word_size);
+                    this->input_select_mux_output[{idx, mcm::right, v}] = sign_extend(
+                            this->input_select_mux_output[{idx, mcm::right, v}], this->word_size);
                 input_node_idx_l = this->input_select[{idx, mcm::left}];
                 input_node_idx_r = this->input_select[{idx, mcm::right}];
-                actual_input_value_l = this->input_select_mux_output[{idx, mcm::left}];
-                actual_input_value_r = this->input_select_mux_output[{idx, mcm::right}];
+                actual_input_value_l = this->input_select_mux_output[{idx, mcm::left, v}];
+                actual_input_value_r = this->input_select_mux_output[{idx, mcm::right, v}];
             } else {
-                this->input_select_mux_output[{idx, mcm::left}] = this->input_select_mux_output[{idx, mcm::right}] = 1;
+                this->input_select_mux_output[{idx, mcm::left, v}] = this->input_select_mux_output[{idx, mcm::right, v}] = 1;
             }
             std::cout << "test where I left the function 2" << std::endl;
             std::cout << "valid value: " << valid << std::endl;
+            std::cout << "left_input_value: " << this->output_values[{input_node_idx_l,v}] << std::endl;
+            std::cout << "right_input_value: " << this->output_values[{input_node_idx_r,v}] << std::endl;
 
             int64_t left_input_value = this->output_values[{input_node_idx_l,v}];
             int64_t right_input_value = this->output_values[{input_node_idx_r,v}];
@@ -1419,6 +1433,7 @@ bool mcm::solution_is_valid() {
             for (int w = 0; w < this->word_size; w++) {
                 actual_shift_output += (this->get_result_value(this->shift_output_variables[{idx, w, v}]) << w);
                 std::cout << "shift_output_variables[{idx, w, v}: " << shift_output_variables[{idx, w, v}] << std::endl;
+                std::cout << "this->get_result_value(shift_output_variables[{idx, w, v}]): " << (this->get_result_value(this->shift_output_variables[{idx, w, v}]) << w)<< std::endl;
             }
             if (this->calc_twos_complement) actual_shift_output = sign_extend(actual_shift_output, this->word_size);
             if (this->verbosity == verbosity_mode::debug_mode) {
@@ -1428,9 +1443,6 @@ bool mcm::solution_is_valid() {
                 std::cout << "  output value = " << actual_shift_output << std::endl;
             }
             //TODO we fail here
-            std::cout << "expected_shift_output: " << expected_shift_output << std::endl;
-            std::cout << "actual_shift_output: " << actual_shift_output << std::endl;
-
             if (expected_shift_output != actual_shift_output) {
                 std::cout << "node #" << idx << " has invalid shift output" << std::endl;
                 std::cout << "  input value = " << left_input_value << std::endl;
@@ -1622,6 +1634,7 @@ bool mcm::solution_is_valid() {
         }
     }
 	return valid;
+	//return true;
 }
 
 void mcm::create_cnf_file() {
@@ -1737,18 +1750,58 @@ std::string mcm::get_adder_graph_description() {
 	if (!this->found_solution) return s.str();
 	s << "{";
 	std::map<int, int> stage;
-	stage[0] = 0;
-	for (int v=0; v<c_row_size(); v++) {
-        for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
-            // insert comma if needed
-            if (idx > (1 + idx_input_buffer())) s << ",";
-            // get left and right inputs and their shift
-            int left_idx;
-            int right_idx;
-            int left_input;
-            int right_input;
-            int left_shift;
-            int right_shift;
+	//build initial stage for inputs
+	for(int i=0; i <= idx_input_buffer(); i++){
+        stage[i] = i;
+	}
+
+	for (int idx = (1 + idx_input_buffer()); idx <= (this->num_adders + idx_input_buffer()); idx++) {
+        // get left and right inputs and their shift
+        int left_idx;
+        int right_idx;
+        int left_input;
+        int right_input;
+        int left_shift;
+        int right_shift;
+        int left_stage;
+        int right_stage;
+        int current_stage;
+        // for (int v=0; v<c_row_size(); v++) {
+        //     // insert comma if needed
+        //     if (idx > (1 + idx_input_buffer())) s << ",";
+        //     left_idx = this->input_select.at({idx, mcm::left});
+        //     right_idx = this->input_select.at({idx, mcm::right});
+        //     left_input = this->output_values.at({left_idx,v});
+        //     right_input = this->output_values.at({right_idx,v});
+        //     left_shift = this->shift_value.at(idx);
+        //     right_shift = 0;
+        //     // add/sub?
+        //     if (this->negate_select.at(idx) == 0) {
+        //         // swap again for subtract
+        //         int idx_cpy = left_idx;
+        //         int input_cpy = left_input;
+        //         int shift_cpy = left_shift;
+        //         left_idx = right_idx;
+        //         left_input = right_input;
+        //         left_shift = right_shift;
+        //         right_idx = idx_cpy;
+        //         right_input = input_cpy;
+        //         right_shift = shift_cpy;
+        //     }
+        //     if (this->subtract.at(idx) == 1) {
+        //         right_input *= -1;
+        //     }
+        //     // calc stage
+        //     left_stage = stage.at(left_idx);
+        //     right_stage = stage.at(right_idx);
+        //     current_stage = std::max(left_stage, right_stage) + 1;
+        //     stage[idx] = current_stage;
+        // }
+        // basic node info
+
+        //TODO there has to be a way to do this more efficient this ist pretty ugly
+        s << "{'A',[" ;
+        for (int v=0; v<c_row_size(); v++) {
             left_idx = this->input_select.at({idx, mcm::left});
             right_idx = this->input_select.at({idx, mcm::right});
             left_input = this->output_values.at({left_idx,v});
@@ -1772,22 +1825,97 @@ std::string mcm::get_adder_graph_description() {
                 right_input *= -1;
             }
             // calc stage
-            int left_stage = stage.at(left_idx);
-            int right_stage = stage.at(right_idx);
-            int current_stage = std::max(left_stage, right_stage) + 1;
+            left_stage = stage.at(left_idx);
+            right_stage = stage.at(right_idx);
+            current_stage = std::max(left_stage, right_stage) + 1;
             stage[idx] = current_stage;
-            // basic node info
-            s << "{'A',[" << this->output_values.at({idx,v}) << "]," << current_stage;
-            if (this->enable_node_output_shift) {
-                s << "," << this->post_adder_shift_value.at(idx);
-            }
-            // left input
-            s << ",[" << left_input << "]," << left_stage << "," << left_shift;
-            // right input
-            s << ",[" << right_input << "]," << right_stage << "," << right_shift;
-            // close bracket
-            s << "}";
+
+            s << this->output_values.at({idx,v});
+            if (v!= c_row_size()-1) s << ",";
         }
+        s << "]," << current_stage;
+        if (this->enable_node_output_shift) {
+            s << "," << this->post_adder_shift_value.at(idx);
+        }
+        // left input
+        s << ",[";
+        for (int v=0; v<c_row_size(); v++) {
+            left_idx = this->input_select.at({idx, mcm::left});
+            right_idx = this->input_select.at({idx, mcm::right});
+            left_input = this->output_values.at({left_idx,v});
+            right_input = this->output_values.at({right_idx,v});
+            left_shift = this->shift_value.at(idx);
+            right_shift = 0;
+            // add/sub?
+            if (this->negate_select.at(idx) == 0) {
+                // swap again for subtract
+                int idx_cpy = left_idx;
+                int input_cpy = left_input;
+                int shift_cpy = left_shift;
+                left_idx = right_idx;
+                left_input = right_input;
+                left_shift = right_shift;
+                right_idx = idx_cpy;
+                right_input = input_cpy;
+                right_shift = shift_cpy;
+            }
+            if (this->subtract.at(idx) == 1) {
+                right_input *= -1;
+            }
+            // calc stage
+            left_stage = stage.at(left_idx);
+            right_stage = stage.at(right_idx);
+            s << left_input;
+            if (v != c_row_size()-1) s << ",";
+        }
+        s << "]," << left_stage << "," << left_shift;
+        // right input
+        s << ",[";
+        for (int v=0; v<c_row_size(); v++) {
+            left_idx = this->input_select.at({idx, mcm::left});
+            right_idx = this->input_select.at({idx, mcm::right});
+            left_input = this->output_values.at({left_idx,v});
+            right_input = this->output_values.at({right_idx,v});
+            left_shift = this->shift_value.at(idx);
+            right_shift = 0;
+            // add/sub?
+            if (this->negate_select.at(idx) == 0) {
+                // swap again for subtract
+                int idx_cpy = left_idx;
+                int input_cpy = left_input;
+                int shift_cpy = left_shift;
+                left_idx = right_idx;
+                left_input = right_input;
+                left_shift = right_shift;
+                right_idx = idx_cpy;
+                right_input = input_cpy;
+                right_shift = shift_cpy;
+            }
+            if (this->subtract.at(idx) == 1) {
+                right_input *= -1;
+            }
+            // calc stage
+            left_stage = stage.at(left_idx);
+            right_stage = stage.at(right_idx);
+            s << right_input;
+            if (v != c_row_size()-1) s << ",";
+        }
+        s << "]," << right_stage << "," << right_shift;
+        // close bracket
+        s << "}";
+
+        // s <<"]";
+        // // basic node info
+        // s << "{'A',[" << this->output_values.at({idx,v}) << "]," << current_stage;
+        // if (this->enable_node_output_shift) {
+        //     s << "," << this->post_adder_shift_value.at(idx);
+        // }
+        // // left input
+        // s << ",[" << left_input << "]," << left_stage << "," << left_shift;
+        // // right input
+        // s << ",[" << right_input << "]," << right_stage << "," << right_shift;
+        // // close bracket
+        // s << "}";
     }
 	s << "}";
 	return s.str();
@@ -2535,7 +2663,7 @@ void mcm::solve_enumeration() {
                 int shifter_input_non_zero_LSBs = 0;
                 int shifter_input = 1;
                 if (idx > (1 + idx_input_buffer())) {
-                    shifter_input = this->input_select_mux_output.at({idx, mcm::left});
+                    shifter_input = this->input_select_mux_output.at({idx, mcm::left, v});
                 }
                 while ((shifter_input & 1) == 0) {
                     shifter_input = shifter_input >> 1;
@@ -2548,10 +2676,10 @@ void mcm::solve_enumeration() {
                     FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
                 }
                 auto can_cut_MSB =
-                        (this->output_values.at({idx,v}) >= 0 and this->input_select_mux_output[{idx, mcm::left}] >= 0) or
-                        (this->output_values.at({idx,v}) >= 0 and this->input_select_mux_output[{idx, mcm::right}] >= 0) or
-                        (this->output_values.at({idx,v}) < 0 and this->input_select_mux_output[{idx, mcm::left}] < 0) or
-                        (this->output_values.at({idx,v}) < 0 and this->input_select_mux_output[{idx, mcm::right}] < 0);
+                        (this->output_values.at({idx,v}) >= 0 and this->input_select_mux_output[{idx, mcm::left, v}] >= 0) or
+                        (this->output_values.at({idx,v}) >= 0 and this->input_select_mux_output[{idx, mcm::right, v}] >= 0) or
+                        (this->output_values.at({idx,v}) < 0 and this->input_select_mux_output[{idx, mcm::left, v}] < 0) or
+                        (this->output_values.at({idx,v}) < 0 and this->input_select_mux_output[{idx, mcm::right, v}] < 0);
                 if (can_cut_MSB) {
                     MSBs_cut++;
                 } else {
@@ -2665,7 +2793,7 @@ void mcm::solve_standard() {
                 int shifter_input_non_zero_LSBs = 0;
                 int shifter_input = 1;
                 if (idx > (1 + idx_input_buffer())) {
-                    shifter_input = this->input_select_mux_output.at({idx, mcm::left});
+                    shifter_input = this->input_select_mux_output.at({idx, mcm::left, v});
                 }
                 while ((shifter_input & 1) == 0) {
                     shifter_input = shifter_input >> 1;
@@ -2679,13 +2807,13 @@ void mcm::solve_standard() {
                 }
 
                 auto can_cut_MSB = (this->output_values.at({idx, v}) >= 0 and
-                                    this->input_select_mux_output[{idx, mcm::left}] >= 0) or
+                                    this->input_select_mux_output[{idx, mcm::left, v}] >= 0) or
                                    (this->output_values.at({idx, v}) >= 0 and
-                                    this->input_select_mux_output[{idx, mcm::right}] >= 0) or
+                                    this->input_select_mux_output[{idx, mcm::right, v}] >= 0) or
                                    (this->output_values.at({idx, v}) < 0 and
-                                    this->input_select_mux_output[{idx, mcm::left}] < 0) or
+                                    this->input_select_mux_output[{idx, mcm::left, v}] < 0) or
                                    (this->output_values.at({idx, v}) < 0 and
-                                    this->input_select_mux_output[{idx, mcm::right}] < 0);
+                                    this->input_select_mux_output[{idx, mcm::right, v}] < 0);
                 if (can_cut_MSB) {
                     MSBs_cut++;
                 } else {
