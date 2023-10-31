@@ -12,6 +12,10 @@
 #include <mcm_cadical.h>
 #endif
 
+#ifdef USE_KISSAT
+#include <mcm_kissat.h>
+#endif
+
 #ifdef USE_Z3
 #include <mcm_z3.h>
 #endif
@@ -34,6 +38,10 @@ int main(int argc, char** argv) {
 	bool enumerate_all = false;
 	int allow_coefficient_sign_inversion = 0;
 	int min_num_adders = -1;
+#ifdef USE_KISSAT
+    // kissat backend still in development!
+	solver_name = "kissat";
+#endif
 #ifdef USE_Z3
 	solver_name = "z3";
 #endif
@@ -46,7 +54,7 @@ int main(int argc, char** argv) {
 	if (argc == 1) {
 		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all>" << std::endl;
 		std::cout << "  => constant(s): <int:int:int>;<...>: colon-separated list of integers that should be computed" << std::endl;
-		std::cout << "  => solver name: <string>: cadical, z3, syrup are supported" << std::endl;
+		std::cout << "  => solver name: <string>: kissat, cadical, z3, syrup are supported" << std::endl;
 		std::cout << "  => timeout: <uint>: number of seconds allowed per SAT instance" << std::endl;
 		std::cout << "  => threads: <uint>: number of threads allowed to use" << std::endl;
 		std::cout << "  => quiet: <0/1>: suppress debug outputs by setting this to 1" << std::endl;
@@ -263,7 +271,14 @@ int main(int argc, char** argv) {
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
 #endif
-	}
+    }
+    else if (solver_name == "kissat") {
+#ifdef USE_KISSAT
+        solver = std::make_unique<mcm_kissat>(C, timeout, verbosity, allow_negative_numbers, write_cnf);
+#else
+        throw std::runtime_error("Link kissat lib to use kissat backend");
+#endif
+    }
 	else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
 #ifdef USE_SYRUP
 		solver = std::make_unique<mcm_syrup>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);

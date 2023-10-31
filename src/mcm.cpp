@@ -163,14 +163,14 @@ void mcm::solve() {
 }
 
 void mcm::reset_backend(formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
 }
 
 void mcm::construct_problem(formulation_mode mode) {
-	if (mode == formulation_mode::reset_all) {
+	if (mode == formulation_mode::reset_all or !this->supports_incremental_solving()) {
 		// only construct new variables in non-incremental mode
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating variables now" << std::endl;
 		this->create_variables();
@@ -714,7 +714,7 @@ int mcm::get_result_value(int var_idx) {
 }
 
 void mcm::create_input_output_constraints(formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	//inputs and outputs for SCM and MCM where input is only 1
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
@@ -754,7 +754,7 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 }
 
 void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
     if (idx < 2) return;
 	if (idx <= idx_input_buffer()) return;
@@ -857,7 +857,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_shift_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
     for(int v=0; v<c_row_size(); v++) {
         for (auto stage = 0; stage < this->shift_word_size; stage++) {
             auto shift_width = (1 << stage);
@@ -950,7 +950,7 @@ void mcm::create_shift_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
     for(int v=0; v<c_row_size(); v++) {
         for (auto stage = 0; stage < this->shift_word_size; stage++) {
             auto shift_width = (1 << stage);
@@ -1025,7 +1025,7 @@ void mcm::create_post_adder_shift_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	auto select_var_idx = this->input_negate_select_variables.at(idx);
     for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
@@ -1051,7 +1051,7 @@ void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_xor_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	auto negate_var_idx = this->input_negate_value_variables.at(idx);
     for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
@@ -1063,7 +1063,7 @@ void mcm::create_xor_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_adder_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
     for(int v=0; v<c_row_size(); v++) {
         for (int w = 0; w < this->word_size; w++) {
             int c_i;
@@ -1113,7 +1113,7 @@ void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
     if (idx <= 1) return;
     if (idx <= idx_input_buffer()) return;
     auto select_input_word_size = this->ceil_log2(idx);
@@ -1130,7 +1130,7 @@ void mcm::create_input_select_limitation_constraints(int idx, formulation_mode m
 }
 
 void mcm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
 	for (int w = 0; w < this->shift_word_size; w++) {
@@ -1142,7 +1142,7 @@ void mcm::create_shift_limitation_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	int max_representable_shift = (1 << this->shift_word_size) - 1;
 	std::vector<int> x(this->shift_word_size);
     for (int w = 0; w < this->shift_word_size; w++) {
@@ -1648,7 +1648,8 @@ void mcm::create_cnf_file() {
 	f.close();
 }
 void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
-    if (mode != formulation_mode::reset_all) return;
+    //TODO need supports incremental here aswell
+    if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 
     std::vector<int> input_bits(this->word_size);
 
@@ -1667,7 +1668,7 @@ void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
     }
 }
 void mcm::create_mcm_output_constraints(formulation_mode mode) {
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	for(int m=1; m<=c_column_size(); m++){
 	    std::vector<int> or_me;
 	    for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
@@ -1721,7 +1722,7 @@ void mcm::create_mcm_output_variables(int idx) {
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
     if(idx_input_buffer() > 0) return;
     //this constraint is not needed for CMM and SOP
-	if (mode != formulation_mode::reset_all) return;
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
     for(int v=0; v<c_row_size(); v++) {
         this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
     }
@@ -1964,7 +1965,7 @@ bool mcm::vector_all_positive(std::vector<int> v){
 }
 
 void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	std::vector<int> abs_coeff_bits(this->word_size);
     for(int v=0; v<c_row_size(); v++) {
         if (this->calc_twos_complement) {
@@ -2077,7 +2078,7 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
 }
 
 void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
-    if (mode == formulation_mode::only_FA_limit) return;
+    if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
     for (int v = 0; v <c_row_size(); v++) {
         if (!this->calc_twos_complement) {
             // can always cut MSB because all coefficients are positive
@@ -2137,7 +2138,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 }
 
 void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
 	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
 		// no addition necessary -> just set container with variables
@@ -2169,7 +2170,7 @@ void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation
 }
 
 void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	for (int w = 0; w < this->shift_word_size; w++) {
 		auto var = this->full_adder_shift_gain_variables[{idx, w}] = ++this->variable_counter;
 		this->create_new_variable(this->variable_counter);
@@ -2217,7 +2218,7 @@ void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 }
 
 void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
 	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
 		// no addition necessary -> just set container with variables
@@ -2248,7 +2249,7 @@ void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode
 }
 
 void mcm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	if (this->num_adders == 1) {
 		// no addition necessary -> just set container with variable
 		this->full_adder_msb_sum_variables[0] = this->full_adder_msb_variables.at(1);
@@ -2267,7 +2268,7 @@ void mcm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
 }
 
 void mcm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	// result = shift_result[last_stage] + msb_sum
 	auto word_size_left_input = this->ceil_log2(this->num_adders * this->max_shift + 1);
 	auto word_size_right_input = this->ceil_log2(this->num_adders + 1);
@@ -2289,7 +2290,7 @@ void mcm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mod
 }
 
 void mcm::create_full_adder_cpa_constraints(formulation_mode mode) {
-	if (mode == formulation_mode::only_FA_limit) return;
+	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	// result = num_bits[last_stage] - (shift_result[last_stage] + msb_sum)
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
 	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);

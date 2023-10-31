@@ -38,11 +38,26 @@ ELSE (CADICAL_LIB AND CADICAL_H)
     message(STATUS "Could not find CaDiCaL (${CADICAL_LIB} and ${CADICAL_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
 ENDIF (CADICAL_LIB AND CADICAL_H)
 
+# find kissat
+find_library(KISSAT_LIB
+        NAMES libkissatpp.so libkissatpp.a libkissatpp.dylib
+        DOC "Directory of the kissat library")
+FIND_PATH(KISSAT_H
+        kissatpp.hpp
+        DOC "Path to main kissat header file kissatpp.hpp"
+        )
+IF (KISSAT_LIB AND KISSAT_H)
+    message(STATUS "Found kissat: ${KISSAT_LIB} and ${KISSAT_H}")
+    add_definitions(-DUSE_KISSAT)
+ELSE (KISSAT_LIB AND KISSAT_H)
+    message(STATUS "Could not find kissat (${KISSAT_LIB} and ${KISSAT_H}). Please specify path by including it in CMAKE_PREFIX_PATH (-DCMAKE_PREFIX_PATH=...)")
+ENDIF (KISSAT_LIB AND KISSAT_H)
+
 # find pthread lib for Glucose Syrup
 find_library(PTHREAD_LIB
         NAMES libpthread.so libpthread.a libpthread.dylib
         DOC "pthread lib used by Glucose Syrup"
-)
+        )
 
 # find Glucose Syrup
 find_library(SYRUP_LIB
@@ -69,6 +84,7 @@ file(GLOB lib_sources
 
         # derived classes
         src/mcm_cadical.cpp
+        src/mcm_kissat.cpp
         src/mcm_z3.cpp
         src/mcm_syrup.cpp
         )
@@ -79,6 +95,7 @@ file(GLOB header_sources
 
         # derived classes
         src/mcm_cadical.h
+        src/mcm_kissat.h
         src/mcm_z3.h
         src/mcm_syrup.h
         )
@@ -98,6 +115,9 @@ ENDIF(Z3_H)
 if(CADICAL_H)
     target_include_directories(satmcm-lib PUBLIC ${CADICAL_H})
 ENDIF(CADICAL_H)
+if(KISSAT_H)
+    target_include_directories(satmcm-lib PUBLIC ${KISSAT_H})
+ENDIF(KISSAT_H)
 if(SYRUP_H)
     target_include_directories(satmcm-lib PUBLIC ${SYRUP_H})
 ENDIF(SYRUP_H)
@@ -109,6 +129,9 @@ ENDIF(Z3_LIB)
 if(CADICAL_LIB)
     target_link_libraries(satmcm-lib PUBLIC ${CADICAL_LIB})
 ENDIF(CADICAL_LIB)
+if(KISSAT_LIB)
+    target_link_libraries(satmcm-lib PUBLIC ${KISSAT_LIB})
+ENDIF(KISSAT_LIB)
 if(PTHREAD_LIB)
     target_link_libraries(satmcm-lib PUBLIC ${PTHREAD_LIB})
 ENDIF(PTHREAD_LIB)

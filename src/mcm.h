@@ -487,6 +487,11 @@ protected:
 	 * whether we also allow a shift at each node's output
 	 */
 	bool enable_node_output_shift = false;
+    /*!
+    * whether the solver supports incremental solving
+    * @return default = true (overload derived class if this is not the case)
+    */
+    virtual bool supports_incremental_solving() { return true; }
 
 private:
 	/*!
