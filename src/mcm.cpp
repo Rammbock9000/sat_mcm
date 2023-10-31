@@ -186,9 +186,7 @@ void mcm::construct_problem(formulation_mode mode) {
 void mcm::create_variables() {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating input node variables" << std::endl;
 	this->create_input_node_variables();
-	for (int i=idx_input_buffer() + 1; i<=(this->num_adders + idx_input_buffer()); i++) { //TODO done
-	    //test
-	    //if(i == 5)exit(0);
+	for (int i=idx_input_buffer() + 1; i<=(this->num_adders + idx_input_buffer()); i++) {
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating variables for node " << i << std::endl;
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_mux_variables" << std::endl;
 		this->create_input_select_mux_variables(i);
@@ -227,7 +225,7 @@ void mcm::create_variables() {
 void mcm::create_constraints(formulation_mode mode) {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      create_input_output_constraints" << std::endl;
 	this->create_input_output_constraints(mode);
-	for (int i=idx_input_buffer() + 1; i<=(this->num_adders + idx_input_buffer()); i++) { //TODO done
+	for (int i=idx_input_buffer() + 1; i<=(this->num_adders + idx_input_buffer()); i++) {
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating constraints for node " << i << std::endl;
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_constraints" << std::endl;
 		this->create_input_select_constraints(i, mode);
@@ -278,7 +276,6 @@ void mcm::create_constraints(formulation_mode mode) {
 
 void mcm::create_input_node_variables() {
     for(int v=0; v<c_row_size(); v++) {
-        //TODO done idx_input_buffer()+1 amount of input variables
         for (int idx = 0; idx <= idx_input_buffer(); idx++) {
             for (int i = 0; i < this->word_size; i++) {
                 this->output_value_variables[{idx, i, v}] = ++this->variable_counter;
@@ -290,7 +287,7 @@ void mcm::create_input_node_variables() {
 
 void mcm::create_input_select_mux_variables(int idx) {
     if (idx < 2) return;
-	if (idx <= idx_input_buffer()) return; //TODO done
+	if (idx <= idx_input_buffer()) return;
 	//example 3x3 matrix: idx <= 2
 	auto select_word_size = this->ceil_log2(idx);
 #if INPUT_SELECT_MUX_OPT
@@ -321,7 +318,7 @@ void mcm::create_input_select_mux_variables(int idx) {
 
 void mcm::create_input_select_selection_variables(int idx) {
     if (idx == 1) return;
-	if (idx <= idx_input_buffer()) return; //TODO done not 100% sure
+	if (idx <= idx_input_buffer()) return;
     //example 3x3 matrix: idx <= (1 + 2)
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir : input_directions) {
@@ -759,7 +756,6 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
-	//TODO done i think
     if (idx < 2) return;
 	if (idx <= idx_input_buffer()) return;
 
@@ -817,7 +813,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 #else
 		    for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
 			    auto num_muxs_per_stage = (1 << mux_stage);
-			    auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1}); // mux_stage //TODO look later, add idx_buffer?
+			    auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1});
 			    for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
 				    if (mux_stage == select_word_size-1) {
 					    // connect with another node output
@@ -874,9 +870,9 @@ void mcm::create_shift_constraints(int idx, formulation_mode mode) {
                 int zero_input_sign_bit_idx;
                 int one_input_var_idx;
                 auto mux_output_var_idx = this->shift_internal_mux_output_variables.at({idx, stage, w, v});
-                if (stage == 0) {//TODO whats up with the stage
+                if (stage == 0) {
                     // connect shifter inputs
-                    if (idx <= 1){//TODO not sure yet, I think just SCM and MCM case here, CMM would start with atleast idx = 2
+                    if (idx <= 1){
                         // shifter input is the output of the input node with idx = 0
                         zero_input_var_idx = this->output_value_variables.at({0, w, v});
                         zero_input_sign_bit_idx = this->output_value_variables.at({0, this->word_size - 1, v});
@@ -1035,7 +1031,7 @@ void mcm::create_negate_select_constraints(int idx, formulation_mode mode) {
         for (int w = 0; w < this->word_size; w++) {
             auto left_input_var_idx = this->shift_output_variables.at({idx, w, v});
             int right_input_var_idx;
-            if (idx == 1){//TODO not sure yet, I think just SCM and MCM case here, CMM would start with atleast idx = 2
+            if (idx == 1){
                 // right input is the output of the input node with idx = 0
                 right_input_var_idx = this->output_value_variables.at({0, w, v});
             } else {
@@ -1119,7 +1115,7 @@ void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 void mcm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all) return;
     if (idx <= 1) return;
-    if (idx <= idx_input_buffer()) return; // TODO done
+    if (idx <= idx_input_buffer()) return;
     auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
     for (auto &dir : this->input_directions) {
@@ -1178,7 +1174,6 @@ void mcm::get_solution_from_backend() {
             // output_values
             this->output_values[{idx,v}] = 0;
             for (int w = 0; w < this->word_size; w++) {
-                //TODO problem here 'std::out_of_range' with range being '+ idx_input_buffer()' should be solved now
                 this->output_values[{idx,v}] += (this->get_result_value(this->output_value_variables.at({idx, w, v})) << w);
             }
             if (this->calc_twos_complement)
@@ -1291,6 +1286,7 @@ void mcm::print_solution() {
 		    }
 			std::cout << " >" <<std::endl;
 		}
+		//ToDo make it look good for vector inputs
         for (int v=0; v<c_row_size(); v++) {
             std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
 
@@ -1344,15 +1340,10 @@ bool mcm::solution_is_valid() {
             int64_t input_node_idx_l = 0;
             int64_t input_node_idx_r = 0;
 
-            //TODO doesn't matter for CMM because never default value there
             int64_t actual_input_value_l = 1;
             int64_t actual_input_value_r = 1;
 
-            //select_input_constraints idx clause:
-            //if (idx < 2) return;
-            //if (idx <= idx_input_buffer()) return; 2*2 example: idx <= 1 return, 3*3 example: idx <= 2 return
-            //if (idx > 1 && idx > idx_input_buffer()) dont need this specification because > 1 always goes into selection between inputs
-            if (idx > 1 ) {//TODO look at it for 2*2 matrix it should start checking at idx 2 while not hindering the SCM and MCM case?
+            if (idx > 1 ) {
                 for (auto &dir : this->input_directions) {
                     for (auto w = 0; w < this->word_size; w++) {
                         this->input_select_mux_output[{idx, dir, v}] += (
@@ -1442,7 +1433,6 @@ bool mcm::solution_is_valid() {
                 std::cout << "  shift value = " << this->shift_value[idx] << std::endl;
                 std::cout << "  output value = " << actual_shift_output << std::endl;
             }
-            //TODO we fail here
             if (expected_shift_output != actual_shift_output) {
                 std::cout << "node #" << idx << " has invalid shift output" << std::endl;
                 std::cout << "  input value = " << left_input_value << std::endl;
@@ -1658,7 +1648,6 @@ void mcm::create_cnf_file() {
 	f.close();
 }
 void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
-    //TODO proof if working as intended
     if (mode != formulation_mode::reset_all) return;
 
     std::vector<int> input_bits(this->word_size);
@@ -1730,6 +1719,8 @@ void mcm::create_mcm_output_variables(int idx) {
 }
 
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
+    if(idx_input_buffer() > 0) return;
+    //this constraint is not needed for CMM and SOP
 	if (mode != formulation_mode::reset_all) return;
     for(int v=0; v<c_row_size(); v++) {
         this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
@@ -1797,9 +1788,10 @@ std::string mcm::get_adder_graph_description() {
         //     current_stage = std::max(left_stage, right_stage) + 1;
         //     stage[idx] = current_stage;
         // }
-        // basic node info
 
-        //TODO there has to be a way to do this more efficient this ist pretty ugly
+        //TODO there has to be a way to do this more efficient this is pretty ugly
+
+        // basic node info
         s << "{'A',[" ;
         for (int v=0; v<c_row_size(); v++) {
             left_idx = this->input_select.at({idx, mcm::left});
@@ -1837,6 +1829,7 @@ std::string mcm::get_adder_graph_description() {
         if (this->enable_node_output_shift) {
             s << "," << this->post_adder_shift_value.at(idx);
         }
+
         // left input
         s << ",[";
         for (int v=0; v<c_row_size(); v++) {
@@ -1869,6 +1862,7 @@ std::string mcm::get_adder_graph_description() {
             if (v != c_row_size()-1) s << ",";
         }
         s << "]," << left_stage << "," << left_shift;
+
         // right input
         s << ",[";
         for (int v=0; v<c_row_size(); v++) {
@@ -2095,7 +2089,6 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
         auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
         this->create_new_variable(this->variable_counter);
         int s_c = this->adder_output_value_variables.at({idx, this->word_size - 1, v});
-        //if (idx == 1) { //TODO changed "==" => "<=" do i need idx > 0?
         if (idx <= (1 + idx_input_buffer()) && idx >0) {
             // m = not s_c
             this->create_1x1_negated_implication(s_c, m);
@@ -2146,7 +2139,6 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->word_size+1);
-    //if (idx == 1)//TODO changed "==" => "<=" do i need idx > 0?
 	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
 		// no addition necessary -> just set container with variables
 		for (int w=0; w<num_bits_word_size; w++) {
@@ -2227,7 +2219,6 @@ void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift+1);
-    //if (idx == 1)//TODO changed "==" => "<=" do i need idx > 0?
 	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
 		// no addition necessary -> just set container with variables
 		for (int w=0; w<num_bits_word_size; w++) {
