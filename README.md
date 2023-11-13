@@ -1,3 +1,8 @@
+ATTENTION: 
+This is a work-in-progress solution for a constant matrix multiplication (CMM) extension
+For the (hopefully stable) MCM version checkout the following commit:
+"a37c145bc9dc4f45ca05793556c1e8774b398525"
+
 Installation instructions
 
 This project is set up to be extendable to various SAT backends.

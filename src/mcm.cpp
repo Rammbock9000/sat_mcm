@@ -2599,6 +2599,14 @@ void mcm::solve_enumeration() {
 			}
 			std::cout << std::endl;
 		}
+        else if (this->c_column_size() == 1) {
+            std::cout << "Trying to solve SOP problem for following constants: ";
+            for (auto &v : this->C) {
+                for (auto &c : v)
+                    std::cout << "  " << c;
+            }
+            std::cout << std::endl;
+        }
 		else{
             std::cout << "Trying to solve CMM problem for following vectors: ";
             for (auto &v : this->C) {
@@ -2718,6 +2726,14 @@ void mcm::solve_standard() {
         }
         else if (this->c_row_size() == 1){
             std::cout << "Trying to solve MCM problem for following constants: ";
+            for (auto &v : this->C) {
+                for (auto &c : v)
+                    std::cout << "  " << c;
+            }
+            std::cout << std::endl;
+        }
+        else if (this->c_column_size() == 1) {
+            std::cout << "Trying to solve SOP problem for following constants: ";
             for (auto &v : this->C) {
                 for (auto &c : v)
                     std::cout << "  " << c;
