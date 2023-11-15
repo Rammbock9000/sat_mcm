@@ -16,16 +16,17 @@
 
 mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf)
 	:	C(C), timeout(timeout), verbosity(verbosity), threads(threads), write_cnf(write_cnf) {
-	// make it even and count shift
+    // make it even and count shift
     this->calc_twos_complement = allow_negative_numbers;
-	for (auto &v : this->C) {
+    for (auto &v : this->C) {
         // ignore 0 vector
         if (std::all_of(v.begin(), v.end(), [](int i) { return i == 0; }))
             continue; // c==0 before, now all values in v == 0
         auto original_vector = v;
         int shifted_bits = 0;
         // right shift until odd
-        std::cout << "entry of vector has no odd value: " << std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); }) << std::endl;
+        std::cout << "entry of vector has no odd value: "
+                  << std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); }) << std::endl;
         while (std::all_of(v.begin(), v.end(), [](int i) { return ((i & 1) == 0); })) {
             for (auto &c : v) {
                 std::cout << "entry of vector: " << c << std::endl;
@@ -53,15 +54,24 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
         }
         //flip the sign of all values in the vector if its requested
         if (this->inverted_coeff_requested[v]) {
-        for (auto &c : v) {
-            std::cout << "flipping sign of entry  " << c ;
-            if (c == 0) continue;
-            c = -c;
-            std::cout << " ----> " << c << std::endl;
+            for (auto &c : v) {
+                std::cout << "flipping sign of entry  " << c;
+                if (c == 0) continue;
+                c = -c;
+                std::cout << " ----> " << c << std::endl;
             }
         }
         this->requested_vectors[original_vector] = {v, shifted_bits};
-	}
+    }
+    //check if C has negative values while negative numbers are not allowd an throw an error
+    for (auto &v : this->C) {
+        for (auto &c : v) {
+            if (c < 0 and !allow_negative_numbers) {
+                //throw an exception
+                throw std::invalid_argument( "input contains negative number(s) while  allow negative coefficients is set to 0" );
+            }
+        }
+    }
 	// set word sizes & track unique constants
 	this->word_size = 1;
 	std::set<std::vector<int>> non_one_unique_vectors;
@@ -214,10 +224,12 @@ void mcm::create_variables() {
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
-		if (this->c_column_size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0][0]])) {
+		//old code
+/*		if (this->c_column_size() != 1 or (this->calc_twos_complement and this->sign_inversion_allowed[this->C[0][0]])) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_mcm_output_variables" << std::endl;
 			this->create_mcm_output_variables(i);
-		}
+		}*/
+        this->create_mcm_output_variables(i);
 		// full adder variables are constructed "on the fly" and put into their containers
 	}
 }
@@ -715,6 +727,9 @@ int mcm::get_result_value(int var_idx) {
 
 void mcm::create_input_output_constraints(formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+
+    //this whole block is replaced by the generic functions: create_mcm_input_constraints(mode) and  create_mcm_output_constraints(mode)
+/*
 	//inputs and outputs for SCM and MCM where input is only 1
 	std::vector<int> input_bits(this->word_size);
 	std::vector<int> output_bits(this->word_size);
@@ -727,30 +742,34 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
         //std::cout<<"output bits: "<< output_bits[w] <<std::endl;
 	}
 
+
 	// force input to 1 and output to C[0][0]
 	if (this->c_row_size() == 1 and this->c_column_size() == 1 and (!this->calc_twos_complement or !this->sign_inversion_allowed[this->C[0][0]])) {
-		// SCM
-        this->force_number(input_bits, 1);
-		this->force_number(output_bits, this->C[0][0]);
+        // SCM
+        //this->force_number(input_bits, 1);
+        //this->force_number(output_bits, this->C[0][0]);
 	}
 	else {
 	    if(this->c_row_size() == 1) {
             // force input to 1 and build MCM output constraints
             // MCM
-            this->force_number(input_bits, 1);
-            this->create_mcm_output_constraints(mode);
+            //this->force_number(input_bits, 1);
+            //this->create_mcm_output_constraints(mode);
         } else if(this->c_column_size() == 1) {
             // force input to unit vectors and outputs to C[0][0]
 	        // SOP
-            this->create_mcm_input_constraints(mode);
-            this->force_number(output_bits, this->C[0][0]);
+            //this->create_mcm_input_constraints(mode);
+            //this->force_number(output_bits, this->C[0][0]);
         } else {
             // force input to unit vectors and build CMM output constraints
             // CMM
-            this->create_mcm_input_constraints(mode);
-            this->create_mcm_output_constraints(mode);
+            //this->create_mcm_input_constraints(mode);
+            //this->create_mcm_output_constraints(mode);
         }
-	}
+	}*/
+
+    this->create_mcm_input_constraints(mode);
+    this->create_mcm_output_constraints(mode);
 }
 
 void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
