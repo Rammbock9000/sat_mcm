@@ -164,6 +164,9 @@ void mcm::optimization_loop(formulation_mode mode) {
 }
 
 void mcm::solve() {
+	// preprocessing for adder depth minimization
+	this->compute_opt_adder_depth_value();
+	// actually solve
 	if (this->enumerate_all) {
 		this->solve_enumeration();
 	}
@@ -180,6 +183,12 @@ void mcm::reset_backend(formulation_mode mode) {
 }
 
 void mcm::construct_problem(formulation_mode mode) {
+	// compute stage word size if needed
+	if (this->force_min_adder_depth) {
+		// allocate enough bits to represent the worst case
+		// i.e., all adders connected in a chain
+		this->adder_depth_word_size = this->ceil_log2(this->num_adders + 1);
+	}
 	if (mode == formulation_mode::reset_all or !this->supports_incremental_solving()) {
 		// only construct new variables in non-incremental mode
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating variables now" << std::endl;
@@ -196,6 +205,7 @@ void mcm::construct_problem(formulation_mode mode) {
 void mcm::create_variables() {
 	if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating input node variables" << std::endl;
 	this->create_input_node_variables();
+	this->create_input_node_depth_variables();
 	for (int i=idx_input_buffer() + 1; i<=(this->num_adders + idx_input_buffer()); i++) {
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "      creating variables for node " << i << std::endl;
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_input_select_mux_variables" << std::endl;
@@ -221,6 +231,10 @@ void mcm::create_variables() {
 			this->create_post_adder_input_shift_value_variables(i);
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_variables" << std::endl;
 			this->create_post_adder_shift_variables(i);
+		}
+		if (this->force_min_adder_depth) {
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_variables" << std::endl;
+			this->create_adder_depth_variables(i);
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
@@ -273,6 +287,16 @@ void mcm::create_constraints(formulation_mode mode) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
 			this->create_full_adder_shift_sum_constraints(i, mode);
 		}
+		if (this->force_min_adder_depth) {
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_select_constraints" << std::endl;
+			this->create_adder_depth_computation_select_constraints(i, mode);
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_max_constraints" << std::endl;
+			this->create_adder_depth_computation_max_constraints(i, mode);
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_add_constraints" << std::endl;
+			this->create_adder_depth_computation_add_constraints(i, mode);
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_limit_constraints" << std::endl;
+			this->create_adder_depth_computation_limit_constraints(i, mode);
+		}
 	}
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_msb_sum_constraints" << std::endl;
@@ -297,8 +321,18 @@ void mcm::create_input_node_variables() {
     }
 }
 
+void mcm::create_input_node_depth_variables() {
+	if (!this->force_min_adder_depth) return;
+	// force adder depth for all inputs to zero
+	for (int idx = 0; idx <= idx_input_buffer(); idx++) {
+		for (int w = 0; w < this->adder_depth_word_size; w++) {
+			this->adder_depth_variables[{idx, w}] = this->init_const_zero_bit();
+		}
+	}
+}
+
 void mcm::create_input_select_mux_variables(int idx) {
-    if (idx < 2) return;
+	if (idx < 2) return;
 	if (idx <= idx_input_buffer()) return;
 	//example 3x3 matrix: idx <= 2
 	auto select_word_size = this->ceil_log2(idx);
@@ -441,6 +475,78 @@ void mcm::create_output_value_variables(int idx) {
             }
         }
     }
+}
+
+void mcm::create_adder_depth_variables(int idx) {
+	/*
+	 *
+	 *
+	 * #if INPUT_SELECT_MUX_OPT
+	auto num_muxs = idx-1;
+#else
+	auto num_muxs = (1 << select_word_size) - 1;
+#endif
+    for(int v=0; v<c_row_size(); v++) {
+        for (auto &dir : input_directions) {
+            for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
+                for (int w = 0; w < this->word_size; w++) {
+                    this->input_select_mux_variables[{idx, dir, mux_idx, w, v}] = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
+#if INPUT_SELECT_MUX_OPT
+                    if (mux_idx == num_muxs-1) {
+                        this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
+                    }
+#else
+                    if (mux_idx == 0) {
+                        this->input_select_mux_output_variables[{idx, dir, w, v}] = this->variable_counter;
+                    }
+#endif
+                }
+            }
+        }
+    }
+	 */
+	// max value up until this adder node = idx
+	int max_value_num_bits = this->ceil_log2(idx+1);
+	// number of multiplexers
+	auto select_word_size = this->ceil_log2(idx);
+#if INPUT_SELECT_MUX_OPT
+	auto num_muxs = idx-1;
+#else
+	auto num_muxs = (1 << select_word_size) - 1;
+#endif
+	// create exactly enough decision variables for the solver and pad the remaining MSBs with zeros
+	for (int w = 0; w < this->adder_depth_word_size; w++) {
+		// left/right input select values
+		for (auto &dir : this->input_directions) {
+			for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
+				this->adder_depth_computation_input_mux_variables[{idx, dir, mux_idx, w}] = ++this->variable_counter;
+				this->create_new_variable(this->variable_counter);
+#if INPUT_SELECT_MUX_OPT
+				if (mux_idx == num_muxs-1) {
+						this->adder_depth_computation_input_variables[{idx, dir, w}] = this->variable_counter;
+				}
+#else
+				if (mux_idx == 0) {
+					this->adder_depth_computation_input_variables[{idx, dir, w}] = this->variable_counter;
+				}
+#endif
+			}
+		}
+		// max computation result value
+		this->adder_depth_computation_max_variables[{idx, w}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		// adder depth output value
+		if (w < max_value_num_bits) {
+			// create new variable
+			this->adder_depth_variables[{idx, w}] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
+		else {
+			// fill with zeros
+			this->adder_depth_variables[{idx, w}] = this->init_const_zero_bit();
+		}
+	}
 }
 
 int mcm::ceil_log2(int n) {
@@ -775,7 +881,7 @@ void mcm::create_input_output_constraints(formulation_mode mode) {
 void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
-    if (idx < 2) return;
+	if (idx < 2) return;
 	if (idx <= idx_input_buffer()) return;
 
 	//create constraints for all muxs
@@ -1169,6 +1275,180 @@ void mcm::create_post_adder_shift_limitation_constraints(int idx, formulation_mo
     }
 	for (int forbidden_number = max_representable_shift; forbidden_number > this->max_shift; forbidden_number--) {
 		this->forbid_number(x, forbidden_number);
+	}
+}
+
+void mcm::create_adder_depth_computation_select_constraints(int idx, formulation_mode mode) {
+	// selection is based on this->input_select_selection_variables
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
+	if (idx < 2) return;
+	if (idx <= idx_input_buffer()) return;
+
+	//create constraints for all muxs
+	if (this->verbosity == verbosity_mode::debug_mode) {
+		std::cout << "creating adder depth computation select constraints for node #" << idx << std::endl;
+	}
+	auto select_word_size = this->ceil_log2(idx);
+	auto next_pow_two = (1 << select_word_size);
+	for (auto &dir : this->input_directions) {
+		int mux_idx = 0;
+		std::map<std::pair<int, int>, int> signal_variables;
+		for (int i=0; i<idx; i++) {
+			for (int w=0; w<this->adder_depth_word_size; w++) {
+				signal_variables[{i, w}] = this->adder_depth_variables.at({i, w});
+			}
+		}
+		std::map<std::pair<int, int>, int> next_signal_variables;
+		auto num_signals = idx;
+		auto next_num_signals = 0;
+#if INPUT_SELECT_MUX_OPT
+		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
+		auto num_muxs_per_stage = next_pow_two >> (mux_stage+1);
+		for (int mux_idx_per_stage = 0; mux_idx_per_stage < num_muxs_per_stage; mux_idx_per_stage++) {
+			if (num_signals >= 2*(mux_idx_per_stage+1)) {
+				// connect two signals from last stage to mux
+				auto select_signal = this->input_select_selection_variables.at({idx, dir, mux_stage});
+				for (int w = 0; w < this->adder_depth_word_size; w++) {
+					auto zero_input = signal_variables.at({2*mux_idx_per_stage, w});
+					auto one_input = signal_variables.at({2*mux_idx_per_stage+1, w});
+					auto mux_output = this->adder_depth_computation_input_mux_variables.at({idx, dir, mux_idx, w});
+					next_signal_variables[{mux_idx_per_stage, w}] = mux_output;
+					this->create_2x1_mux(zero_input, one_input, select_signal, mux_output);
+				}
+				next_num_signals++;
+				mux_idx++;
+			}
+			else if (num_signals == 2*(mux_idx_per_stage+1)-1) {
+				// only 1 signal left -> use it as an input to the next stage
+				for (int w = 0; w < this->adder_depth_word_size; w++) {
+					next_signal_variables[{mux_idx_per_stage, w}] = signal_variables.at({2*mux_idx_per_stage, w});
+				}
+				next_num_signals++;
+			}
+			else {
+				// handled all signals of this stage
+				break;
+			}
+		}
+		// update counter & container
+		num_signals = next_num_signals;
+		signal_variables = next_signal_variables;
+	}
+#else
+		for (int mux_stage = 0; mux_stage < select_word_size; mux_stage++) {
+			auto num_muxs_per_stage = (1 << mux_stage);
+			auto mux_select_var_idx = this->input_select_selection_variables.at({idx, dir, select_word_size-mux_stage-1});
+			for (int mux_idx_in_stage = 0; mux_idx_in_stage < num_muxs_per_stage; mux_idx_in_stage++) {
+				if (mux_stage == select_word_size-1) {
+					// connect with another node output
+					auto zero_input_node_idx = 2 * mux_idx_in_stage;
+					auto one_input_node_idx = zero_input_node_idx + 1;
+					if (zero_input_node_idx >= idx) zero_input_node_idx = idx-1;
+					if (one_input_node_idx >= idx) one_input_node_idx = idx-1;
+					for (int w = 0; w < this->adder_depth_word_size; w++) {
+						auto mux_output_var_idx = this->adder_depth_computation_input_mux_variables.at({idx, dir, mux_idx, w});
+						auto zero_input_var_idx = this->adder_depth_variables.at({zero_input_node_idx, w});
+						auto one_input_var_idx = this->adder_depth_variables.at({one_input_node_idx, w});
+						if (zero_input_node_idx == one_input_node_idx) {
+							// both inputs are equal -> mux output == mux input (select line does not matter...)
+							this->create_1x1_equivalence(zero_input_var_idx, mux_output_var_idx);
+						}
+						else {
+							this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
+						}
+					}
+				}
+				else {
+					// connect with mux from higher stage
+					auto num_muxs_in_next_stage = (1 << (mux_stage + 1));
+					auto zero_mux_idx_in_next_stage = 2 * mux_idx_in_stage;
+					auto zero_input_mux_idx = num_muxs_in_next_stage - 1 + zero_mux_idx_in_next_stage;
+					auto one_input_mux_idx = zero_input_mux_idx + 1;
+					for (int w = 0; w < this->adder_depth_word_size; w++) {
+						auto mux_output_var_idx = this->adder_depth_computation_input_mux_variables.at({idx, dir, mux_idx, w});
+						auto zero_input_var_idx = this->adder_depth_computation_input_mux_variables.at({idx, dir, zero_input_mux_idx, w});
+						auto one_input_var_idx = this->adder_depth_computation_input_mux_variables.at({idx, dir, one_input_mux_idx, w});
+						this->create_2x1_mux(zero_input_var_idx, one_input_var_idx, mux_select_var_idx, mux_output_var_idx);
+					}
+				}
+				// increment current mux idx
+				mux_idx++;
+			}
+		}
+#endif
+	}
+}
+
+void mcm::create_adder_depth_computation_max_constraints(int idx, formulation_mode mode) {
+	// the VERY FIRST adder node must be connected to one of the inputs
+	// => the max is always zero
+	if (idx == this->c_row_size()) {
+		for (int w = 0; w < this->adder_depth_word_size; w++) {
+			this->force_bit(this->adder_depth_computation_max_variables.at({idx, w}), 0);
+		}
+		return;
+	}
+	// compute c = max(a, b)
+	int x_i = this->init_const_zero_bit();
+	int y_i = this->init_const_zero_bit();
+	for (int w = this->adder_depth_word_size-1; w >= 0; w--) {
+		int x_o;
+		int y_o;
+		if (w > 0) {
+			x_o = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+			y_o = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
+		else {
+			x_o = -1;
+			y_o = -1;
+		}
+		auto a_i = this->adder_depth_computation_input_variables.at({idx, input_direction::left, w});
+		auto b_i = this->adder_depth_computation_input_variables.at({idx, input_direction::right, w});
+		auto c_o = this->adder_depth_computation_max_variables.at({idx, w});
+		this->create_max_cell(a_i, b_i, x_i, y_i, c_o, x_o, y_o);
+		x_i = x_o;
+		y_i = y_o;
+	}
+}
+
+void mcm::create_adder_depth_computation_add_constraints(int idx, formulation_mode mode) {
+	// increment by 1 to increase adder depth count
+	// just use a ripple-carry adder based on half adders for this
+	int b = this->init_const_one_bit();
+	for (int w = 0; w < this->adder_depth_word_size; w++) {
+		int c_o;
+		if (w < this->adder_depth_word_size-1) {
+			c_o = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
+		else {
+			c_o = -1;
+		}
+		auto a = this->adder_depth_computation_max_variables.at({idx, w});
+		auto sum = this->adder_depth_variables.at({idx, w});
+		this->create_half_adder({a, false}, {b, false}, {sum, false}, {c_o, false});
+		b = c_o;
+	}
+}
+
+void mcm::create_adder_depth_computation_limit_constraints(int idx, mcm::formulation_mode mode) {
+	// prohibit solutions with too large adder depth
+	int upper_limit = this->opt_adder_depth - 1;
+	std::vector<std::pair<int, bool>> clause_prototype;
+	for (int w = this->adder_depth_word_size-1; w >= 0; w--) {
+		auto upper_limit_bit = (upper_limit >> w) & 1;
+		auto x_w = this->adder_depth_computation_max_variables.at({idx, w});
+		if (upper_limit_bit) {
+			clause_prototype.emplace_back(x_w, true);
+		}
+		else {
+			auto clause = clause_prototype;
+			clause.emplace_back(x_w, true);
+			this->create_arbitrary_clause(clause);
+		}
 	}
 }
 
@@ -2887,3 +3167,127 @@ void mcm::solve_standard() {
 	this->found_solution = true;
 }
 
+void mcm::minimize_adder_depth() {
+	this->force_min_adder_depth = true;
+}
+
+void mcm::compute_opt_adder_depth_value() {
+	if (!this->force_min_adder_depth) {
+		return;
+	}
+	this->opt_adder_depth = 0;
+	for (auto &v : this->C) {
+		// compute #nonzeros in canonical signed digit representation
+		// for each vector element
+		int non_zeros_csd = 0;
+		for (auto &c : v) {
+			size_t c_word_size;
+			if (c < 0) {
+				c_word_size = static_cast<size_t>(std::ceil(std::log2(-c)));
+			}
+			else {
+				c_word_size = static_cast<size_t>(std::ceil(std::log2(c+1)));
+			}
+			// init csd representation with binary number representation
+			c_word_size += 2; // need two bits more to compute csd representation (maybe 1 woulda been enough but who cares)
+			std::vector<int> csd(c_word_size, 0);
+			for (size_t i=0; i<c_word_size; i++) {
+				auto bit_val = (c >> i) & 1;
+				if (bit_val) csd.at(i) = 1;
+			}
+			// convert to canonical form
+			for (size_t i=0; i<c_word_size; i++) {
+				auto bit_val_i_is_1 = csd.at(i) == 1;
+				if (!bit_val_i_is_1) continue;
+				size_t j=i+1;
+				while (j < c_word_size) {
+					if (csd.at(j) == 1) {
+						j++;
+						continue;
+					}
+					else if (csd.at(j) == 0) {
+						if (j < i+2) {
+							// only found "01"
+							break;
+						}
+						// found at least "011" or even more ones
+						// transform into "-101" and fill middle with zeros in case we found more than two ones
+						csd.at(i) = -1;
+						csd.at(j) = 1;
+						for (size_t k=i+1; k<j; k++) {
+							csd.at(k) = 0;
+						}
+						break;
+					}
+					else { // csd.at(j) == -1
+						break;
+					}
+				}
+			}
+			// count nonzeros
+//			std::cout << "CSD for c=" << c << " is";
+			for (auto &bit : csd) {
+				if (bit == 0) {
+//					std::cout << " 0";
+					continue;
+				}
+				else {
+//					if (bit == 1) {
+//						std::cout << " 1";
+//					}
+//					else {
+//						std::cout << " -"; // -1
+//					}
+					non_zeros_csd++;
+				}
+			}
+//			std::cout << std::endl;
+		}
+		// compute ADopt = max(ceil(log2(sum over all non_zero_csd)))
+		this->opt_adder_depth = std::max(this->opt_adder_depth, static_cast<int>(std::ceil(std::log2(non_zeros_csd))));
+	}
+}
+
+void mcm::create_max_cell(int a_i, int b_i, int x_i, int y_i, int c_o, int x_o, int y_o) {
+	// clauses to compute c_o
+	//  a_i  b_i -c_o
+	this->create_arbitrary_clause({{a_i, false}, {b_i, false}, {c_o, true}});
+	//  a_i -x_i -y_i -c_o
+	this->create_arbitrary_clause({{a_i, false}, {x_i, true}, {y_i, true}, {c_o, true}});
+	//  b_i  x_i -y_i -c_o
+	this->create_arbitrary_clause({{b_i, false}, {x_i, false}, {y_i, true}, {c_o, true}});
+	// -b_i  x_i  c_o
+	this->create_arbitrary_clause({{b_i, true}, {x_i, false}, {c_o, false}});
+	// -b_i  y_i  c_o
+	this->create_arbitrary_clause({{b_i, true}, {y_i, false}, {c_o, false}});
+	// -a_i -x_i  c_o
+	this->create_arbitrary_clause({{a_i, true}, {x_i, true}, {c_o, false}});
+	// -a_i  y_i  c_o
+	this->create_arbitrary_clause({{a_i, true}, {y_i, false}, {c_o, false}});
+	// -a_i -b_i  c_o (REDUNDANT BUT MAY HELP UNIT PROPAGATION!?!?!?!?!?!)
+	this->create_arbitrary_clause({{a_i, true}, {b_i, true}, {c_o, false}});
+	// clauses to compute x_o
+	if (x_o != -1) {
+		// -x_i -y_i  x_o
+		this->create_arbitrary_clause({{x_i, true}, {y_i, true}, {x_o, false}});
+		//  b_i  y_i  x_o
+		this->create_arbitrary_clause({{b_i, false}, {y_i, false}, {x_o, false}});
+		//  x_i -y_i -x_o
+		this->create_arbitrary_clause({{x_i, false}, {y_i, true}, {x_o, true}});
+		// -b_i  y_i -x_o
+		this->create_arbitrary_clause({{b_i, true}, {y_i, false}, {x_o, true}});
+	}
+	// clauses to compute y_o
+	if (y_o != -1) {
+		// -y_i  y_o
+		this->create_arbitrary_clause({{y_i, true}, {y_o, false}});
+		//  a_i -b_i  y_o
+		this->create_arbitrary_clause({{a_i, false}, {b_i, true}, {y_o, false}});
+		// -a_i  b_i  y_o
+		this->create_arbitrary_clause({{a_i, true}, {b_i, false}, {y_o, false}});
+		// -a_i -b_i  y_i -y_o
+		this->create_arbitrary_clause({{a_i, true}, {b_i, true}, {y_i, false}, {y_o, true}});
+		//  a_i  b_i  y_i -y_o
+		this->create_arbitrary_clause({{a_i, false}, {b_i, false}, {y_i, false}, {y_o, true}});
+	}
+}

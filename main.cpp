@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
 	bool enumerate_all = false;
 	int allow_coefficient_sign_inversion = 0;
 	int min_num_adders = -1;
+	bool min_adder_depth = false;
 #ifdef USE_KISSAT
     // kissat backend still in development!
 	solver_name = "kissat";
@@ -52,9 +53,13 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all>" << std::endl;
-		std::cout << "  => constant(s): <int:int:int>;<...>: colon-separated list of integers that should be computed" << std::endl;
-		std::cout << "  => solver name: <string>: kissat, cadical, z3, syrup are supported" << std::endl;
+		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth>" << std::endl;
+		std::cout <<   "  => constant(s): <int:int:int>;<...>;...: specify the constant matrix" << std::endl;
+		std::cout <<   "      => separate columns with colons and rows with semicolons" << std::endl;
+		std::cout << R"(      => need to put this argument into "..." on UNIX-based systems)" << std::endl;
+		std::cout << R"(      => i.e., use "A:B:C" for SOP and "A;B;C" for MCM and "A" for SCM)" << std::endl;
+		std::cout << R"(      => e.g., specify "11:21;33:-44" to get a solution that computes both 11*x1+21*x2 and 33*x1-44*x2)" << std::endl;
+		std::cout << "  => solver name: <string>: kissat, cadical, z3, syrup are currently supported" << std::endl;
 		std::cout << "  => timeout: <uint>: number of seconds allowed per SAT instance" << std::endl;
 		std::cout << "  => threads: <uint>: number of threads allowed to use" << std::endl;
 		std::cout << "  => quiet: <0/1>: suppress debug outputs by setting this to 1" << std::endl;
@@ -65,20 +70,21 @@ int main(int argc, char** argv) {
 		std::cout << "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it" << std::endl;
 		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
 		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
+		std::cout << "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => NOT WORKING YET" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
 		std::string s(argv[1]);
 		try {
 			std::stringstream c_str(s);
-            std::stringstream s_str;
+			std::stringstream s_str;
 			std::string vector_buff;
 			std::string buff;
 			std::vector<std::string> v;
 			while(std::getline(c_str, vector_buff, ';')) {
 			    v.emplace_back(vector_buff);
 			}
-			for(auto entry : v){
+			for(auto &entry : v){
 			    std::cout << entry << std::endl;
 			}
 			for(int i = 0; i < v.size(); i++){
@@ -102,12 +108,12 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to integer(s)" << std::endl;
+			err_msg << "failed to convert " << s << " to integer(s) (arg #1)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
 	//changed from constant(s): <int:int:...>: to constants(s): <int:int:int;...>
-	for(auto v : C){
+	for(auto &v : C){
 	    for(auto c : v){
 	        std::cout << c << std::endl;
 	    }
@@ -125,7 +131,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to integer" << std::endl;
+			err_msg << "failed to convert " << s << " to integer (arg #3)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -136,7 +142,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to integer" << std::endl;
+			err_msg << "failed to convert " << s << " to integer (arg #4)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -153,7 +159,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #5)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -164,7 +170,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #6)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -175,7 +181,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #7)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -186,7 +192,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #8)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -197,7 +203,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #9)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -208,7 +214,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to int" << std::endl;
+			err_msg << "failed to convert " << s << " to int (arg #10)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -219,7 +225,7 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to int" << std::endl;
+			err_msg << "failed to convert " << s << " to int (arg #11)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -230,7 +236,18 @@ int main(int argc, char** argv) {
 		}
 		catch (...) {
 			std::stringstream err_msg;
-			err_msg << "failed to convert " << s << " to 1/0" << std::endl;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #12)" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
+	if (argc > 13) {
+		std::string s(argv[13]);
+		try {
+			min_adder_depth = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #13)" << std::endl;
 			throw std::runtime_error(err_msg.str());
 		}
 	}
@@ -300,6 +317,7 @@ int main(int argc, char** argv) {
 	if (allow_node_output_shift) solver->allow_node_output_shift();
 	if (allow_coefficient_sign_inversion != 0) solver->ignore_sign(allow_coefficient_sign_inversion == -1);
 	if (min_num_adders >= 0) solver->set_min_add(min_num_adders);
+	if (min_adder_depth) solver->minimize_adder_depth();
 	solver->solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;

@@ -54,6 +54,10 @@ public:
 	 */
 	void allow_node_output_shift();
 	/*!
+	 * only permit solutions with minimal adder depth by calling this function prior to solving
+	 */
+	void minimize_adder_depth();
+	/*!
 	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
 	 * depending on the implementation costs
 	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
@@ -377,6 +381,17 @@ protected:
 	 * @param num
 	 */
 	virtual void force_number(const std::vector<int> &x, int val);
+	/*!
+	 * create clauses for one bit of a "ripple-carry" version of the computation "c = max(a,b)", where a,b,c are integers
+	 * @param a_i current bit for a
+	 * @param b_i current bit for b
+	 * @param x_i current bit that determines whether "a >= b" was already determined in a previous stage
+	 * @param y_i current bit that determines whether x_i is valid (i.e., could be determined, yet)
+	 * @param c_o current output bit for the result
+	 * @param x_o serves as "x_i" in the next stage
+	 * @param y_o serves as "y_i" in the next stage
+	 */
+	virtual void create_max_cell(int a_i, int b_i, int x_i, int y_i, int c_o, int x_o, int y_o);
 
 	/*!
 	 * @param n
@@ -399,7 +414,7 @@ protected:
 	int constraint_counter = 0;
 
 	/*!
-	 * the constant by which we want to multiply
+	 * the constant(s) by which we want to multiply
 	 */
 	std::vector<std::vector<int>> C;
 	/*!
@@ -426,6 +441,22 @@ protected:
 	 * word size of the corresponding node input
 	 */
 	int shift_word_size;
+	/*!
+	 * word size for adder depth computation (relevant for min adder depth constraint and for pipelining)
+	 */
+	int adder_depth_word_size;
+	/*!
+	 * whether to permit only solutions with minimal adder depth
+	 */
+	bool force_min_adder_depth = false;
+	/*!
+	 * value for the optimum adder depth
+	 */
+	int opt_adder_depth = 0;
+	/*!
+	 * used to compute this->opt_adder_depth before solving
+	 */
+	void compute_opt_adder_depth_value();
 	/*!
 	 * current number of adders
 	 */
@@ -637,6 +668,7 @@ private:
 	//// CREATE ALL VARIABLES ////
 	//////////////////////////////
 	void create_input_node_variables(); // idx = 0 is the input node that has a constant value 0 as output
+	void create_input_node_depth_variables(); // idx = 0 is the input node that has a constant value 0 as output
 	void create_input_select_mux_variables(int idx); // select input variables
 	void create_input_select_selection_variables(int idx);
 	void create_input_shift_value_variables(int idx);
@@ -650,6 +682,7 @@ private:
 	void create_post_adder_shift_variables(int idx);
 	void create_output_value_variables(int idx);
 	void create_mcm_output_variables(int idx);
+	void create_adder_depth_variables(int idx);
 
 
 	////////////////////////////////
@@ -667,7 +700,7 @@ private:
 	void create_post_adder_shift_constraints(int idx, formulation_mode mode);
 	void create_odd_fundamentals_constraints(int idx, formulation_mode mode);
 	void create_mcm_output_constraints(formulation_mode mode);
-    void create_mcm_input_constraints(formulation_mode mode);
+	void create_mcm_input_constraints(formulation_mode mode);
 	void create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode);
 	void create_full_adder_msb_constraints(int idx, formulation_mode mode);
 	void create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode);
@@ -677,6 +710,10 @@ private:
 	void create_full_adder_add_subtract_inputs_constraints(formulation_mode mode);
 	void create_full_adder_cpa_constraints(formulation_mode mode);
 	void create_full_adder_result_constraints();
+	void create_adder_depth_computation_select_constraints(int idx, formulation_mode mode);
+	void create_adder_depth_computation_max_constraints(int idx, formulation_mode mode);
+	void create_adder_depth_computation_add_constraints(int idx, formulation_mode mode);
+	void create_adder_depth_computation_limit_constraints(int idx, formulation_mode mode);
 	void prohibit_current_solution();
 
 	/*!
@@ -847,6 +884,24 @@ private:
 	 * < bit > -> variable idx
 	 */
 	std::map<int, int> full_adder_comparator_carry_variables;
+	/*!
+	 * < idx, bit > -> variable idx
+	 */
+	std::map<std::pair<int, int>, int> adder_depth_variables;
+	/*!
+	 * < idx, direction, bit > -> variable idx
+	 * /eta and /theta
+	 */
+	std::map<std::tuple<int, input_direction, int>, int> adder_depth_computation_input_variables;
+	/*!
+	 * < idx, direction, mux idx, bit > -> variable idx
+	 * /eta and /theta
+	 */
+	std::map<std::tuple<int, input_direction, int, int>, int> adder_depth_computation_input_mux_variables;
+	/*!
+	 * < idx, bit > -> variable idx
+	 */
+	std::map<std::pair<int, int>, int> adder_depth_computation_max_variables;
 	/*!
 	 * a variable that is forced to 1
 	 */
