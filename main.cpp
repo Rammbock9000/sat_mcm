@@ -39,6 +39,7 @@ int main(int argc, char** argv) {
 	int allow_coefficient_sign_inversion = 0;
 	int min_num_adders = -1;
 	bool min_adder_depth = false;
+	bool pipelining = false;
 #ifdef USE_KISSAT
     // kissat backend still in development!
 	solver_name = "kissat";
@@ -53,7 +54,7 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth>" << std::endl;
+		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth> <pipelining>" << std::endl;
 		std::cout <<   "  => constant(s): <int:int:int>;<...>;...: specify the constant matrix" << std::endl;
 		std::cout <<   "      => separate columns with colons and rows with semicolons" << std::endl;
 		std::cout << R"(      => need to put this argument into "..." on UNIX-based systems)" << std::endl;
@@ -71,6 +72,7 @@ int main(int argc, char** argv) {
 		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
 		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
 		std::cout << "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS" << std::endl;
+		std::cout << "  => pipelining: <0/1>: let the solver optimize under the assumption that the adder graph will be fully pipelined after each adder stage => WORK IN PROGRESS" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -251,6 +253,17 @@ int main(int argc, char** argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+	if (argc > 14) {
+		std::string s(argv[14]);
+		try {
+			pipelining = (bool)std::stoi(s);
+		}
+		catch (...) {
+			std::stringstream err_msg;
+			err_msg << "failed to convert " << s << " to 1/0 (arg #14)" << std::endl;
+			throw std::runtime_error(err_msg.str());
+		}
+	}
 
     if (C[0].size() == 1 and C.size() == 1 ) {
         std::cout << "Starting SCM for constant(s) " << C[0].front() << std::endl;
@@ -318,6 +331,7 @@ int main(int argc, char** argv) {
 	if (allow_coefficient_sign_inversion != 0) solver->ignore_sign(allow_coefficient_sign_inversion == -1);
 	if (min_num_adders >= 0) solver->set_min_add(min_num_adders);
 	if (min_adder_depth) solver->minimize_adder_depth();
+	if (pipelining) solver->enable_pipelining();
 	solver->solve();
 	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;

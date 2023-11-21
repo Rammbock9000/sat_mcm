@@ -180,11 +180,15 @@ void mcm::reset_backend(formulation_mode mode) {
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
+	if (mode == formulation_mode::reset_all) {
+		this->const_one_bit = -1;
+		this->const_zero_bit = -1;
+	}
 }
 
 void mcm::construct_problem(formulation_mode mode) {
 	// compute stage word size if needed
-	if (this->force_min_adder_depth) {
+	if (this->force_min_adder_depth or this->pipelining_enabled) {
 		// allocate enough bits to represent the worst case
 		// i.e., all adders connected in a chain
 		this->adder_depth_word_size = this->ceil_log2(this->num_adders + 1);
@@ -232,9 +236,13 @@ void mcm::create_variables() {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_variables" << std::endl;
 			this->create_post_adder_shift_variables(i);
 		}
-		if (this->force_min_adder_depth) {
+		if (this->force_min_adder_depth or this->pipelining_enabled) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_post_adder_shift_variables" << std::endl;
 			this->create_adder_depth_variables(i);
+		}
+		if (this->pipelining_enabled) {
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_pipelining_variables" << std::endl;
+			this->create_pipelining_variables(i);
 		}
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_output_value_variables" << std::endl;
 		this->create_output_value_variables(i);
@@ -287,15 +295,23 @@ void mcm::create_constraints(formulation_mode mode) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
 			this->create_full_adder_shift_sum_constraints(i, mode);
 		}
-		if (this->force_min_adder_depth) {
+		if (this->force_min_adder_depth or this->pipelining_enabled) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_select_constraints" << std::endl;
 			this->create_adder_depth_computation_select_constraints(i, mode);
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_max_constraints" << std::endl;
 			this->create_adder_depth_computation_max_constraints(i, mode);
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_add_constraints" << std::endl;
 			this->create_adder_depth_computation_add_constraints(i, mode);
+		}
+		if (this->force_min_adder_depth) {
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_adder_depth_computation_limit_constraints" << std::endl;
 			this->create_adder_depth_computation_limit_constraints(i, mode);
+		}
+		if (this->pipelining_enabled) {
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_pipelining_input_stage_equality_constraints" << std::endl;
+			this->create_pipelining_input_stage_equality_constraints(i, mode);
+			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_pipelining_register_constraints" << std::endl;
+			this->create_pipelining_register_constraints(i, mode);
 		}
 	}
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
@@ -322,7 +338,7 @@ void mcm::create_input_node_variables() {
 }
 
 void mcm::create_input_node_depth_variables() {
-	if (!this->force_min_adder_depth) return;
+	if (!this->force_min_adder_depth and !this->pipelining_enabled) return;
 	// force adder depth for all inputs to zero
 	for (int idx = 0; idx <= idx_input_buffer(); idx++) {
 		for (int w = 0; w < this->adder_depth_word_size; w++) {
@@ -478,34 +494,6 @@ void mcm::create_output_value_variables(int idx) {
 }
 
 void mcm::create_adder_depth_variables(int idx) {
-	/*
-	 *
-	 *
-	 * #if INPUT_SELECT_MUX_OPT
-	auto num_muxs = idx-1;
-#else
-	auto num_muxs = (1 << select_word_size) - 1;
-#endif
-    for(int v=0; v<c_row_size(); v++) {
-        for (auto &dir : input_directions) {
-            for (int mux_idx = 0; mux_idx < num_muxs; mux_idx++) {
-                for (int w = 0; w < this->word_size; w++) {
-                    this->input_select_mux_variables[{idx, dir, mux_idx, w, v}] = ++this->variable_counter;
-                    this->create_new_variable(this->variable_counter);
-#if INPUT_SELECT_MUX_OPT
-                    if (mux_idx == num_muxs-1) {
-                        this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
-                    }
-#else
-                    if (mux_idx == 0) {
-                        this->input_select_mux_output_variables[{idx, dir, w, v}] = this->variable_counter;
-                    }
-#endif
-                }
-            }
-        }
-    }
-	 */
 	// max value up until this adder node = idx
 	int max_value_num_bits = this->ceil_log2(idx+1);
 	// number of multiplexers
@@ -547,6 +535,24 @@ void mcm::create_adder_depth_variables(int idx) {
 			this->adder_depth_variables[{idx, w}] = this->init_const_zero_bit();
 		}
 	}
+}
+
+void mcm::create_mcm_output_variables(int idx) {
+	for(int m=1; m<=c_column_size(); m++) {
+		this->mcm_output_variables[{idx, m}] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+		if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+			this->mcm_output_variables[{idx, -m}] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
+	}
+}
+
+void mcm::create_pipelining_variables(int idx) {
+	this->register_variables[idx] = ++this->variable_counter;
+	this->create_new_variable(this->variable_counter);
+	this->input_stages_equal_variables[idx] = ++this->variable_counter;
+	this->create_new_variable(this->variable_counter);
 }
 
 int mcm::ceil_log2(int n) {
@@ -1429,6 +1435,7 @@ void mcm::create_adder_depth_computation_add_constraints(int idx, formulation_mo
 		}
 		auto a = this->adder_depth_computation_max_variables.at({idx, w});
 		auto sum = this->adder_depth_variables.at({idx, w});
+		std::cout << "#q# adder depth +1 constraint for idx/w=" << idx << "/" << w << std::endl;
 		this->create_half_adder({a, false}, {b, false}, {sum, false}, {c_o, false});
 		b = c_o;
 	}
@@ -1466,6 +1473,8 @@ void mcm::get_solution_from_backend() {
 	this->can_cut_msb_values.clear();
 	this->coeff_word_size_sum_values.clear();
 	this->shift_sum_values.clear();
+	this->is_register.clear();
+	this->pipeline_stage.clear();
 	this->num_FAs_value = 0;
 	// get solution
     for(int idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
@@ -1572,6 +1581,23 @@ void mcm::get_solution_from_backend() {
                 this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
             }
         }
+			if (this->pipelining_enabled and idx > idx_input_buffer()) {
+				this->is_register[idx] = this->get_result_value(this->register_variables.at(idx));
+				this->pipeline_stage[idx] = 0;
+				for (int w=0; w<this->adder_depth_word_size; w++) {
+					auto val = this->get_result_value(this->adder_depth_variables.at({idx, w}));
+					std::cout << "#q# pipeline stage variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
+					val = this->get_result_value(this->adder_depth_computation_max_variables.at({idx, w}));
+					std::cout << "#q# pipeline stage max variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
+					if (idx > idx_input_buffer()+1) {
+						val = this->get_result_value(this->adder_depth_computation_input_variables.at({idx, input_direction::left, w}));
+						std::cout << "#q# pipeline stage left input variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
+						val = this->get_result_value(this->adder_depth_computation_input_variables.at({idx, input_direction::right, w}));
+						std::cout << "#q# pipeline stage right input variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
+					}
+					this->pipeline_stage[idx] += (this->get_result_value(this->adder_depth_variables.at({idx, w})) << w);
+				}
+			}
     }
 }
 
@@ -1609,8 +1635,12 @@ void mcm::print_solution() {
                           << (this->negate_select[idx] == 1 ? " (non-shifted)" : " (shifted)") << std::endl;
                 std::cout << "    subtract: " << this->subtract[idx] << std::endl;
                 if (this->enable_node_output_shift) {
-                    std::cout << "    post adder right shift value: " << this->post_adder_shift_value[idx] << std::endl;
+									std::cout << "    post adder right shift value: " << this->post_adder_shift_value[idx] << std::endl;
                 }
+								if (this->pipelining_enabled) {
+									std::cout << "    register: " << this->is_register[idx] << std::endl;
+									std::cout << "    pipeline stage: " << this->pipeline_stage[idx] << std::endl;
+								}
             }
         }
 		std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
@@ -1945,86 +1975,6 @@ void mcm::create_cnf_file() {
 	f << "p cnf " << this->variable_counter << " " << this->constraint_counter << std::endl;
 	f << this->cnf_clauses.str();
 	f.close();
-}
-void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
-    //TODO need supports incremental here aswell
-    if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
-
-    std::vector<int> input_bits(this->word_size);
-
-    for(int i=0; i<=c_row_size()-1; i++){
-        for (int j=0; j<=c_row_size()-1; j++) {
-            for (auto w = 0; w < this->word_size; w++) {
-                input_bits[w] = this->output_value_variables.at({i, w, j});
-                std::cout<<"input bits: "<< input_bits[w] <<std::endl;
-            }
-            if(i==j) {
-                force_number(input_bits, 1);
-            }else{
-                force_number(input_bits, 0);
-            }
-        }
-    }
-}
-void mcm::create_mcm_output_constraints(formulation_mode mode) {
-	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
-	for(int m=1; m<=c_column_size(); m++){
-	    std::vector<int> or_me;
-	    for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
-            std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, m}] <<std::endl;
-	        or_me.emplace_back(this->mcm_output_variables[{idx, m}]);
-	        for(int v=0; v<c_row_size(); v++) {
-	            for (int w = 0; w < this->word_size; w++) {
-	                if (((C[m-1][v] >> w) & 1) == 1) {
-	                    this->create_1x1_implication(this->mcm_output_variables[{idx, m}],
-                                                  this->output_value_variables[{idx, w, v}]);
-	                } else {
-	                    this->create_1x1_negated_implication(this->mcm_output_variables[{idx, m}],
-                                                          this->output_value_variables[{idx, w, v}]);
-	                }
-	            }
-	        }
-	    }
-	    if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
-	        // also allow the solver to choose -c instead of c if it's easier to implement
-	        for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
-                std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, -m}] <<std::endl;
-	            or_me.emplace_back(this->mcm_output_variables[{idx, -m}]);
-	            for(int v=0; v<c_row_size(); v++) {
-	                for (int w = 0; w < this->word_size; w++) {
-	                    if ((((-C[m-1][v]) >> w) & 1) == 1) {
-	                        this->create_1x1_implication(this->mcm_output_variables[{idx, -m}],
-                                                      this->output_value_variables[{idx, w, v}]);
-	                    } else {
-	                        this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -m}],
-                                                              this->output_value_variables[{idx, w, v}]);
-	                    }
-	                }
-	            }
-	        }
-	    }
-	    this->create_or(or_me);
-    }
-}
-
-void mcm::create_mcm_output_variables(int idx) {
-    for(int m=1; m<=c_column_size(); m++) {
-        this->mcm_output_variables[{idx, m}] = ++this->variable_counter;
-        this->create_new_variable(this->variable_counter);
-        if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
-            this->mcm_output_variables[{idx, -m}] = ++this->variable_counter;
-            this->create_new_variable(this->variable_counter);
-        }
-    }
-}
-
-void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
-    if(idx_input_buffer() > 0) return;
-    //this constraint is not needed for CMM and SOP
-	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
-    for(int v=0; v<c_row_size(); v++) {
-        this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
-    }
 }
 
 int64_t mcm::sign_extend(int64_t x, int w) {
@@ -2383,7 +2333,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
             // can always cut MSB because all coefficients are positive
             // -> just set the m to 1 and count on unit propagation within the solver :)
             this->full_adder_msb_variables[idx] = this->init_const_one_bit();
-            this->force_bit(this->const_one_bit, 1);
+            //this->force_bit(this->const_one_bit, 1); // already done in init function
             return;
         }
         auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
@@ -2684,6 +2634,123 @@ void mcm::create_full_adder_result_constraints() {
 		// pass ok and carry bits to next stage
 		this->full_adder_comparator_ok_variables[w] = ok_last = ok_new;
 		this->full_adder_comparator_carry_variables[w] = carry_last = carry_new;
+	}
+}
+
+void mcm::create_mcm_input_constraints(mcm::formulation_mode mode) {
+	//TODO need supports incremental here aswell
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+
+	std::vector<int> input_bits(this->word_size);
+
+	for(int i=0; i<=c_row_size()-1; i++){
+		for (int j=0; j<=c_row_size()-1; j++) {
+			for (auto w = 0; w < this->word_size; w++) {
+				input_bits[w] = this->output_value_variables.at({i, w, j});
+				std::cout<<"input bits: "<< input_bits[w] <<std::endl;
+			}
+			if(i==j) {
+				force_number(input_bits, 1);
+			}else{
+				force_number(input_bits, 0);
+			}
+		}
+	}
+}
+
+void mcm::create_mcm_output_constraints(formulation_mode mode) {
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	for(int m=1; m<=c_column_size(); m++){
+		std::vector<int> or_me;
+		for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+			std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, m}] <<std::endl;
+			or_me.emplace_back(this->mcm_output_variables[{idx, m}]);
+			for(int v=0; v<c_row_size(); v++) {
+				for (int w = 0; w < this->word_size; w++) {
+					if (((C[m-1][v] >> w) & 1) == 1) {
+						this->create_1x1_implication(this->mcm_output_variables[{idx, m}],
+																				 this->output_value_variables[{idx, w, v}]);
+					} else {
+						this->create_1x1_negated_implication(this->mcm_output_variables[{idx, m}],
+																								 this->output_value_variables[{idx, w, v}]);
+					}
+				}
+			}
+		}
+		if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+			// also allow the solver to choose -c instead of c if it's easier to implement
+			for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+				std::cout<<"mcm_output_variables[{idx, m}: "<< this->mcm_output_variables[{idx, -m}] <<std::endl;
+				or_me.emplace_back(this->mcm_output_variables[{idx, -m}]);
+				for(int v=0; v<c_row_size(); v++) {
+					for (int w = 0; w < this->word_size; w++) {
+						if ((((-C[m-1][v]) >> w) & 1) == 1) {
+							this->create_1x1_implication(this->mcm_output_variables[{idx, -m}],
+																					 this->output_value_variables[{idx, w, v}]);
+						} else {
+							this->create_1x1_negated_implication(this->mcm_output_variables[{idx, -m}],
+																									 this->output_value_variables[{idx, w, v}]);
+						}
+					}
+				}
+			}
+		}
+		this->create_or(or_me);
+	}
+}
+
+void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
+	if(idx_input_buffer() > 0) return;
+	//this constraint is not needed for CMM and SOP
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	for(int v=0; v<c_row_size(); v++) {
+		this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
+	}
+}
+
+void mcm::create_pipelining_register_constraints(int idx, mcm::formulation_mode mode) {
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	auto reg_var = this->register_variables.at(idx);
+	// reg_var implies that input select values for left & right are equal
+	int input_select_word_size = this->ceil_log2(idx);
+	for (int w = 0; w < input_select_word_size; w++) {
+		auto l_w = this->input_select_selection_variables.at({idx, input_direction::left, w});
+		auto r_w = this->input_select_selection_variables.at({idx, input_direction::right, w});
+		this->create_arbitrary_clause({{reg_var, true}, {l_w, true}, {r_w, false}});
+		this->create_arbitrary_clause({{reg_var, true}, {l_w, false}, {r_w, true}});
+	}
+	// reg_var implies that the shift value is equal to one
+	for (int w = 0; w < this->shift_word_size; w++) {
+		auto s_w = this->input_shift_value_variables.at({idx, w});
+		this->create_arbitrary_clause({{reg_var, true}, {s_w, w != 0}});
+	}
+	// reg_var implies that the negate-select is equal to one (i.e., the un-shifted input gets subtracted)
+	auto negate_select_var = this->input_negate_select_variables.at(idx);
+	this->create_arbitrary_clause({{reg_var, true}, {negate_select_var, false}});
+	// reg_var implies that the subtract value is equal to one (i.e., perform subtraction instead of addition)
+	auto negate_value_var = this->input_negate_value_variables.at(idx);
+	this->create_arbitrary_clause({{reg_var, true}, {negate_value_var, false}});
+	// reg_var implies that the post-add right shift is equal to zero (if it is modeled as well)
+	if (this->enable_node_output_shift) {
+		for (int w = 0; w < this->shift_word_size; w++) {
+			auto s_w = this->input_post_adder_shift_value_variables.at({idx, w});
+			this->create_arbitrary_clause({{reg_var, true}, {s_w, true}});
+		}
+	}
+}
+
+void mcm::create_pipelining_input_stage_equality_constraints(int idx, mcm::formulation_mode mode) {
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	if (idx <= this->c_row_size()) return;
+	// adder depth values for left & right must be equal
+	// if reg_var is set then they are automatically equal since reg_var implies that input select values are equal
+	// if reg_var is NOT set then they must be equal because an adder can only process two inputs from the same stage
+	std::cout << "#q# add constraint that adder_depth lef/right is equal for idx=" << idx << std::endl;
+	for (int w = 0; w < this->adder_depth_word_size; w++) {
+		auto l_w = this->adder_depth_computation_input_variables.at({idx, input_direction::left, w});
+		auto r_w = this->adder_depth_computation_input_variables.at({idx, input_direction::right, w});
+		this->create_arbitrary_clause({{l_w, true}, {r_w, false}});
+		this->create_arbitrary_clause({{l_w, false}, {r_w, true}});
 	}
 }
 
@@ -3172,7 +3239,7 @@ void mcm::minimize_adder_depth() {
 }
 
 void mcm::compute_opt_adder_depth_value() {
-	if (!this->force_min_adder_depth) {
+	if (!this->force_min_adder_depth and !this->pipelining_enabled) {
 		return;
 	}
 	this->opt_adder_depth = 0;
@@ -3290,4 +3357,8 @@ void mcm::create_max_cell(int a_i, int b_i, int x_i, int y_i, int c_o, int x_o, 
 		//  a_i  b_i  y_i -y_o
 		this->create_arbitrary_clause({{a_i, false}, {b_i, false}, {y_i, false}, {y_o, true}});
 	}
+}
+
+void mcm::enable_pipelining() {
+	this->pipelining_enabled = true;
 }

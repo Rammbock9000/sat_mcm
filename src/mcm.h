@@ -58,6 +58,13 @@ public:
 	 */
 	void minimize_adder_depth();
 	/*!
+	 * assume that the adder graph will be implemented with a pipeline stage after each adder stage
+	 * => optimize for that
+	 * => minimize the total number of registered operations
+	 * => i.e., an adder is "as expensive" as a register
+	 */
+	void enable_pipelining();
+	/*!
 	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
 	 * depending on the implementation costs
 	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
@@ -458,6 +465,10 @@ protected:
 	 */
 	void compute_opt_adder_depth_value();
 	/*!
+	 * whether to permit only solutions with minimal adder depth
+	 */
+	bool pipelining_enabled = false;
+	/*!
 	 * current number of adders
 	 */
 	int num_adders = 0;
@@ -615,6 +626,14 @@ private:
 	 */
 	std::map<int, int> shift_sum_values;
 	/*!
+	 * node idx -> 1/0
+	 */
+	std::map<int, int> is_register;
+	/*!
+	 * node idx -> int value
+	 */
+	std::map<int, int> pipeline_stage;
+	/*!
 	 *  int value
 	 */
 	int num_FAs_value;
@@ -683,6 +702,7 @@ private:
 	void create_output_value_variables(int idx);
 	void create_mcm_output_variables(int idx);
 	void create_adder_depth_variables(int idx);
+	void create_pipelining_variables(int idx);
 
 
 	////////////////////////////////
@@ -714,6 +734,8 @@ private:
 	void create_adder_depth_computation_max_constraints(int idx, formulation_mode mode);
 	void create_adder_depth_computation_add_constraints(int idx, formulation_mode mode);
 	void create_adder_depth_computation_limit_constraints(int idx, formulation_mode mode);
+	void create_pipelining_register_constraints(int idx, formulation_mode mode);
+	void create_pipelining_input_stage_equality_constraints(int idx, formulation_mode mode);
 	void prohibit_current_solution();
 
 	/*!
@@ -902,6 +924,14 @@ private:
 	 * < idx, bit > -> variable idx
 	 */
 	std::map<std::pair<int, int>, int> adder_depth_computation_max_variables;
+	/*!
+	 * < idx > -> variable idx
+	 */
+	std::map<int, int> register_variables;
+	/*!
+	 * < idx > -> variable idx
+	 */
+	std::map<int, int> input_stages_equal_variables;
 	/*!
 	 * a variable that is forced to 1
 	 */
