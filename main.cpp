@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 		std::cout << "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it" << std::endl;
 		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
 		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
-		std::cout << "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => NOT WORKING YET" << std::endl;
+		std::cout << "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
