@@ -8,7 +8,7 @@ def read_constants(filename):
             line = line.replace("\r", "")
             if len(line) == 0:
                 continue
-            elements = line.split(";")
+            elements = line.split(",")
             if len(elements) < 2:
                 continue
             constants_with_costs.append([elements[0], elements[1]])
