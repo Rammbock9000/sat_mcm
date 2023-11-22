@@ -254,6 +254,9 @@ void mcm::create_variables() {
         this->create_mcm_output_variables(i);
 		// full adder variables are constructed "on the fly" and put into their containers
 	}
+	if (this->pipelining_enabled and this->force_output_stages_equal) {
+		this->create_output_stage_eq_variables();
+	}
 }
 
 void mcm::create_constraints(formulation_mode mode) {
@@ -312,6 +315,10 @@ void mcm::create_constraints(formulation_mode mode) {
 			this->create_pipelining_input_stage_equality_constraints(i, mode);
 			if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_pipelining_register_constraints" << std::endl;
 			this->create_pipelining_register_constraints(i, mode);
+			if (this->force_output_stages_equal) {
+				if (this->verbosity == verbosity_mode::debug_mode) std::cout << "        create_pipelining_output_stage_equality_constraints" << std::endl;
+				this->create_pipelining_output_stage_equality_constraints(i, mode);
+			}
 		}
 	}
 	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
@@ -553,6 +560,13 @@ void mcm::create_pipelining_variables(int idx) {
 	this->create_new_variable(this->variable_counter);
 	this->input_stages_equal_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
+}
+
+void mcm::create_output_stage_eq_variables() {
+	for (int w = 0; w < this->adder_depth_word_size; w++) {
+		this->output_stage_eq_variables[w] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+	}
 }
 
 int mcm::ceil_log2(int n) {
@@ -1435,7 +1449,6 @@ void mcm::create_adder_depth_computation_add_constraints(int idx, formulation_mo
 		}
 		auto a = this->adder_depth_computation_max_variables.at({idx, w});
 		auto sum = this->adder_depth_variables.at({idx, w});
-		std::cout << "#q# adder depth +1 constraint for idx/w=" << idx << "/" << w << std::endl;
 		this->create_half_adder({a, false}, {b, false}, {sum, false}, {c_o, false});
 		b = c_o;
 	}
@@ -1586,14 +1599,10 @@ void mcm::get_solution_from_backend() {
 				this->pipeline_stage[idx] = 0;
 				for (int w=0; w<this->adder_depth_word_size; w++) {
 					auto val = this->get_result_value(this->adder_depth_variables.at({idx, w}));
-					std::cout << "#q# pipeline stage variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
 					val = this->get_result_value(this->adder_depth_computation_max_variables.at({idx, w}));
-					std::cout << "#q# pipeline stage max variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
 					if (idx > idx_input_buffer()+1) {
 						val = this->get_result_value(this->adder_depth_computation_input_variables.at({idx, input_direction::left, w}));
-						std::cout << "#q# pipeline stage left input variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
 						val = this->get_result_value(this->adder_depth_computation_input_variables.at({idx, input_direction::right, w}));
-						std::cout << "#q# pipeline stage right input variable value for idx/w=" << idx << "/" << w << " is " << val << std::endl;
 					}
 					this->pipeline_stage[idx] += (this->get_result_value(this->adder_depth_variables.at({idx, w})) << w);
 				}
@@ -2745,12 +2754,35 @@ void mcm::create_pipelining_input_stage_equality_constraints(int idx, mcm::formu
 	// adder depth values for left & right must be equal
 	// if reg_var is set then they are automatically equal since reg_var implies that input select values are equal
 	// if reg_var is NOT set then they must be equal because an adder can only process two inputs from the same stage
-	std::cout << "#q# add constraint that adder_depth lef/right is equal for idx=" << idx << std::endl;
 	for (int w = 0; w < this->adder_depth_word_size; w++) {
 		auto l_w = this->adder_depth_computation_input_variables.at({idx, input_direction::left, w});
 		auto r_w = this->adder_depth_computation_input_variables.at({idx, input_direction::right, w});
 		this->create_arbitrary_clause({{l_w, true}, {r_w, false}});
 		this->create_arbitrary_clause({{l_w, false}, {r_w, true}});
+	}
+}
+
+void mcm::create_pipelining_output_stage_equality_constraints(int idx, mcm::formulation_mode mode) {
+	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	// force adder depths to be equal for all outputs
+	// for SCM/SOP (i.e., this->c_column_size() = 1) this is always given because there is only one output
+	if (this->c_column_size() < 2) return;
+	// for MCM/CMM (i.e., this->c_column_size() > 1) we can use the mcm output variables as an indicator for output nodes
+	for(int m=1; m<=c_column_size(); m++){
+		std::vector<int> mcm_output_vars(1, this->mcm_output_variables.at({idx, m}));
+		if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+			mcm_output_vars.emplace_back(this->mcm_output_variables.at({idx, -m}));
+		}
+		// create clauses for the relation:
+		// "mcm_output_var implies that the stage for node #idx is equal to the output stage"
+		for (auto &mcm_output_var : mcm_output_vars) {
+			for (int w = 0; w < this->adder_depth_word_size; w++) {
+				auto node_stage_var = this->adder_depth_variables.at({idx, w});
+				auto output_stage_var = this->output_stage_eq_variables.at(w);
+				this->create_arbitrary_clause({{mcm_output_var, true}, {node_stage_var, true}, {output_stage_var, false}});
+				this->create_arbitrary_clause({{mcm_output_var, true}, {node_stage_var, false}, {output_stage_var, true}});
+			}
+		}
 	}
 }
 
@@ -3361,4 +3393,8 @@ void mcm::create_max_cell(int a_i, int b_i, int x_i, int y_i, int c_o, int x_o, 
 
 void mcm::enable_pipelining() {
 	this->pipelining_enabled = true;
+}
+
+void mcm::equalize_output_stages() {
+	this->force_output_stages_equal = true;
 }

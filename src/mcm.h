@@ -65,6 +65,10 @@ public:
 	 */
 	void enable_pipelining();
 	/*!
+	 * force all outputs into the same pipeline stage
+	 */
+	void equalize_output_stages();
+	/*!
 	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
 	 * depending on the implementation costs
 	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
@@ -465,9 +469,14 @@ protected:
 	 */
 	void compute_opt_adder_depth_value();
 	/*!
-	 * whether to permit only solutions with minimal adder depth
+	 * whether to assume a fully pipelined adder graph
+	 * -> i.e., minimize the number of registered operations (#reg_add + #reg)
 	 */
 	bool pipelining_enabled = false;
+	/*!
+	 * force all outputs into the same pipeline stage
+	 */
+	bool force_output_stages_equal = false;
 	/*!
 	 * current number of adders
 	 */
@@ -703,6 +712,7 @@ private:
 	void create_mcm_output_variables(int idx);
 	void create_adder_depth_variables(int idx);
 	void create_pipelining_variables(int idx);
+	void create_output_stage_eq_variables();
 
 
 	////////////////////////////////
@@ -736,6 +746,7 @@ private:
 	void create_adder_depth_computation_limit_constraints(int idx, formulation_mode mode);
 	void create_pipelining_register_constraints(int idx, formulation_mode mode);
 	void create_pipelining_input_stage_equality_constraints(int idx, formulation_mode mode);
+	void create_pipelining_output_stage_equality_constraints(int idx, formulation_mode mode);
 	void prohibit_current_solution();
 
 	/*!
@@ -932,6 +943,10 @@ private:
 	 * < idx > -> variable idx
 	 */
 	std::map<int, int> input_stages_equal_variables;
+	/*!
+	 * < bit > -> variable idx
+	 */
+	std::map<int, int> output_stage_eq_variables;
 	/*!
 	 * a variable that is forced to 1
 	 */
