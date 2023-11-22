@@ -27,36 +27,44 @@ public:
 	enum verbosity_mode {
 		debug_mode, normal_mode, quiet_mode
 	};
+
 	/*!
 	 * constructor
 	 * @param C the vector of constants we want to compute
 	 * @param timeout in seconds
 	 * @param quiet true/false
 	 */
-	mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads, bool allow_negative_numbers, bool write_cnf);
+	mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads,
+			bool allow_negative_numbers, bool write_cnf);
+
 	/*!
 	 * define the minimum number of needed adders to help the algorithm converge faster
 	 * @param new_min_add value
 	 */
 	void set_min_add(int new_min_add);
+
 	/*!
 	 * define whether all solutions shall be enumerated or only the optimal solution is of interest
 	 * @param new_enumerate_all value
 	 */
 	void set_enumerate_all(bool new_enumerate_all);
+
 	/*!
 	 * also minimize full adders for the optimal number of adder nodes during this->solve()
 	 */
 	void also_minimize_full_adders();
+
 	/*!
 	 * also allow a shift at each node's output during this->solve()
 	 * this reduces the number of needed adders in very few corner cases by 1 at the cost of an increased runtime
 	 */
 	void allow_node_output_shift();
+
 	/*!
 	 * only permit solutions with minimal adder depth by calling this function prior to solving
 	 */
 	void minimize_adder_depth();
+
 	/*!
 	 * assume that the adder graph will be implemented with a pipeline stage after each adder stage
 	 * => optimize for that
@@ -64,24 +72,29 @@ public:
 	 * => i.e., an adder is "as expensive" as a register
 	 */
 	void enable_pipelining();
+
 	/*!
 	 * force all outputs into the same pipeline stage
 	 */
 	void equalize_output_stages();
+
 	/*!
 	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
 	 * depending on the implementation costs
 	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
 	 */
 	void ignore_sign(bool only_apply_to_negative_coefficients);
+
 	/*!
 	 * solve the problem
 	 */
 	void solve();
+
 	/*!
 	 * print solution values
 	 */
 	void print_solution();
+
 	/*!
 	 * sign extend x and return that badboy
 	 * @param x 2's complement number with w bits
@@ -89,11 +102,13 @@ public:
 	 * @return sign extended x
 	 */
 	static int64_t sign_extend(int64_t x, int w);
+
 	/*!
 	 * visit 'https://gitlab.com/kumm/pagsuite' for info
 	 * @return a string that uniquely describes the resulting adder graph
 	 */
 	std::string get_adder_graph_description();
+
 	/*!
 	 * @return whether the computed solution is optimal
 	 *   -> pair.first: optimal w.r.t. number of add operations
@@ -107,12 +122,14 @@ protected:
 	 * @return whether the problem is feasible
 	 */
 	virtual std::pair<bool, bool> check();
+
 	/*!
 	 * get result value for the variable with index "var_idx" if a solution was found
 	 * @param var_idx
 	 * @return the value
 	 */
 	virtual int get_result_value(int var_idx);
+
 	/*!
 	 * reset the solver backend
 	 */
@@ -123,6 +140,7 @@ protected:
 	 * @param idx variable index (=name)
 	 */
 	virtual void create_new_variable(int idx);
+
 	/*!
 	 * helper function to create an arbitrary clause:
 	 * @param a < variable idx, negate >
@@ -141,7 +159,10 @@ protected:
 	 * @param sum < variable, whether the bit should be negated at the adder output >
 	 * @param c_o < variable, whether the bit should be negated at the adder output >
 	 */
-	virtual void create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum, std::pair<int, bool> c_o={-1, false});
+	virtual void
+	create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i, std::pair<int, bool> sum,
+										std::pair<int, bool> c_o = {-1, false});
+
 	/*!
 	 * clauses for a half adder (i.e., 2:2 compressor, a full adder with c_i=0)
 	 * @param a < variable, whether the bit should be negated at the adder input >
@@ -149,7 +170,9 @@ protected:
 	 * @param sum < variable, whether the bit should be negated at the adder output >
 	 * @param c_o < variable, whether the bit should be negated at the adder output >
 	 */
-	virtual void create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum, std::pair<int, bool> c_o={-1, false});
+	virtual void create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum,
+																 std::pair<int, bool> c_o = {-1, false});
+
 	/*!
 	 * disallow shifting bits that are not equal to the sign bit
 	 * clauses are:
@@ -160,6 +183,7 @@ protected:
 	 * @param a
 	 */
 	virtual void create_signed_shift_overflow_protection(int sel, int s_a, int a);
+
 	/*!
 	 * disallow overflows for signed additions/subtractions (sub=1: subtraction, sub=0: addition)
 	 * clauses are:
@@ -173,6 +197,7 @@ protected:
 	 * @param s_y
 	 */
 	virtual void create_signed_add_overflow_protection(int sub, int s_a, int s_b, int s_y);
+
 	/*!
 	 * force x_0 or x_1 or ... x_n = 1
 	 * clauses are:
@@ -181,6 +206,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_or(std::vector<int> &x);
+
 	/*!
 	 * force a -> b
 	 * clauses are:
@@ -189,6 +215,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1x1_implication(int a, int b);
+
 	/*!
 	 * force a -> !b
 	 * clauses are:
@@ -197,6 +224,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1x1_negated_implication(int a, int b);
+
 	/*!
 	 * force !a -> b
 	 * clauses are:
@@ -205,6 +233,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1x1_reversed_negated_implication(int a, int b);
+
 	/*!
 	 * force a -> (b_0 or b_1 or ...)
 	 *   1) -a  b_0  b_1 ...
@@ -212,6 +241,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_1xN_implication(int a, const std::vector<int> &b);
+
 	/*!
 	 * force (a_0 and a_1 and ...) -> (b_0 or b_1 or ...)
 	 *   1) -a_0 -a_1 ...  b_0  b_1 ...
@@ -219,6 +249,7 @@ protected:
 	 * @param b
 	 */
 	virtual void create_MxN_implication(const std::vector<int> &a, const std::vector<int> &b);
+
 	/*!
 	 * force y = x
 	 * clauses are:
@@ -228,6 +259,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_1x1_equivalence(int x, int y);
+
 	/*!
 	 * force y = s ? a : b
 	 * clauses are:
@@ -243,6 +275,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_mux(int a, int b, int s, int y);
+
 	/*!
 	 * force y = s ? a : b AND not (s and a)
 	 * clauses are:
@@ -258,6 +291,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_mux_shift_disallowed(int a, int b, int s, int y);
+
 	/*!
 	 * force y = s ? a : b where b = 0
 	 * => y = !s and a
@@ -270,6 +304,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_mux_zero_const(int a, int s, int y);
+
 	/*!
 	 * force y = a XOR b
 	 * clauses are:
@@ -282,6 +317,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_xor(int a, int b, int y);
+
 	/*!
 	 * force y = not (a XOR b)
 	 * clauses are:
@@ -294,6 +330,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_equiv(int a, int b, int y);
+
 	/*!
 	 * force y = a OR b
 	 * clauses are:
@@ -305,6 +342,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_or(int a, int b, int y);
+
 	/*!
 	 * force y = a AND b
 	 * clauses are:
@@ -316,6 +354,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_and(int a, int b, int y);
+
 	/*!
 	 * force y = a AND (not b)
 	 * clauses are:
@@ -327,6 +366,7 @@ protected:
 	 * @param y
 	 */
 	virtual void create_2x1_and_b_inv(int a, int b, int y);
+
 	/*!
 	 * force s to be the sum output of a full adder
 	 * clauses are:
@@ -344,6 +384,7 @@ protected:
 	 * @param s
 	 */
 	virtual void create_add_sum(int a, int b, int c_i, int s);
+
 	/*!
 	 * force c_o to be the carry output of a full adder
 	 * clauses are:
@@ -359,6 +400,7 @@ protected:
 	 * @param c_o
 	 */
 	virtual void create_add_carry(int a, int b, int c_i, int c_o);
+
 	/*!
 	 * these clauses are not needed but increase performance during unit propagation
 	 * clauses are:
@@ -374,24 +416,28 @@ protected:
 	 * @param c_o
 	 */
 	virtual void create_add_redundant(int a, int b, int c_i, int s, int c_o);
+
 	/*!
 	 * set x = val
 	 * @param x
 	 * @param val must be 0 or 1
 	 */
 	virtual void force_bit(int x, int val);
+
 	/*!
 	 * force x != num
 	 * @param x vector that contains all bits
 	 * @param num
 	 */
 	virtual void forbid_number(const std::vector<int> &x, int val);
+
 	/*!
 	 * force x == num
 	 * @param x vector that contains all bits
 	 * @param num
 	 */
 	virtual void force_number(const std::vector<int> &x, int val);
+
 	/*!
 	 * create clauses for one bit of a "ripple-carry" version of the computation "c = max(a,b)", where a,b,c are integers
 	 * @param a_i current bit for a
@@ -409,6 +455,7 @@ protected:
 	 * @return ceil(log2(n))
 	 */
 	int ceil_log2(int n);
+
 	/*!
 	 * @param n
 	 * @return floor(log2(n))
@@ -464,14 +511,17 @@ protected:
 	 * value for the optimum adder depth
 	 */
 	int opt_adder_depth = 0;
+
 	/*!
 	 * used to compute this->opt_adder_depth before solving
 	 */
 	void compute_opt_adder_depth_value();
+
 	/*!
 	 * preprocess the requested constants
 	 */
 	void preprocess_constants();
+
 	/*!
 	 * whether to assume a fully pipelined adder graph
 	 * -> i.e., minimize the number of registered operations (#reg_add + #reg)
@@ -542,25 +592,29 @@ protected:
 	 * whether we also allow a shift at each node's output
 	 */
 	bool enable_node_output_shift = false;
-    /*!
-    * whether the solver supports incremental solving
-    * @return default = true (overload derived class if this is not the case)
-    */
-    virtual bool supports_incremental_solving() { return true; }
+
+	/*!
+	* whether the solver supports incremental solving
+	* @return default = true (overload derived class if this is not the case)
+	*/
+	virtual bool supports_incremental_solving() { return true; }
 
 private:
 	/*!
 	 * whether we want to enumerate all solutions for minimum adder count
 	 */
 	bool enumerate_all = false;
+
 	/*!
 	 * solving method for this->enumerate_all == true
 	 */
 	void solve_enumeration();
+
 	/*!
 	 * solving method for this->enumerate_all == false (standard case)
 	 */
 	void solve_standard();
+
 	/*!
 	 * limit on the number of full adders used
 	 * FULL_ADDERS_UNLIMITED = no limit
@@ -570,19 +624,23 @@ private:
 	 * store all cnf clauses for cnf file generation
 	 */
 	std::stringstream cnf_clauses;
+
 	/*!
 	 * creates a .cnf file for the current SAT problem
 	 */
 	void create_cnf_file();
+
 	/*!
 	 * get solution from backend and store result in containers below
 	 */
 	void get_solution_from_backend();
+
 	/*!
 	 * verify whether the found solution is valid
 	 * @return if it is valid
 	 */
 	bool solution_is_valid();
+
 	/*!
 	 * < node idx, left/right > -> int value
 	 */
@@ -608,11 +666,11 @@ private:
 	 * node idx -> int value
 	 * CMM Dimension
 	 */
-    std::map<std::pair<int, int>, int> add_result_values;
+	std::map<std::pair<int, int>, int> add_result_values;
 	/*!
 	 * node idx -> int value
 	 */
-    std::map<int, int> post_adder_shift_value;
+	std::map<int, int> post_adder_shift_value;
 	/*!
 	 * node idx -> int value
 	 * CMM Dimension
@@ -650,43 +708,52 @@ private:
 	 *  int value
 	 */
 	int num_FAs_value;
+
 	/*!
 	 * create backend solver variables and keep track of their indices
 	 */
 	void create_variables();
+
 	/*!
 	 * create solver constraints
 	 */
 	void create_constraints(formulation_mode mode);
+
 	/*!
 	 * construct the problem (everything needed for solving)
 	 */
 	void construct_problem(formulation_mode mode);
+
 	/*!
 	 * optimize #adders or #full_adders within this loop
 	 */
 	void optimization_loop(formulation_mode mode);
-    /*!
-     * check if vector has only positv values after they were flipped in the constructor
-     * the solver can then allow sign inversion for this vector
-     * @param v current vector to check
-     * @return true when vector is all positiv else false
-     */
-    bool vector_all_positive(const std::vector<int> v);
-    /*!
-     * @return C[0].size()
-     */
-    inline int c_row_size(){return C[0].size();}
-    /*!
-     * @return C.size()
-     */
-    inline int c_column_size(){return C.size();}
-    /*!
-     * C[0].size() idx are reserved by the inputs
-     * @return idx input buffer caused by multiple inputs in SOP and CMM
-     * not sure yet if the -1 is correct
-     */
-    inline int idx_input_buffer(){return C[0].size()-1;}
+
+	/*!
+	 * check if vector has only positv values after they were flipped in the constructor
+	 * the solver can then allow sign inversion for this vector
+	 * @param v current vector to check
+	 * @return true when vector is all positiv else false
+	 */
+	bool vector_all_positive(const std::vector<int> v);
+
+	/*!
+	 * @return C[0].size()
+	 */
+	inline int c_row_size() { return C[0].size(); }
+
+	/*!
+	 * @return C.size()
+	 */
+	inline int c_column_size() { return C.size(); }
+
+	/*!
+	 * C[0].size() idx are reserved by the inputs
+	 * @return idx input buffer caused by multiple inputs in SOP and CMM
+	 * not sure yet if the -1 is correct
+	 */
+	inline int idx_input_buffer() { return C[0].size() - 1; }
+
 	/*!
 	 * cache values for ceil(log2(n))
 	 */
@@ -703,19 +770,33 @@ private:
 	void create_input_node_depth_variables(); // idx = 0 is the input node that has a constant value 0 as output
 	void create_input_select_mux_variables(int idx); // select input variables
 	void create_input_select_selection_variables(int idx);
+
 	void create_input_shift_value_variables(int idx);
+
 	void create_shift_internal_variables(int idx);
+
 	void create_input_negate_select_variable(int idx);
+
 	void create_negate_select_output_variables(int idx);
+
 	void create_input_negate_value_variable(int idx);
+
 	void create_xor_output_variables(int idx);
+
 	void create_adder_internal_variables(int idx);
+
 	void create_post_adder_input_shift_value_variables(int idx);
+
 	void create_post_adder_shift_variables(int idx);
+
 	void create_output_value_variables(int idx);
+
 	void create_mcm_output_variables(int idx);
+
 	void create_adder_depth_variables(int idx);
+
 	void create_pipelining_variables(int idx);
+
 	void create_output_stage_eq_variables();
 
 
@@ -723,34 +804,63 @@ private:
 	//// CREATE ALL CONSTRAINTS ////
 	////////////////////////////////
 	void create_input_output_constraints(formulation_mode mode);
+
 	void create_input_select_constraints(int idx, formulation_mode mode);
+
 	void create_input_select_limitation_constraints(int idx, formulation_mode mode);
+
 	void create_shift_limitation_constraints(int idx, formulation_mode mode);
+
 	void create_shift_constraints(int idx, formulation_mode mode);
+
 	void create_negate_select_constraints(int idx, formulation_mode mode);
+
 	void create_xor_constraints(int idx, formulation_mode mode);
+
 	void create_adder_constraints(int idx, formulation_mode mode);
+
 	void create_post_adder_shift_limitation_constraints(int idx, formulation_mode mode);
+
 	void create_post_adder_shift_constraints(int idx, formulation_mode mode);
+
 	void create_odd_fundamentals_constraints(int idx, formulation_mode mode);
+
 	void create_mcm_output_constraints(formulation_mode mode);
+
 	void create_mcm_input_constraints(formulation_mode mode);
+
 	void create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode);
+
 	void create_full_adder_msb_constraints(int idx, formulation_mode mode);
+
 	void create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode);
+
 	void create_full_adder_shift_gain_constraints(int idx, formulation_mode mode);
+
 	void create_full_adder_shift_sum_constraints(int idx, formulation_mode mode);
+
 	void create_full_adder_msb_sum_constraints(formulation_mode mode);
+
 	void create_full_adder_add_subtract_inputs_constraints(formulation_mode mode);
+
 	void create_full_adder_cpa_constraints(formulation_mode mode);
+
 	void create_full_adder_result_constraints();
+
 	void create_adder_depth_computation_select_constraints(int idx, formulation_mode mode);
+
 	void create_adder_depth_computation_max_constraints(int idx, formulation_mode mode);
+
 	void create_adder_depth_computation_add_constraints(int idx, formulation_mode mode);
+
 	void create_adder_depth_computation_limit_constraints(int idx, formulation_mode mode);
+
 	void create_pipelining_register_constraints(int idx, formulation_mode mode);
+
 	void create_pipelining_input_stage_equality_constraints(int idx, formulation_mode mode);
+
 	void create_pipelining_output_stage_equality_constraints(int idx, formulation_mode mode);
+
 	void prohibit_current_solution();
 
 	/*!
@@ -964,11 +1074,13 @@ private:
 	 * a variable that is forced to 0
 	 */
 	int const_zero_bit = -1;
+
 	/*!
 	 * init this->const_one_bit if not yet initialized
 	 * @return this->const_one_bit after init
 	 */
 	int init_const_one_bit();
+
 	/*!
 	 * init this->const_one_bit if not yet initialized
 	 * @return this->const_one_bit after init

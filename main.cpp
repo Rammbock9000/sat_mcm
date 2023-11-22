@@ -13,7 +13,9 @@
 #endif
 
 #ifdef USE_KISSAT
+
 #include <mcm_kissat.h>
+
 #endif
 
 #ifdef USE_Z3
@@ -24,7 +26,7 @@
 #include <mcm_syrup.h>
 #endif
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 	std::unique_ptr<mcm> solver;
 	std::vector<std::vector<int>> C;
 	int timeout = 300;
@@ -42,7 +44,7 @@ int main(int argc, char** argv) {
 	bool pipelining = false;
 	bool eq_output_stages = false;
 #ifdef USE_KISSAT
-    // kissat backend still in development!
+	// kissat backend still in development!
 	solver_name = "kissat";
 #endif
 #ifdef USE_Z3
@@ -55,26 +57,45 @@ int main(int argc, char** argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout << "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth> <pipelining> <equalize output stages>" << std::endl;
-		std::cout <<   "  => constant(s): <int:int:int>;<...>;...: specify the constant matrix" << std::endl;
-		std::cout <<   "      => separate columns with colons and rows with semicolons" << std::endl;
+		std::cout
+			<< "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth> <pipelining> <equalize output stages>"
+			<< std::endl;
+		std::cout << "  => constant(s): <int:int:int>;<...>;...: specify the constant matrix" << std::endl;
+		std::cout << "      => separate columns with colons and rows with semicolons" << std::endl;
 		std::cout << R"(      => need to put this argument into "..." on UNIX-based systems)" << std::endl;
 		std::cout << R"(      => i.e., use "A:B:C" for SOP and "A;B;C" for MCM and "A" for SCM)" << std::endl;
-		std::cout << R"(      => e.g., specify "11:21;33:-44" to get a solution that computes both 11*x1+21*x2 and 33*x1-44*x2)" << std::endl;
+		std::cout
+			<< R"(      => e.g., specify "11:21;33:-44" to get a solution that computes both 11*x1+21*x2 and 33*x1-44*x2)"
+			<< std::endl;
 		std::cout << "  => solver name: <string>: kissat, cadical, z3, syrup are currently supported" << std::endl;
 		std::cout << "  => timeout: <uint>: number of seconds allowed per SAT instance" << std::endl;
 		std::cout << "  => threads: <uint>: number of threads allowed to use" << std::endl;
 		std::cout << "  => quiet: <0/1>: suppress debug outputs by setting this to 1" << std::endl;
-		std::cout << "  => minimize full adders: <0/1>: minimize the full adder count for the optimal number of adders by setting this to 1" << std::endl;
-		std::cout << "  => allow post adder right shifts: <0/1>: account for the optional right shift after the addition" << std::endl;
-		std::cout << "  => allow negative coefficients: <0/1>: allow the use of negative coefficients to decrease the FA count" << std::endl;
+		std::cout
+			<< "  => minimize full adders: <0/1>: minimize the full adder count for the optimal number of adders by setting this to 1"
+			<< std::endl;
+		std::cout << "  => allow post adder right shifts: <0/1>: account for the optional right shift after the addition"
+							<< std::endl;
+		std::cout
+			<< "  => allow negative coefficients: <0/1>: allow the use of negative coefficients to decrease the FA count"
+			<< std::endl;
 		std::cout << "  => write cnf files: <0/1>: write all SAT programs to CNF files" << std::endl;
-		std::cout << "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it" << std::endl;
+		std::cout
+			<< "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it"
+			<< std::endl;
 		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
-		std::cout << "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)" << std::endl;
-		std::cout << "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS" << std::endl;
-		std::cout << "  => pipelining: <0/1>: let the solver optimize under the assumption that the adder graph will be fully pipelined after each adder stage => WORK IN PROGRESS" << std::endl;
-		std::cout << "  => equalize output stages: <0/1>: force all outputs into the same pipeline stage (only relevant for pipelining) => WORK IN PROGRESS" << std::endl;
+		std::cout
+			<< "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)"
+			<< std::endl;
+		std::cout
+			<< "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS"
+			<< std::endl;
+		std::cout
+			<< "  => pipelining: <0/1>: let the solver optimize under the assumption that the adder graph will be fully pipelined after each adder stage => WORK IN PROGRESS"
+			<< std::endl;
+		std::cout
+			<< "  => equalize output stages: <0/1>: force all outputs into the same pipeline stage (only relevant for pipelining) => WORK IN PROGRESS"
+			<< std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -85,29 +106,29 @@ int main(int argc, char** argv) {
 			std::string vector_buff;
 			std::string buff;
 			std::vector<std::string> v;
-			while(std::getline(c_str, vector_buff, ';')) {
-			    v.emplace_back(vector_buff);
+			while (std::getline(c_str, vector_buff, ';')) {
+				v.emplace_back(vector_buff);
 			}
-			for(auto &entry : v){
-			    std::cout << entry << std::endl;
-			}
-			for(int i = 0; i < v.size(); i++){
-                s_str << v[i];
-                std::cout << v[i] << std::endl;
-                std::vector<int> vector_row;
+			//for (auto &entry: v) {
+			//	std::cout << entry << std::endl;
+			//}
+			for (int i = 0; i < v.size(); i++) {
+				s_str << v[i];
+				//std::cout << v[i] << std::endl;
+				std::vector<int> vector_row;
 
-                while(std::getline(s_str, buff, ':')) {
-                    std::cout << "before emplace" << std::endl;
-                    vector_row.emplace_back(std::stoi(buff));
-                    std::cout << "after emplace" << std::endl;
-                }
-                std::cout << vector_row.size() << std::endl;
-                for(int j = 0; j < vector_row.size(); j++) {
-                    std::cout << vector_row[j] << std::endl;
-                }
-                std::cout << "----"<< std::endl;
-                C.emplace_back(vector_row);
-                s_str.clear();
+				while (std::getline(s_str, buff, ':')) {
+					//std::cout << "before emplace" << std::endl;
+					vector_row.emplace_back(std::stoi(buff));
+					//std::cout << "after emplace" << std::endl;
+				}
+				//std::cout << vector_row.size() << std::endl;
+				//for (int j = 0; j < vector_row.size(); j++) {
+				//	std::cout << vector_row[j] << std::endl;
+				//}
+				//std::cout << "----" << std::endl;
+				C.emplace_back(vector_row);
+				s_str.clear();
 			}
 		}
 		catch (...) {
@@ -117,15 +138,15 @@ int main(int argc, char** argv) {
 		}
 	}
 	//changed from constant(s): <int:int:...>: to constants(s): <int:int:int;...>
-	for(auto &v : C){
-	    for(auto c : v){
-	        std::cout << c << std::endl;
-	    }
+	for (auto &v: C) {
+		for (auto c: v) {
+			std::cout << c << std::endl;
+		}
 	}
 
 	if (argc > 2) {
 		std::string s(argv[2]);
-		std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){return std::tolower(c);});
+		std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
 		solver_name = s;
 	}
 	if (argc > 3) {
@@ -153,11 +174,10 @@ int main(int argc, char** argv) {
 	if (argc > 5) {
 		std::string s(argv[5]);
 		try {
-			auto quiet = (bool)std::stoi(s);
+			auto quiet = (bool) std::stoi(s);
 			if (quiet) {
 				verbosity = mcm::verbosity_mode::normal_mode;
-			}
-			else {
+			} else {
 				verbosity = mcm::verbosity_mode::debug_mode;
 			}
 		}
@@ -170,7 +190,7 @@ int main(int argc, char** argv) {
 	if (argc > 6) {
 		std::string s(argv[6]);
 		try {
-			also_minimize_full_adders = (bool)std::stoi(s);
+			also_minimize_full_adders = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -181,7 +201,7 @@ int main(int argc, char** argv) {
 	if (argc > 7) {
 		std::string s(argv[7]);
 		try {
-			allow_node_output_shift = (bool)std::stoi(s);
+			allow_node_output_shift = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -192,7 +212,7 @@ int main(int argc, char** argv) {
 	if (argc > 8) {
 		std::string s(argv[8]);
 		try {
-			allow_negative_numbers = (bool)std::stoi(s);
+			allow_negative_numbers = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -203,7 +223,7 @@ int main(int argc, char** argv) {
 	if (argc > 9) {
 		std::string s(argv[9]);
 		try {
-			write_cnf = (bool)std::stoi(s);
+			write_cnf = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -236,7 +256,7 @@ int main(int argc, char** argv) {
 	if (argc > 12) {
 		std::string s(argv[12]);
 		try {
-			enumerate_all = (bool)std::stoi(s);
+			enumerate_all = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -247,7 +267,7 @@ int main(int argc, char** argv) {
 	if (argc > 13) {
 		std::string s(argv[13]);
 		try {
-			min_adder_depth = (bool)std::stoi(s);
+			min_adder_depth = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -258,7 +278,7 @@ int main(int argc, char** argv) {
 	if (argc > 14) {
 		std::string s(argv[14]);
 		try {
-			pipelining = (bool)std::stoi(s);
+			pipelining = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -269,7 +289,7 @@ int main(int argc, char** argv) {
 	if (argc > 15) {
 		std::string s(argv[15]);
 		try {
-			eq_output_stages = (bool)std::stoi(s);
+			eq_output_stages = (bool) std::stoi(s);
 		}
 		catch (...) {
 			std::stringstream err_msg;
@@ -278,35 +298,34 @@ int main(int argc, char** argv) {
 		}
 	}
 
-    if (C[0].size() == 1 and C.size() == 1 ) {
-        std::cout << "Starting SCM for constant(s) " << C[0].front() << std::endl;
-    }
-    else if (C[0].size() == 1){
-        std::cout << "Starting MCM for constant(s)" << std::endl;
-        for (auto &v : C) {
-            for (auto &c : v)
-                std::cout << c << std::endl;
-        }
-    }
-    else{
-        std::cout << "Starting CMM for constant(s)" << std::endl;
-        for (auto &v : C) {
-            std::cout << "<";
-            for (auto &c : v) {
-                std::cout << "  " << c;
-            }
-            std::cout << " >" << std::endl;
-        }
-    }
-    /* old console output for SCM and MCM
-	std::cout << "Starting CMM for constant(s)" << (C.size()>1?"s\n":" ");
-	for (auto &v : C) {
-	    for (auto &c : v) {
-            std::cout << (C.size() > 1 ? "  " : "") << c << (C.size() > 1 ? "\n" : " ");
-        }
+	if (C[0].size() == 1 and C.size() == 1) {
+		std::cout << "Starting SCM for constant(s) " << C[0].front() << std::endl;
+	} else if (C[0].size() == 1) {
+		std::cout << "Starting MCM for constant(s)" << std::endl;
+		for (auto &v: C) {
+			for (auto &c: v)
+				std::cout << c << std::endl;
+		}
+	} else {
+		std::cout << "Starting CMM for constant(s)" << std::endl;
+		for (auto &v: C) {
+			std::cout << "<";
+			for (auto &c: v) {
+				std::cout << "  " << c;
+			}
+			std::cout << " >" << std::endl;
+		}
 	}
-	*/
-	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads << " allowed threads" << std::endl;
+	/* old console output for SCM and MCM
+std::cout << "Starting CMM for constant(s)" << (C.size()>1?"s\n":" ");
+for (auto &v : C) {
+		for (auto &c : v) {
+					std::cout << (C.size() > 1 ? "  " : "") << c << (C.size() > 1 ? "\n" : " ");
+			}
+}
+*/
+	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads
+						<< " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
 	if (solver_name == "cadical") {
 #ifdef USE_CADICAL
@@ -314,30 +333,26 @@ int main(int argc, char** argv) {
 #else
 		throw std::runtime_error("Link CaDiCaL lib to use CaDiCaL backend");
 #endif
-    }
-    else if (solver_name == "kissat") {
+	} else if (solver_name == "kissat") {
 #ifdef USE_KISSAT
-        solver = std::make_unique<mcm_kissat>(C, timeout, verbosity, allow_negative_numbers, write_cnf);
+		solver = std::make_unique<mcm_kissat>(C, timeout, verbosity, allow_negative_numbers, write_cnf);
 #else
-        throw std::runtime_error("Link kissat lib to use kissat backend");
+		throw std::runtime_error("Link kissat lib to use kissat backend");
 #endif
-    }
-	else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
+	} else if (solver_name == "syrup" or solver_name == "glucose" or solver_name == "glucose-syrup") {
 #ifdef USE_SYRUP
 		solver = std::make_unique<mcm_syrup>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Glucose-Syrup lib to use syrup backend");
 #endif
-	}
-	else if (solver_name == "z3") {
+	} else if (solver_name == "z3") {
 #ifdef USE_Z3
 		solver = std::make_unique<mcm_z3>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
 #else
 		throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif
-	}
-	else
-		throw std::runtime_error("unknown solver name '"+solver_name+"'");
+	} else
+		throw std::runtime_error("unknown solver name '" + solver_name + "'");
 	solver->set_enumerate_all(enumerate_all);
 	if (also_minimize_full_adders) solver->also_minimize_full_adders();
 	if (allow_node_output_shift) solver->allow_node_output_shift();
@@ -347,10 +362,12 @@ int main(int argc, char** argv) {
 	if (pipelining) solver->enable_pipelining();
 	if (eq_output_stages) solver->equalize_output_stages();
 	solver->solve();
-	auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() / 1000.0;
+	auto elapsed_time =
+		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() /
+		1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;
 	solver->print_solution();
-	auto [a,b] = solver->solution_is_optimal();
+	auto [a, b] = solver->solution_is_optimal();
 	std::cerr << "#Add optimal = " << a << std::endl;
 	std::cerr << "#FAs optimal = " << b << std::endl;
 	return 0;
