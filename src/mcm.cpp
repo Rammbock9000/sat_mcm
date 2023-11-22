@@ -573,6 +573,11 @@ void mcm::create_mcm_output_variables(int idx) {
 void mcm::create_pipelining_variables(int idx) {
 	//this->register_variables[idx] = ++this->variable_counter;
 	//this->create_new_variable(this->variable_counter);
+	if (this->c_column_size() > 1) {
+		// MCM/CMM
+		this->node_is_output_variables[idx] = ++this->variable_counter;
+		this->create_new_variable(this->variable_counter);
+	}
 	this->input_stages_equal_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
 }
@@ -2801,6 +2806,7 @@ void mcm::create_pipelining_output_stage_equality_constraints(int idx, mcm::form
 	// for SCM/SOP (i.e., this->c_column_size() = 1) this is always given because there is only one output
 	if (this->c_column_size() < 2) return;
 	// for MCM/CMM (i.e., this->c_column_size() > 1) we can use the mcm output variables as an indicator for output nodes
+	/*
 	for(int m=1; m<=c_column_size(); m++){
 		std::vector<int> mcm_output_vars(1, this->mcm_output_variables.at({idx, m}));
 		if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
@@ -2816,6 +2822,27 @@ void mcm::create_pipelining_output_stage_equality_constraints(int idx, mcm::form
 				this->create_arbitrary_clause({{mcm_output_var, true}, {node_stage_var, false}, {output_stage_var, true}});
 			}
 		}
+	}
+	 */
+	// correctly set node_is_output_variable
+	auto node_is_output_var = this->node_is_output_variables.at(idx);
+	for(int m=1; m<=c_column_size(); m++){
+		std::vector<int> mcm_output_vars(1, this->mcm_output_variables.at({idx, m}));
+		if (this->calc_twos_complement and this->sign_inversion_allowed[m]) {
+			mcm_output_vars.emplace_back(this->mcm_output_variables.at({idx, -m}));
+		}
+		// mcm_output implies node_is_output
+		for (auto &mcm_output_var : mcm_output_vars) {
+			this->create_1x1_implication(mcm_output_var, node_is_output_var);
+		}
+	}
+	// now force the relationship:
+	// "node_is_output_var implies that the stage for node #idx is equal to the output stage"
+	for (int w = 0; w < this->adder_depth_word_size; w++) {
+		auto node_stage_var = this->adder_depth_variables.at({idx, w});
+		auto output_stage_var = this->output_stage_eq_variables.at(w);
+		this->create_arbitrary_clause({{node_is_output_var, true}, {node_stage_var, true}, {output_stage_var, false}});
+		this->create_arbitrary_clause({{node_is_output_var, true}, {node_stage_var, false}, {output_stage_var, true}});
 	}
 }
 

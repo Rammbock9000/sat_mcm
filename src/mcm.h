@@ -953,6 +953,10 @@ private:
 	 */
 	std::map<int, int> output_stage_eq_variables;
 	/*!
+	 * < idx > -> variable idx
+	 */
+	std::map<int, int> node_is_output_variables;
+	/*!
 	 * a variable that is forced to 1
 	 */
 	int const_one_bit = -1;
