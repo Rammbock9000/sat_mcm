@@ -469,6 +469,10 @@ protected:
 	 */
 	void compute_opt_adder_depth_value();
 	/*!
+	 * preprocess the requested constants
+	 */
+	void preprocess_constants();
+	/*!
 	 * whether to assume a fully pipelined adder graph
 	 * -> i.e., minimize the number of registered operations (#reg_add + #reg)
 	 */

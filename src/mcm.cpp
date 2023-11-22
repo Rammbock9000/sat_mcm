@@ -36,7 +36,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
             }
             shifted_bits++;
         }
-        //look for first non zero value in vector and check if its > or < 0
+        //look for first nonzero value in vector and check if its > or < 0
         //note: do not remove if you think it's not needed think about it twice (norm for duplicate vector)
         for (auto &c : v) {
             std::cout << "found entry: " << c << std::endl;
@@ -86,8 +86,13 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
         std::cout << "return value 'not only contain 0's': " << !(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) << std::endl;
         std::cout << "return value 'sum of absolute vector is not 1': " << (std::accumulate(absV.begin(), absV.end(), 0) != 1)  << std::endl;
 
-        if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
-            std::accumulate(absV.begin(), absV.end(), 0) != 1) non_one_unique_vectors.insert(v);
+				// nfiege: for pipelining we cannot ignore unit vectors (or 1's in the MCM case)
+				// sort them out before solving if pipelining is not used
+        /*if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
+            std::accumulate(absV.begin(), absV.end(), 0) != 1) non_one_unique_vectors.insert(v);*/
+				// only ignore all-zero vectors here
+		if (!std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) non_one_unique_vectors.insert(v);
+
 		//calculate ceiling over all values
 		for (auto &c : v) {
             auto w = this->ceil_log2(std::abs(c)) + 1;
@@ -164,6 +169,8 @@ void mcm::optimization_loop(formulation_mode mode) {
 }
 
 void mcm::solve() {
+	// preprocessing for non-pipelining settings
+	this->preprocess_constants();
 	// preprocessing for adder depth minimization
 	this->compute_opt_adder_depth_value();
 	// actually solve
@@ -529,8 +536,16 @@ void mcm::create_adder_depth_variables(int idx) {
 			}
 		}
 		// max computation result value
-		this->adder_depth_computation_max_variables[{idx, w}] = ++this->variable_counter;
-		this->create_new_variable(this->variable_counter);
+		if (this->pipelining_enabled and num_muxs > 0) {
+			// pipelining enabled, and it is NOT the first node -> input adder depths are forced equal
+			// just set the maximum of left/right to the left one
+			this->adder_depth_computation_max_variables[{idx, w}] = this->adder_depth_computation_input_variables.at({idx, input_direction::left, w});
+		}
+		else {
+			// pipelining disabled, or it is the first node -> input adder depths can differ
+			this->adder_depth_computation_max_variables[{idx, w}] = ++this->variable_counter;
+			this->create_new_variable(this->variable_counter);
+		}
 		// adder depth output value
 		if (w < max_value_num_bits) {
 			// create new variable
@@ -1402,11 +1417,17 @@ void mcm::create_adder_depth_computation_select_constraints(int idx, formulation
 
 void mcm::create_adder_depth_computation_max_constraints(int idx, formulation_mode mode) {
 	// the VERY FIRST adder node must be connected to one of the inputs
+	// => it does not have inputs
 	// => the max is always zero
 	if (idx == this->c_row_size()) {
 		for (int w = 0; w < this->adder_depth_word_size; w++) {
 			this->force_bit(this->adder_depth_computation_max_variables.at({idx, w}), 0);
 		}
+		return;
+	}
+	if (this->pipelining_enabled) {
+		// no need to explicitly compute the max value for pipelined adder graphs
+		// because both inputs come from the same pipeline stage
 		return;
 	}
 	// compute c = max(a, b)
@@ -3344,6 +3365,25 @@ void mcm::compute_opt_adder_depth_value() {
 		}
 		// compute ADopt = max(ceil(log2(sum over all non_zero_csd)))
 		this->opt_adder_depth = std::max(this->opt_adder_depth, static_cast<int>(std::ceil(std::log2(non_zeros_csd))));
+	}
+}
+
+void mcm::preprocess_constants() {
+	// constants are fine as they are if pipelining is enabled
+	if (this->pipelining_enabled) return;
+	// if it's disabled, we must eliminate all unit vectors from the list of constants
+	// and adjust the lower bound on the number of adders
+	bool vec_eliminated = true;
+	while (vec_eliminated) {
+		vec_eliminated = false;
+		for (auto it=this->C.begin(); it!=this->C.end(); it++) {
+			bool is_unit_vector = std::accumulate(it->begin(), it->end(), 0)==1;
+			if (!is_unit_vector) continue;
+			this->C.erase(it);
+			this->num_adders--;
+			vec_eliminated = true;
+			break;
+		}
 	}
 }
 
