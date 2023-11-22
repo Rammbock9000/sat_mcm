@@ -941,8 +941,9 @@ private:
 	std::map<std::pair<int, int>, int> adder_depth_computation_max_variables;
 	/*!
 	 * < idx > -> variable idx
+	 * => are they really needed?!?!?!?
 	 */
-	std::map<int, int> register_variables;
+	//std::map<int, int> register_variables;
 	/*!
 	 * < idx > -> variable idx
 	 */

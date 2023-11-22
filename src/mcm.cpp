@@ -571,8 +571,8 @@ void mcm::create_mcm_output_variables(int idx) {
 }
 
 void mcm::create_pipelining_variables(int idx) {
-	this->register_variables[idx] = ++this->variable_counter;
-	this->create_new_variable(this->variable_counter);
+	//this->register_variables[idx] = ++this->variable_counter;
+	//this->create_new_variable(this->variable_counter);
 	this->input_stages_equal_variables[idx] = ++this->variable_counter;
 	this->create_new_variable(this->variable_counter);
 }
@@ -1616,7 +1616,16 @@ void mcm::get_solution_from_backend() {
             }
         }
 			if (this->pipelining_enabled and idx > idx_input_buffer()) {
-				this->is_register[idx] = this->get_result_value(this->register_variables.at(idx));
+				//this->is_register[idx] = this->get_result_value(this->register_variables.at(idx));
+				auto idx_l = this->input_select.at({idx, input_direction::left});
+				auto idx_r = this->input_select.at({idx, input_direction::right});
+				bool identical_to_l= true;
+				bool identical_to_r = true;
+				for (int i=0; i<this->c_row_size(); i++) {
+					if (this->output_values.at({idx, i}) != this->output_values.at({idx_l, i})) identical_to_l = false;
+					if (this->output_values.at({idx, i}) != this->output_values.at({idx_r, i})) identical_to_r = false;
+				}
+				this->is_register[idx] = identical_to_l or identical_to_r;
 				this->pipeline_stage[idx] = 0;
 				for (int w=0; w<this->adder_depth_word_size; w++) {
 					auto val = this->get_result_value(this->adder_depth_variables.at({idx, w}));
@@ -2740,6 +2749,7 @@ void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
 
 void mcm::create_pipelining_register_constraints(int idx, mcm::formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
+	/*
 	auto reg_var = this->register_variables.at(idx);
 	// reg_var implies that input select values for left & right are equal
 	int input_select_word_size = this->ceil_log2(idx);
@@ -2767,6 +2777,8 @@ void mcm::create_pipelining_register_constraints(int idx, mcm::formulation_mode 
 			this->create_arbitrary_clause({{reg_var, true}, {s_w, true}});
 		}
 	}
+	 */
+	// just let the solver figure it out by itself lol
 }
 
 void mcm::create_pipelining_input_stage_equality_constraints(int idx, mcm::formulation_mode mode) {
@@ -3369,8 +3381,8 @@ void mcm::compute_opt_adder_depth_value() {
 }
 
 void mcm::preprocess_constants() {
-	// constants are fine as they are if pipelining is enabled
-	if (this->pipelining_enabled) return;
+	// constants are fine as they are if pipelining is enabled and output stages must be equalized
+	if (this->pipelining_enabled and this->force_output_stages_equal) return;
 	// if it's disabled, we must eliminate all unit vectors from the list of constants
 	// and adjust the lower bound on the number of adders
 	bool vec_eliminated = true;
