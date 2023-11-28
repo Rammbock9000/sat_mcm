@@ -3640,7 +3640,11 @@ void mcm::preprocess_constants() {
 	while (vec_eliminated) {
 		vec_eliminated = false;
 		for (auto it = this->C.begin(); it != this->C.end(); it++) {
-			bool is_unit_vector = std::accumulate(it->begin(), it->end(), 0) == 1;
+			std::vector<int> vec_abs = *it;
+			for (auto &v : vec_abs) {
+				v = std::abs(v);
+			}
+			bool is_unit_vector = std::accumulate(vec_abs.begin(), vec_abs.end(), 0) == 1;
 			if (!is_unit_vector) continue;
 			this->C.erase(it);
 			this->num_adders--;

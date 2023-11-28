@@ -19,8 +19,11 @@ def get_setup(bench_type):
     if bench_type == "scm_reduced" or bench_type == "pscm_reduced":
         filename = "benchmark/inputs/scm/scm_reduced.csv"
         name_tag = "constant"
-    elif bench_type == "scm" or bench_type == "scm":
+    elif bench_type == "scm":
         filename = "benchmark/inputs/scm/scm.csv"
+        name_tag = "constant"
+    elif bench_type == "pscm":
+        filename = "benchmark/inputs/scm/scm_20.csv"
         name_tag = "constant"
     elif bench_type == "scm_lagoon_metodi":
         filename = "benchmark/inputs/scm/scm_lagoon_metodi.csv"
@@ -80,6 +83,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         timeout_mul = 24*7 # 1 week for very hard scm instances
     elif "enumerate" in bench_type:
         timeout_mul = 24*7 # 1 week for enumeration
+    if pipelining:
+        timeout_mul *= 2 # pipelining is harder
     timeout = 3600*timeout_mul
     if "enumerate" in bench_type:
         enumerate_all = 1
