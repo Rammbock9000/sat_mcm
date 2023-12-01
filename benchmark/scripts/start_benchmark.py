@@ -100,7 +100,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
     write_cnf = 0
     min_num_add = 0
     allow_negative_numbers = 0 if bench_type == "unsigned_mcm" else 1 if bench_type == "complex_mult" else also_minimize_full_adders
-    allow_sign_inversion = 0 if bench_type == "unsigned_mcm" or allow_negative_numbers == 0 else -1
+    allow_sign_inversion = 0 if bench_type == "unsigned_mcm" or bench_type == "complex_mult" or allow_negative_numbers == 0 else -1
 
     if "enumerate" in bench_type:
         if bench_type == "enumerate_unsigned":

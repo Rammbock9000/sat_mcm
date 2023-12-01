@@ -62,7 +62,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 				//std::cout << " ----> " << c << std::endl;
 			}
 		}
-		this->requested_vectors[original_vector] = {v, shifted_bits};
+		this->requested_vectors[original_vector] = {v, shifted_bits}; // store "requested vs. actual" info
 	}
 	//check if C has negative values while negative numbers are not allowd an throw an error
 	for (auto &v: this->C) {
@@ -2272,7 +2272,7 @@ std::string mcm::get_adder_graph_description() {
 	std::map<int, int> stage;
 	//build initial stage for inputs
 	for (int i = 0; i <= idx_input_buffer(); i++) {
-		stage[i] = i;
+		stage[i] = 0;
 	}
 
 	for (int idx = (1 + idx_input_buffer()); idx <= (this->num_adders + idx_input_buffer()); idx++) {
@@ -2320,6 +2320,10 @@ std::string mcm::get_adder_graph_description() {
 
 		//TODO there has to be a way to do this more efficient this is pretty ugly
 
+        // separate nodes with comma
+        if (idx > (1 + idx_input_buffer())) {
+            s << ",";
+        }
 		// basic node info
 		s << "{'A',[";
 		for (int v = 0; v < c_row_size(); v++) {
@@ -2440,6 +2444,43 @@ std::string mcm::get_adder_graph_description() {
 		// // close bracket
 		// s << "}";
 	}
+    for (auto &it : this->requested_vectors) {
+        // extract elements
+        auto requested_coeff = it.first;
+        auto actual_coeff = it.second.first;
+        auto node_output_shift = it.second.second;
+        // get stage of the node that computes this output value
+        // in case of multiple duplicate "correct" values (i.e., for pipelining), take the one in the last stage
+        int node_stage = 0;
+        std::cout << std::endl;
+        for (int idx=0; idx<this->num_adders; idx++) {
+            bool correct_one = true;
+            auto node_idx = idx+this->c_row_size();
+            for (int v=0; v<this->c_row_size(); v++) {
+                if (this->output_values.at({node_idx, v}) != actual_coeff.at(v)) correct_one = false;
+            }
+            if (!correct_one) {
+                continue;
+            }
+            node_stage = std::max(node_stage, stage.at(node_idx));
+        }
+        // generate info as string
+        s << ",{'O',[";
+        for (size_t i=0; i<requested_coeff.size(); i++) {
+            if (i > 0) {
+                s << ",";
+            }
+            s << requested_coeff.at(i);
+        }
+        s << "]," << node_stage << ",["; // the output is available in the same stage as the node that computes it
+        for (size_t i=0; i<actual_coeff.size(); i++) {
+            if (i>0) {
+                s << ",";
+            }
+            s << actual_coeff.at(i);
+        }
+        s << "]," << node_stage << "}";
+    }
 	s << "}";
 	return s.str();
 }
