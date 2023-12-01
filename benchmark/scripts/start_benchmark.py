@@ -43,6 +43,9 @@ def get_setup(bench_type):
     elif bench_type == "enumerate_signed_all":
         filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
+    elif bench_type == "complex_mult":
+        filename = "benchmark/inputs/cmm/complex_6.csv"
+        name_tag = "constant"
     else:
         raise Exception(f"invalid benchmark specified: {bench_type}")
     return filename, name_tag
@@ -83,6 +86,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         timeout_mul = 24*7 # 1 week for very hard scm instances
     elif "enumerate" in bench_type:
         timeout_mul = 24*7 # 1 week for enumeration
+    elif "complex_mult" in bench_type:
+        timeout_mul = 24*7 # 1 week for complex multiplications
     if pipelining:
         timeout_mul *= 2 # pipelining is harder
     timeout = 3600*timeout_mul
@@ -94,8 +99,9 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
     quiet = 1
     write_cnf = 0
     min_num_add = 0
-    allow_negative_numbers = 0 if bench_type == "unsigned_mcm" else also_minimize_full_adders
+    allow_negative_numbers = 0 if bench_type == "unsigned_mcm" else 1 if bench_type == "complex_mult" else also_minimize_full_adders
     allow_sign_inversion = 0 if bench_type == "unsigned_mcm" or allow_negative_numbers == 0 else -1
+
     if "enumerate" in bench_type:
         if bench_type == "enumerate_unsigned":
             allow_sign_inversion = 0
@@ -123,12 +129,12 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         else: # name_tag == "counting":
             filename_temp = f"{i}"
             i += 1
-        result_filename = f"{result_dir}/{bench_type}/shift_{allow_post_add_right_shift}_FA_{also_minimize_full_adders}/{filename_temp}.txt"
+        result_filename = f"{result_dir}/{bench_type}/shift_{allow_post_add_right_shift}_FA_{also_minimize_full_adders}/{filename_temp}.txt".replace(";","_")
         if os.path.isfile(result_filename):
             # result already exists
             continue
         # create file
-        command = f"touch {result_filename}"
+        command = f'touch {result_filename}'
         os.system(command)
         # run experiment
         fa_min_str = "without FA minimization"

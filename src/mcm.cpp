@@ -98,7 +98,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 
 		//calculate ceiling over all values
 		for (auto &c: v) {
-			auto w = this->ceil_log2(std::abs(c)) + 1;
+			auto w = this->ceil_log2(std::abs(c)) + 1 ;
 			if (w > this->word_size) this->word_size = w;
 		}
 		absV.clear();
@@ -110,7 +110,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 		this->word_size++;
 	}
 
-	this->shift_word_size = this->ceil_log2(this->max_shift + 1);
+	this->shift_word_size = std::max(this->ceil_log2(this->max_shift + 1), 1);
 	this->num_adders = (int) non_one_unique_vectors.size() - 1;
 	if (this->verbosity != verbosity_mode::quiet_mode) {
 		std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
@@ -1826,6 +1826,60 @@ void mcm::get_solution_from_backend() {
 }
 
 void mcm::print_solution() {
+#if 1
+    // print failure
+    if (!this->found_solution) {
+        std::cout << "Failed to find solution for constant multiplication by:" << std::endl;
+        for (auto &v: this->C) {
+            std::cout << "  V = <";
+            for (auto c: v) {
+                std::cout << " " << c;
+            }
+            std::cout << " >" << std::endl;
+        }
+        return;
+    }
+    // found solution! -> print general info
+    std::cout << "Found solution for constant multiplication by:" << std::endl;
+    for (auto &v: this->C) {
+        std::cout << "  <";
+        for (auto c: v) {
+            std::cout << " " << c;
+        }
+        std::cout << " >" << std::endl;
+    }
+    std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
+    // print remaining nodes
+    for (auto idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+        std::stringstream const_value_as_str;
+        const_value_as_str << "[";
+        for (int v = 0; v < c_row_size(); v++) {
+            if (v>0) const_value_as_str << ",";
+            const_value_as_str << (this->calc_twos_complement ? sign_extend((int64_t) this->output_values[{idx, v}],
+                                                                            this->word_size) : this->output_values[{idx, v}]);
+        }
+        const_value_as_str << "]";
+        std::cout << "  node #" << idx << " = "
+                  << const_value_as_str.str()
+                  << std::endl;
+        if (idx <= idx_input_buffer()) continue;
+        std::cout << "    left input: node " << this->input_select[{idx, mcm::left}] << std::endl;
+        std::cout << "    right input: node " << this->input_select[{idx, mcm::right}] << std::endl;
+        std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
+        std::cout << "    negate select: " << this->negate_select[idx]
+                  << (this->negate_select[idx] == 1 ? " (non-shifted)" : " (shifted)") << std::endl;
+        std::cout << "    subtract: " << this->subtract[idx] << std::endl;
+        if (this->enable_node_output_shift) {
+            std::cout << "    post adder right shift value: " << this->post_adder_shift_value[idx] << std::endl;
+        }
+        if (this->pipelining_enabled) {
+            std::cout << "    register: " << this->is_register[idx] << std::endl;
+            std::cout << "    pipeline stage: " << this->pipeline_stage[idx] << std::endl;
+        }
+    }
+    // lastly, print adder graph
+    std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
+#else
 	if (this->found_solution) {
 		std::cout << "Solution for Vector" << std::endl;
 		for (auto &v: this->C) {
@@ -1878,6 +1932,7 @@ void mcm::print_solution() {
 			std::cout << " >" << std::endl;
 		}
 	}
+#endif
 }
 
 bool mcm::solution_is_valid() {
