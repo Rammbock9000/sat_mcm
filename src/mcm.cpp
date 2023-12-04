@@ -3334,7 +3334,7 @@ void mcm::prohibit_current_solution() {
 	std::vector<std::pair<int, bool>> clause;
 	int v; // variable buffer
 	//for (int i = 1; i <= this->num_adders; i++) {
-    for (int i = this->c_column_size(); i <= this->num_adders; i++) {
+    for (int i = this->c_row_size(); i < this->num_adders+this->c_row_size(); i++) {
 		auto mux_word_size = this->ceil_log2(i);
 		// left input mux
 		for (int s = 0; s < mux_word_size; s++) {
@@ -3438,45 +3438,66 @@ void mcm::solve_enumeration() {
 		int current_full_adders = 0;
 		int MSBs_cut = 0;
 		int MSBs_not_cut = 0;
-		for (int v = 0; v < c_row_size(); v++) {
-			for (int idx = 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
-				if (this->output_values.at({idx, v}) == 0) {
-					// more adders allocated than necessary
-					continue;
-				}
-				int FAs_for_this_node = (int) std::ceil(std::log2(std::abs(this->add_result_values.at({idx, v}))));
-				int shifter_input_non_zero_LSBs = 0;
-				int shifter_input = 1;
-				if (idx > (1 + idx_input_buffer())) {
-					shifter_input = this->input_select_mux_output.at({idx, mcm::left, v});
-				}
-				while ((shifter_input & 1) == 0) {
-					shifter_input = shifter_input >> 1;
-					shifter_input_non_zero_LSBs++;
-				}
-				if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
-					// we do not need to use a full adder for the shifted LSBs
-					//   for a + b
-					//   and a - (b << s)
-					FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
-				}
-				auto can_cut_MSB =
-					(this->output_values.at({idx, v}) >= 0 and this->input_select_mux_output[{idx, mcm::left, v}] >= 0) or
-					(this->output_values.at({idx, v}) >= 0 and this->input_select_mux_output[{idx, mcm::right, v}] >= 0) or
-					(this->output_values.at({idx, v}) < 0 and this->input_select_mux_output[{idx, mcm::left, v}] < 0) or
-					(this->output_values.at({idx, v}) < 0 and this->input_select_mux_output[{idx, mcm::right, v}] < 0);
-				if (can_cut_MSB) {
-					MSBs_cut++;
-				} else {
-					MSBs_not_cut++;
-				}
-				if (this->verbosity != verbosity_mode::quiet_mode) {
-					std::cout << "Additional FAs for node " << idx << " = "
-										<< (can_cut_MSB ? FAs_for_this_node - 1 : FAs_for_this_node) << std::endl;
-				}
-				current_full_adders += (FAs_for_this_node - ((int) can_cut_MSB));
-			}
-		}
+
+        for (int idx = this->c_row_size(); idx < this->num_adders + this->c_row_size(); idx++) {
+            int sum_over_abs_values = 0;
+            for (int v = 0; v < c_row_size(); v++) {
+                sum_over_abs_values += std::abs(this->add_result_values.at({idx, v}));
+            }
+            if (sum_over_abs_values == 0) {
+                // redundant node
+                continue;
+            }
+            int FAs_for_this_node = (int) std::ceil(std::log2(sum_over_abs_values));
+            int shifter_input_non_zero_LSBs = 0;
+            /*int shifter_input = 1;
+            if (idx > (1 + idx_input_buffer())) {
+                shifter_input = this->input_select_mux_output.at({idx, mcm::left, v});
+            }
+            while ((shifter_input & 1) == 0) {
+                shifter_input = shifter_input >> 1;
+                shifter_input_non_zero_LSBs++;
+            }*/
+            while (true) { // exit by explicit break statement
+                if (idx < 2) break;
+                bool all_even = true;
+                for (int v=0; v<this->c_row_size(); v++) {
+                    auto shifter_input = this->input_select_mux_output.at({idx, mcm::left, v});
+                    if (((shifter_input >> shifter_input_non_zero_LSBs) & 1) == 1) {
+                        all_even = false;
+                        break;
+                    }
+                }
+                if (!all_even) break;
+                shifter_input_non_zero_LSBs++;
+            }
+            if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
+                // we do not need to use a full adder for the shifted LSBs
+                //   for a + b
+                //   and a - (b << s)
+                FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
+            }
+            bool can_cut_MSB = false;
+            if (this->c_row_size() == 1) {
+                // can only cut the MSB for SCM/MCM
+                can_cut_MSB =
+                        (this->output_values.at({idx, 0}) >= 0 and this->input_select_mux_output[{idx, mcm::left, 0}] >= 0) or
+                        (this->output_values.at({idx, 0}) >= 0 and this->input_select_mux_output[{idx, mcm::right, 0}] >= 0) or
+                        (this->output_values.at({idx, 0}) < 0 and this->input_select_mux_output[{idx, mcm::left, 0}] < 0) or
+                        (this->output_values.at({idx, 0}) < 0 and this->input_select_mux_output[{idx, mcm::right, 0}] < 0);
+            }
+            if (can_cut_MSB) {
+                MSBs_cut++;
+            } else {
+                MSBs_not_cut++;
+            }
+            if (this->verbosity != verbosity_mode::quiet_mode) {
+                std::cout << "Additional FAs for node " << idx << " = "
+                                    << (can_cut_MSB ? FAs_for_this_node - 1 : FAs_for_this_node) << std::endl;
+            }
+            current_full_adders += (FAs_for_this_node - ((int) can_cut_MSB));
+        }
+
 		if (current_full_adders > this->max_full_adders and this->max_full_adders != FULL_ADDERS_UNLIMITED) {
 			if (this->verbosity != verbosity_mode::quiet_mode) {
 				this->print_solution();
