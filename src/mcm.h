@@ -605,6 +605,11 @@ private:
 	 */
 	bool enumerate_all = false;
 
+    /*!
+     * cache already enumerated solutions for non-incremental solvers
+     */
+    std::vector<std::vector<std::pair<int, bool>>> already_enumerated_solutions_cache;
+
 	/*!
 	 * solving method for this->enumerate_all == true
 	 */

@@ -138,11 +138,11 @@ int main(int argc, char **argv) {
 		}
 	}
 	//changed from constant(s): <int:int:...>: to constants(s): <int:int:int;...>
-	for (auto &v: C) {
-		for (auto c: v) {
-			std::cout << c << std::endl;
-		}
-	}
+	//for (auto &v: C) {
+	//	for (auto c: v) {
+	//		std::cout << c << std::endl;
+	//	}
+	//}
 
 	if (argc > 2) {
 		std::string s(argv[2]);
@@ -299,19 +299,19 @@ int main(int argc, char **argv) {
 	}
 
 	if (C[0].size() == 1 and C.size() == 1) {
-		std::cout << "Starting SCM for constant(s) " << C[0].front() << std::endl;
+		std::cout << "Starting SCM for constant " << C[0].front() << std::endl;
 	} else if (C[0].size() == 1) {
-		std::cout << "Starting MCM for constant(s)" << std::endl;
+		std::cout << "Starting MCM for constants" << std::endl;
 		for (auto &v: C) {
 			for (auto &c: v)
 				std::cout << c << std::endl;
 		}
 	} else {
-		std::cout << "Starting CMM for constant(s)" << std::endl;
+		std::cout << "Starting CMM for matrix" << std::endl;
 		for (auto &v: C) {
 			std::cout << "<";
 			for (auto &c: v) {
-				std::cout << "  " << c;
+				std::cout << " " << c;
 			}
 			std::cout << " >" << std::endl;
 		}

@@ -215,6 +215,9 @@ void mcm::reset_backend(formulation_mode mode) {
 		this->const_one_bit = -1;
 		this->const_zero_bit = -1;
 	}
+    for (auto &clause : this->already_enumerated_solutions_cache) {
+        this->create_arbitrary_clause(clause);
+    }
 }
 
 void mcm::construct_problem(formulation_mode mode) {
@@ -3365,7 +3368,10 @@ void mcm::prohibit_current_solution() {
 			}
 		}
 	}
-	this->create_arbitrary_clause(clause);
+    this->already_enumerated_solutions_cache.emplace_back(clause);
+    if (this->supports_incremental_solving()) {
+        this->create_arbitrary_clause(clause);
+    }
 }
 
 void mcm::set_enumerate_all(bool new_enumerate_all) {
@@ -3375,6 +3381,7 @@ void mcm::set_enumerate_all(bool new_enumerate_all) {
 void mcm::solve_enumeration() {
 	this->num_FA_opt = true;
 	this->num_add_opt = true;
+    this->already_enumerated_solutions_cache.clear();
 	if (this->verbosity == verbosity_mode::debug_mode) {
 		if (this->c_row_size() == 1 and this->c_column_size() == 1) {
 			std::cout << "Trying to solve SCM problem for constant: " << this->C[0].front() << std::endl;
@@ -3521,6 +3528,7 @@ void mcm::solve_enumeration() {
 			this->num_FA_opt = false;
 		}
 	}
+    std::cout << "Enumerated " << this->already_enumerated_solutions_cache.size() << " solutions" << std::endl;
 	this->found_solution = true;
 }
 

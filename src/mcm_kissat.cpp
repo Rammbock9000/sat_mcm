@@ -11,9 +11,10 @@ mcm_kissat::mcm_kissat(const std::vector<std::vector<int>> &C, int timeout, verb
         : mcm(C, timeout, verbosity, 1, allow_negative_numbers, write_cnf){}
 
 void mcm_kissat::reset_backend(formulation_mode mode) {
-    mcm::reset_backend(mode);
     // always create new solver since kissat does not support incremental solving
     this->solver = std::make_unique<kissatpp::kissatpp>(timeout);
+    // must call parent method AFTER initializing a new solver instance due to incremental workaround
+    mcm::reset_backend(mode);
 }
 
 std::pair<bool, bool> mcm_kissat::check() {
