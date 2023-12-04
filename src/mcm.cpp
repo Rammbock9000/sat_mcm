@@ -3333,7 +3333,8 @@ std::vector<int> mcm::create_bitheap(const std::vector<std::pair<std::vector<int
 void mcm::prohibit_current_solution() {
 	std::vector<std::pair<int, bool>> clause;
 	int v; // variable buffer
-	for (int i = 1; i <= this->num_adders; i++) {
+	//for (int i = 1; i <= this->num_adders; i++) {
+    for (int i = this->c_column_size(); i <= this->num_adders; i++) {
 		auto mux_word_size = this->ceil_log2(i);
 		// left input mux
 		for (int s = 0; s < mux_word_size; s++) {
