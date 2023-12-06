@@ -1,5 +1,15 @@
 import os
 import threading
+from sys import argv
+
+def get_num_threads_from_user():
+    if len(argv) < 2:
+        return 1
+    try:
+        return int(argv[1])
+    except ValueError as e:
+        print(f"unable to convert '{argv[1]}' to #threads (int): {repr(e)}")
+    return 1
 
 class worker_thread(threading.Thread):
     def __init__(self, id, command):
@@ -66,8 +76,9 @@ def get_setup(bench_type):
 
 def main():
     bench_type_tuples = [("mcm","shift_0_FA_0",0,0), ("mcm","shift_0_FA_1",1,0), ("unsigned_mcm","shift_0_FA_1",1,0), ("scm_lagoon_metodi","shift_0_FA_0",0,0), ("scm_reduced","shift_0_FA_0",0,0), ("scm_reduced","shift_1_FA_1",1,1), ("scm","shift_0_FA_0",0,0), ("scm","shift_1_FA_0",0,1), ("enumerate_unsigned","shift_1_FA_0",0,1), ("enumerate_signed_negative","shift_1_FA_0",0,1), ("enumerate_signed_all","shift_1_FA_0",0,1)]
+    num_threads = get_num_threads_from_user()
     for bench_type_tuple in bench_type_tuples:
-        do_it(bench_type_tuple, "cadical", num_worker_threads=1)
+        do_it(bench_type_tuple, "cadical", num_worker_threads=num_threads)
         bit_str = "with bit-level cost minimization" if bench_type_tuple[1] == 1 else "without bit-level cost minimization"
         shift_str = "including post-add right shifter" if bench_type_tuple[2] == 1 else "without post-add right shifter"
         print(f"finished benchmark {bench_type_tuple[0]} :)")
