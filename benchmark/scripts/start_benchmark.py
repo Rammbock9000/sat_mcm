@@ -113,7 +113,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
     elif "enumerate" in bench_type:
         timeout_mul = 24*7 # 1 week for enumeration
     elif "complex_mult" in bench_type or "sop_symmetry" in bench_type:
-        timeout_mul = 24*7 # 1 week for complex multiplications and sop instances
+        timeout_mul = 24*5 # 5 days for complex multiplications and sop instances
     if pipelining:
         timeout_mul *= 2 # pipelining is harder
     timeout = 3600*timeout_mul
