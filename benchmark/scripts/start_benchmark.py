@@ -65,7 +65,7 @@ def get_setup(bench_type):
         filename = "benchmark/inputs/mcm/mcm.csv"
         name_tag = "counting"
     elif bench_type == "complex_mult":
-        filename = "benchmark/inputs/cmm/complex_6.csv"
+        filename = "benchmark/inputs/cmm/complex_8.csv"
         name_tag = "constant"
     elif bench_type == "sop_symmetry":
         filename = "benchmark/inputs/sop/sop_symmetry_8.csv"
