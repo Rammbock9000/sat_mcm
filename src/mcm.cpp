@@ -194,9 +194,7 @@ void mcm::optimization_loop(formulation_mode mode) {
 
 void mcm::solve() {
 	// preprocessing for non-pipelining settings
-    std::cout << "#q# constant size BEFORE preprocessing: " << this->C.size() << std::endl;
 	this->preprocess_constants();
-    std::cout << "#q# constant size AFTER preprocessing: " << this->C.size() << std::endl;
 	// preprocessing for adder depth minimization
 	this->compute_opt_adder_depth_value();
 	// actually solve
