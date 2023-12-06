@@ -5,7 +5,7 @@ def main():
     # if <pipelining> is not specified (i.e. len(tuple) == 4), it is assumed to be 0
     bench_type_tuples = [("sop_symmetry","shift_1_FA_0",0,1)]
     for bench_type_tuple in bench_type_tuples:
-        do_it(bench_type_tuple, "kissat")
+        do_it(bench_type_tuple, "kissat", num_worker_threads=4)
         print(f"finished benchmark {bench_type_tuple[0]} :)")
 
 if __name__=='__main__':

@@ -1,4 +1,15 @@
 import os
+import threading
+
+class worker_thread(threading.Thread):
+    def __init__(self, id, command):
+        threading.Thread.__init__(self)
+        self.id = id
+        self.command = command
+
+    def run(self):
+        print(f"  thread id {self.id} -> executing '{self.command}'")
+        os.system(self.command)
 
 def read_constants(filename):
     constants_with_costs = []
@@ -56,12 +67,12 @@ def get_setup(bench_type):
 def main():
     bench_type_tuples = [("mcm","shift_0_FA_0",0,0), ("mcm","shift_0_FA_1",1,0), ("unsigned_mcm","shift_0_FA_1",1,0), ("scm_lagoon_metodi","shift_0_FA_0",0,0), ("scm_reduced","shift_0_FA_0",0,0), ("scm_reduced","shift_1_FA_1",1,1), ("scm","shift_0_FA_0",0,0), ("scm","shift_1_FA_0",0,1), ("enumerate_unsigned","shift_1_FA_0",0,1), ("enumerate_signed_negative","shift_1_FA_0",0,1), ("enumerate_signed_all","shift_1_FA_0",0,1)]
     for bench_type_tuple in bench_type_tuples:
-        do_it(bench_type_tuple)
+        do_it(bench_type_tuple, "cadical", num_worker_threads=1)
         bit_str = "with bit-level cost minimization" if bench_type_tuple[1] == 1 else "without bit-level cost minimization"
         shift_str = "including post-add right shifter" if bench_type_tuple[2] == 1 else "without post-add right shifter"
         print(f"finished benchmark {bench_type_tuple[0]} :)")
 
-def do_it(bench_type_tuple, solver="CaDiCaL"):
+def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
     # setup
     min_adder_depth = 0
     equalize_output_stages = 0
@@ -127,6 +138,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         os.mkdir(f"{result_dir}/{bench_type}/")
     if not os.path.exists(f"{result_dir}/{bench_type}/{subdir_name}/"):
         os.mkdir(f"{result_dir}/{bench_type}/{subdir_name}/")
+    # init thread management system (a simple list lol)
+    worker_threads = [None for _ in range(num_worker_threads)]
     # read constants incl. costs
     constants_with_costs = read_constants(filename)
     i = 0
@@ -148,9 +161,30 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         fa_min_str = "without FA minimization"
         if also_minimize_full_adders:
             fa_min_str = "with FA minimization"
-        command = f'{binary} "{constant}" {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} {min_adder_depth} {pipelining} {equalize_output_stages} 1>log.txt 2>>{result_filename}'
-        print(f"  -> executing '{command}'")
-        os.system(command)
+        # simply execute the program (DEPRECATED -> USE WORKER THREADS INSTEAD)
+        #command = f'{binary} "{constant}" {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} {min_adder_depth} {pipelining} {equalize_output_stages} 1>log.txt 2>>{result_filename}'
+        #print(f"  -> executing '{command}'")
+        #os.system(command)
+        # wait until we can spawn a new worker thread
+        worker_id = -1
+        while worker_id < 0:
+            for potential_worker_id, worker in enumerate(worker_threads):
+                if worker == None:
+                    # found uninitialized worker
+                    worker_id = potential_worker_id
+                    break
+                if worker.is_alive():
+                    # found running worker
+                    continue
+                # found idle (finished) worker
+                worker.join()
+                worker_id = potential_worker_id
+        # start new worker
+        command = f'{binary} "{constant}" {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} {min_adder_depth} {pipelining} {equalize_output_stages} 1>log_{worker_id}.txt 2>>{result_filename}'
+        worker_threads[worker_id] = worker_thread(worker_id, command)
+        worker_threads[worker_id].start()
+
+
     
 if __name__=="__main__":
     main()
