@@ -11,8 +11,9 @@
 #include <algorithm>
 #include <numeric>
 
-#define INPUT_SELECT_MUX_OPT 0 // I have NO IDEA WHY but apparently setting this to 0 is faster...
-#define FPGA_ADD 0 // try out full adders as used in FPGAs ... maybe SAT solvers like those better than normal ones?!
+#define INPUT_SELECT_MUX_OPT 1 // I have NO IDEA WHY but apparently setting this to 0 is slightly faster for SCM... still leave it at 1 since MCM/CMM are much harder anyways
+#define FPGA_ADD 0 // try out full adders as used in FPGAs. Maybe SAT solvers like those better than normal ones?! => nfiege: Turns out they don't...
+#define ADD_OPT_CLAUSES 1 // try out an optimized set of clauses for half/full adders
 
 mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode verbosity, int threads,
 				 bool allow_negative_numbers, bool write_cnf)
@@ -64,7 +65,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 		}
 		this->requested_vectors[original_vector] = {v, shifted_bits}; // store "requested vs. actual" info
 	}
-	//check if C has negative values while negative numbers are not allowd an throw an error
+	//check if C has negative values while negative numbers are not allowed and throw an error
 	for (auto &v: this->C) {
 		for (auto &c: v) {
 			if (c < 0 and !allow_negative_numbers) {
@@ -79,7 +80,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	std::vector<int> absV;
 	for (auto &v: this->C) {
 		for (auto &i : v) {
-			absV.emplace_back(abs(i));
+			absV.emplace_back(std::abs(i));
 			//std::cout << "abs constant: " << abs(i) << std::endl;
 		}
 		//std::cout << "abs accumulate: " << std::accumulate(absV.begin(), absV.end(), 0) << std::endl;
@@ -90,9 +91,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 		//					<< (std::accumulate(absV.begin(), absV.end(), 0) != 1) << std::endl;
 
 		// nfiege: for pipelining we cannot ignore unit vectors (or 1's in the MCM case)
-		// sort them out before solving if pipelining is not used
-		/*if (!(std::all_of(v.begin(), v.end(), [](int i) { return i==0; })) and
-				std::accumulate(absV.begin(), absV.end(), 0) != 1) non_one_unique_vectors.insert(v);*/
+		// sort them out later, i.e., before solving, if pipelining is not used
 		// only ignore all-zero vectors here
 		if (!std::all_of(v.begin(), v.end(), [](int i) { return i == 0; })) non_one_unique_vectors.insert(v);
 
@@ -195,7 +194,9 @@ void mcm::optimization_loop(formulation_mode mode) {
 
 void mcm::solve() {
 	// preprocessing for non-pipelining settings
+    std::cout << "#q# constant size BEFORE preprocessing: " << this->C.size() << std::endl;
 	this->preprocess_constants();
+    std::cout << "#q# constant size AFTER preprocessing: " << this->C.size() << std::endl;
 	// preprocessing for adder depth minimization
 	this->compute_opt_adder_depth_value();
 	// actually solve
@@ -444,7 +445,7 @@ void mcm::create_input_select_mux_variables(int idx) {
 					this->create_new_variable(this->variable_counter);
 #if INPUT_SELECT_MUX_OPT
 					if (mux_idx == num_muxs-1) {
-							this->input_select_mux_output_variables[{idx, dir, w}] = this->variable_counter;
+							this->input_select_mux_output_variables[{idx, dir, w, v}] = this->variable_counter;
 					}
 #else
 					if (mux_idx == 0) {
@@ -1137,7 +1138,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 						for (int w = 0; w < this->word_size; w++) {
 							auto zero_input = signal_variables.at({2*mux_idx_per_stage, w});
 							auto one_input = signal_variables.at({2*mux_idx_per_stage+1, w});
-							auto mux_output = this->input_select_mux_variables.at({idx, dir, mux_idx, w});
+							auto mux_output = this->input_select_mux_variables.at({idx, dir, mux_idx, w, v});
 							next_signal_variables[{mux_idx_per_stage, w}] = mux_output;
 							this->create_2x1_mux(zero_input, one_input, select_signal, mux_output);
 						}
@@ -1438,9 +1439,11 @@ void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 			this->create_2x1_mux(a, c_i, xor_int, c_o);
 #else
 			// build sum
-			this->create_add_sum(a, b, c_i, s);
+			//this->create_add_sum(a, b, c_i, s);
 			// build carry
-			this->create_add_carry(a, b, c_i, c_o);
+			//this->create_add_carry(a, b, c_i, c_o);
+            // build full adder (instead of building clauses for sum/carry separately)
+            this->create_full_adder({a, false}, {b, false}, {c_i, false}, {s, false}, {c_o, false});
 			// build redundant clauses to increase strength of unit propagation
 			// note (nfiege): this doesn't bring any speedup
 			//this->create_add_redundant(a, b, c_i, s, c_o);
@@ -3131,6 +3134,95 @@ void mcm::create_pipelining_output_stage_equality_constraints(int idx, mcm::form
 
 void mcm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> c_i,
 														std::pair<int, bool> sum, std::pair<int, bool> c_o) {
+#if ADD_OPT_CLAUSES
+    // build only clauses for the sum computation if only the sum was requested (i.e., c_o = -1)
+    if (c_o.first == -1) {
+        // 1)
+        this->create_arbitrary_clause({{a.first,   a.second},
+                                       {b.first,   not b.second},
+                                       {c_i.first, c_i.second},
+                                       {sum.first, sum.second}});
+        // 2)
+        this->create_arbitrary_clause({{a.first,   not a.second},
+                                       {b.first,   b.second},
+                                       {c_i.first, c_i.second},
+                                       {sum.first, sum.second}});
+        // 3)
+        this->create_arbitrary_clause({{a.first,   a.second},
+                                       {b.first,   b.second},
+                                       {c_i.first, c_i.second},
+                                       {sum.first, not sum.second}});
+        // 4)
+        this->create_arbitrary_clause({{a.first,   not a.second},
+                                       {b.first,   not b.second},
+                                       {c_i.first, c_i.second},
+                                       {sum.first, not sum.second}});
+        // 5)
+        this->create_arbitrary_clause({{a.first,   a.second},
+                                       {b.first,   not b.second},
+                                       {c_i.first, not c_i.second},
+                                       {sum.first, not sum.second}});
+        // 6)
+        this->create_arbitrary_clause({{a.first,   not a.second},
+                                       {b.first,   b.second},
+                                       {c_i.first, not c_i.second},
+                                       {sum.first, not sum.second}});
+        // 7)
+        this->create_arbitrary_clause({{a.first,   a.second},
+                                       {b.first,   b.second},
+                                       {c_i.first, not c_i.second},
+                                       {sum.first, sum.second}});
+        // 8)
+        this->create_arbitrary_clause({{a.first,   not a.second},
+                                       {b.first,   not b.second},
+                                       {c_i.first, not c_i.second},
+                                       {sum.first, sum.second}});
+        return;
+    }
+    // build carry clauses and use them to generate an optimized set of sum clauses
+    // c_o computation (from a, b, c_i):
+    // 1)
+    this->create_arbitrary_clause({{a.first,   not a.second},
+                                   {b.first,   not b.second},
+                                   {c_o.first, c_o.second}});
+    // 2)
+    this->create_arbitrary_clause({{a.first,   a.second},
+                                   {c_i.first, c_i.second},
+                                   {c_o.first, not c_o.second}});
+    // 3)
+    this->create_arbitrary_clause({{b.first,   b.second},
+                                   {c_i.first, c_i.second},
+                                   {c_o.first, not c_o.second}});
+    // 4)
+    this->create_arbitrary_clause({{a.first,   a.second},
+                                   {b.first,   b.second},
+                                   {c_o.first, not c_o.second}});
+    // 5)
+    this->create_arbitrary_clause({{b.first,   not b.second},
+                                   {c_i.first, not c_i.second},
+                                   {c_o.first, c_o.second}});
+    // 6)
+    this->create_arbitrary_clause({{a.first,   not a.second},
+                                   {c_i.first, not c_i.second},
+                                   {c_o.first, c_o.second}});
+    // sum computation (from a, b, c_i, c_o):
+    // 1)
+    this->create_arbitrary_clause({{a.first, a.second}, {c_o.first, not c_o.second}, {sum.first, not sum.second}});
+    // 2)
+    this->create_arbitrary_clause({{b.first, b.second}, {c_o.first, not c_o.second}, {sum.first, not sum.second}});
+    // 3)
+    this->create_arbitrary_clause({{c_i.first, c_i.second}, {c_o.first, not c_o.second}, {sum.first, not sum.second}});
+    // 4)
+    this->create_arbitrary_clause({{a.first, a.second}, {b.first, b.second}, {c_i.first, c_i.second}, {sum.first, not sum.second}});
+    // 5)
+    this->create_arbitrary_clause({{a.first, not a.second}, {c_o.first, c_o.second}, {sum.first, sum.second}});
+    // 6)
+    this->create_arbitrary_clause({{b.first, not b.second}, {c_o.first, c_o.second}, {sum.first, sum.second}});
+    // 7)
+    this->create_arbitrary_clause({{c_i.first, not c_i.second}, {c_o.first, c_o.second}, {sum.first, sum.second}});
+    // 8)
+    this->create_arbitrary_clause({{a.first, not a.second}, {b.first, not b.second}, {c_i.first, not c_i.second}, {sum.first, sum.second}});
+#else
 	//this->create_add_sum(a, b, c_i, sum);
 	// 1)
 	this->create_arbitrary_clause({{a.first,   a.second},
@@ -3199,6 +3291,7 @@ void mcm::create_full_adder(std::pair<int, bool> a, std::pair<int, bool> b, std:
 	this->create_arbitrary_clause({{a.first,   not a.second},
 																 {c_i.first, not c_i.second},
 																 {c_o.first, c_o.second}});
+#endif
 }
 
 void mcm::create_half_adder(std::pair<int, bool> a, std::pair<int, bool> b, std::pair<int, bool> sum,
@@ -3334,43 +3427,121 @@ std::vector<int> mcm::create_bitheap(const std::vector<std::pair<std::vector<int
 }
 
 void mcm::prohibit_current_solution() {
-	std::vector<std::pair<int, bool>> clause;
+	std::vector<std::pair<int, bool>> clause_base;
+    std::set<int> inputs_permutable_indices;
+    std::map<int, bool> is_subtracter;
+    std::map<int, std::pair<int, bool>> negate_select_literals;
+    std::map<int, std::vector<std::pair<int, bool>>> input_literals_l;
+    std::map<int, std::vector<std::pair<int, bool>>> input_literals_r;
 	int v; // variable buffer
 	//for (int i = 1; i <= this->num_adders; i++) {
     for (int i = this->c_row_size(); i < this->num_adders+this->c_row_size(); i++) {
-		auto mux_word_size = this->ceil_log2(i);
-		// left input mux
-		for (int s = 0; s < mux_word_size; s++) {
-			v = this->input_select_selection_variables.at({i, mcm::left, s});
-			clause.emplace_back(v, this->get_result_value(v));
-		}
-		// right input mux
-		for (int s = 0; s < mux_word_size; s++) {
-			v = this->input_select_selection_variables.at({i, mcm::right, s});
-			clause.emplace_back(v, this->get_result_value(v));
-		}
 		// pre add shift
+        bool shift_eq_zero = true;
 		for (int s = 0; s < this->shift_word_size; s++) {
 			v = this->input_shift_value_variables.at({i, s});
-			clause.emplace_back(v, this->get_result_value(v));
+			clause_base.emplace_back(v, this->get_result_value(v));
+            shift_eq_zero = shift_eq_zero and !this->get_result_value(v);
 		}
-		// negate select
-		v = this->input_negate_select_variables.at(i);
-		clause.emplace_back(v, this->get_result_value(v));
+        if (shift_eq_zero) {
+            // if the shift is equal to zero then the assignment to left/right input can be swapped without consequences
+            inputs_permutable_indices.insert(i);
+        }
+        auto mux_word_size = this->ceil_log2(i);
+        if (mux_word_size > 0) {
+            // left input mux
+            for (int s = 0; s < mux_word_size; s++) {
+                v = this->input_select_selection_variables.at({i, mcm::left, s});
+                if (shift_eq_zero) {
+                    input_literals_l[i].emplace_back(v, this->get_result_value(v));
+                }
+                else {
+                    clause_base.emplace_back(v, this->get_result_value(v));
+                }
+            }
+            // right input mux
+            for (int s = 0; s < mux_word_size; s++) {
+                v = this->input_select_selection_variables.at({i, mcm::right, s});
+                if (shift_eq_zero) {
+                    input_literals_r[i].emplace_back(v, this->get_result_value(v));
+                }
+                else {
+                    clause_base.emplace_back(v, this->get_result_value(v));
+                }
+            }
+        }
 		// negate value
 		v = this->input_negate_value_variables.at(i);
-		clause.emplace_back(v, this->get_result_value(v));
+        is_subtracter[i] = this->get_result_value(v);
+		clause_base.emplace_back(v, is_subtracter[i]);
+        // negate select
+        if (is_subtracter[i]) {
+            // only include negate select if a subtraction was performed
+            v = this->input_negate_select_variables.at(i);
+            if (shift_eq_zero) {
+                // permutable inputs are handled separately, later
+                negate_select_literals[i] = {v, this->get_result_value(v)};
+            }
+            else {
+                // non-permutable indices must be added to the clause base
+                clause_base.emplace_back(v, this->get_result_value(v));
+            }
+        }
 		// post add shift
 		if (this->enable_node_output_shift) {
 			for (int s = 0; s < this->shift_word_size; s++) {
 				v = this->input_post_adder_shift_value_variables.at({i, s});
-				clause.emplace_back(v, this->get_result_value(v));
+				clause_base.emplace_back(v, this->get_result_value(v));
 			}
 		}
 	}
-    this->already_enumerated_solutions_cache.emplace_back(clause);
-    if (this->supports_incremental_solving()) {
-        this->create_arbitrary_clause(clause);
+    auto num_clauses_to_add = (1 << inputs_permutable_indices.size());
+    for (int clause_counter=0; clause_counter<num_clauses_to_add; clause_counter++) {
+        auto clause = clause_base; // copy clause base
+        // add permutable inputs to clause
+        int idx_counter = 0;
+        for (auto idx : inputs_permutable_indices) {
+            auto swap_inputs = (clause_counter >> idx_counter) & 1;
+            auto mux_word_size = this->ceil_log2(idx);
+            // handle input literals
+            for (int w=0; w<mux_word_size; w++) {
+                auto lit_l = input_literals_l.at(idx).at(w);
+                auto var_idx_l = lit_l.first;
+                auto val_idx_l = lit_l.second;
+                auto lit_r = input_literals_r.at(idx).at(w);
+                auto var_idx_r = lit_r.first;
+                auto val_idx_r = lit_r.second;
+                if (swap_inputs) {
+                    // left/right swapped
+                    clause.emplace_back(var_idx_l, val_idx_r);
+                    clause.emplace_back(var_idx_r, val_idx_l);
+                }
+                else {
+                    // left/right NOT swapped
+                    clause.emplace_back(var_idx_l, val_idx_l);
+                    clause.emplace_back(var_idx_r, val_idx_r);
+                }
+            }
+            // handle subtract selection
+            if (is_subtracter[idx]) {
+                // prohibit inverted sign bit
+                auto lit_n = negate_select_literals.at(idx);
+                auto var_idx_n = lit_n.first;
+                auto val_idx_n = lit_n.second;
+                if (swap_inputs) {
+                    clause.emplace_back(var_idx_n, not val_idx_n);
+                }
+                else {
+                    clause.emplace_back(var_idx_n, val_idx_n);
+                }
+            }
+            idx_counter++;
+        }
+        // add clause
+        this->already_enumerated_solutions_cache.emplace_back(clause);
+        if (this->supports_incremental_solving()) {
+            this->create_arbitrary_clause(clause);
+        }
     }
 }
 
@@ -3414,8 +3585,9 @@ void mcm::solve_enumeration() {
 	}
 	bool trivial = true;
 	//unit vectors are trivial
+    //detect unit vector by accumulating the absolute values of the vector elements and comparing to 1
 	for (auto &v: this->C) {
-		if (std::accumulate(v.begin(), v.end(), 0) != 1) {
+		if (mcm::is_unit_vector(v)) {
 			trivial = false;
 			break;
 		}
@@ -3438,7 +3610,9 @@ void mcm::solve_enumeration() {
 	}
 	// now enumerate all solutions for minimum adder count
 	mode = formulation_mode::all_FA_clauses;
+    int num_solutions_counter = 0;
 	while (this->found_solution) {
+        num_solutions_counter++;
 		this->timeout = this->fa_minimization_timeout;
 		// count current # of full adders
 		// except for the last node because its output always has a constant number of full adders
@@ -3528,7 +3702,7 @@ void mcm::solve_enumeration() {
 			this->num_FA_opt = false;
 		}
 	}
-    std::cout << "Enumerated " << this->already_enumerated_solutions_cache.size() << " solutions" << std::endl;
+    std::cout << "Enumerated " << num_solutions_counter << " solutions" << std::endl;
 	this->found_solution = true;
 }
 
@@ -3566,9 +3740,9 @@ void mcm::solve_standard() {
 		std::cout << "with word size " << this->word_size << " and max shift " << this->max_shift << std::endl;
 	}
 	bool trivial = true;
-	//unit vectors are trivial
+	//inputs that comprise ONLY unit vectors are trivial
 	for (auto &v: this->C) {
-		if (std::accumulate(v.begin(), v.end(), 0) != 1) {
+		if (!mcm::is_unit_vector(v)) {
 			trivial = false;
 			break;
 		}
@@ -3766,12 +3940,7 @@ void mcm::preprocess_constants() {
 	while (vec_eliminated) {
 		vec_eliminated = false;
 		for (auto it = this->C.begin(); it != this->C.end(); it++) {
-			std::vector<int> vec_abs = *it;
-			for (auto &v : vec_abs) {
-				v = std::abs(v);
-			}
-			bool is_unit_vector = std::accumulate(vec_abs.begin(), vec_abs.end(), 0) == 1;
-			if (!is_unit_vector) continue;
+			if (!mcm::is_unit_vector(*it)) continue;
 			this->C.erase(it);
 			this->num_adders--;
 			vec_eliminated = true;
@@ -3867,4 +4036,8 @@ void mcm::enable_pipelining() {
 
 void mcm::equalize_output_stages() {
 	this->force_output_stages_equal = true;
+}
+
+bool mcm::is_unit_vector(const std::vector<int> &vec) {
+    return std::accumulate(vec.begin(), vec.end(), 0, [](const int &running_abs, const int &x) {return running_abs+std::abs(x);}) == 1;
 }

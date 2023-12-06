@@ -116,6 +116,13 @@ public:
 	 */
 	std::pair<int, int> solution_is_optimal();
 
+    /*!
+     * check if a vector is a unit vector
+     * @param vec the vector to check
+     * @return the answer
+     */
+    static bool is_unit_vector(const std::vector<int> &vec);
+
 protected:
 	/*!
 	 * check feasibility after constructing the problem

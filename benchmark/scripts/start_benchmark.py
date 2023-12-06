@@ -46,12 +46,15 @@ def get_setup(bench_type):
     elif bench_type == "complex_mult":
         filename = "benchmark/inputs/cmm/complex_6.csv"
         name_tag = "constant"
+    elif bench_type == "sop_symmetry":
+        filename = "benchmark/inputs/sop/sop_symmetry_8.csv"
+        name_tag = "constant"
     else:
         raise Exception(f"invalid benchmark specified: {bench_type}")
     return filename, name_tag
 
 def main():
-    bench_type_tuples = [("mcm",0,0), ("mcm",1,0), ("unsigned_mcm",1,0), ("scm_lagoon_metodi",0,0), ("scm_reduced",0,0), ("scm_reduced",1,1), ("scm",0,0), ("scm",0,1), ("enumerate_unsigned",0,1), ("enumerate_signed_negative",0,1), ("enumerate_signed_all",0,1)]
+    bench_type_tuples = [("mcm","shift_0_FA_0",0,0), ("mcm","shift_0_FA_1",1,0), ("unsigned_mcm","shift_0_FA_1",1,0), ("scm_lagoon_metodi","shift_0_FA_0",0,0), ("scm_reduced","shift_0_FA_0",0,0), ("scm_reduced","shift_1_FA_1",1,1), ("scm","shift_0_FA_0",0,0), ("scm","shift_1_FA_0",0,1), ("enumerate_unsigned","shift_1_FA_0",0,1), ("enumerate_signed_negative","shift_1_FA_0",0,1), ("enumerate_signed_all","shift_1_FA_0",0,1)]
     for bench_type_tuple in bench_type_tuples:
         do_it(bench_type_tuple)
         bit_str = "with bit-level cost minimization" if bench_type_tuple[1] == 1 else "without bit-level cost minimization"
@@ -63,11 +66,12 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
     min_adder_depth = 0
     equalize_output_stages = 0
     bench_type = bench_type_tuple[0]
-    also_minimize_full_adders = bench_type_tuple[1]
-    allow_post_add_right_shift = bench_type_tuple[2]
+    subdir_name = bench_type_tuple[1]
+    also_minimize_full_adders = bench_type_tuple[2]
+    allow_post_add_right_shift = bench_type_tuple[3]
     pipelining = 0
-    if len(bench_type_tuple) > 3:
-        pipelining = bench_type_tuple[3]
+    if len(bench_type_tuple) > 4:
+        pipelining = bench_type_tuple[4]
     if pipelining:
         equalize_output_stages = 1
         pipe_str = "with pipelining"
@@ -86,8 +90,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         timeout_mul = 24*7 # 1 week for very hard scm instances
     elif "enumerate" in bench_type:
         timeout_mul = 24*7 # 1 week for enumeration
-    elif "complex_mult" in bench_type:
-        timeout_mul = 24*7 # 1 week for complex multiplications
+    elif "complex_mult" in bench_type or "sop_symmetry" in bench_type:
+        timeout_mul = 24*7 # 1 week for complex multiplications and sop instances
     if pipelining:
         timeout_mul *= 2 # pipelining is harder
     timeout = 3600*timeout_mul
@@ -99,8 +103,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
     quiet = 1
     write_cnf = 0
     min_num_add = 0
-    allow_negative_numbers = 0 if bench_type == "unsigned_mcm" else 1 if bench_type == "complex_mult" else also_minimize_full_adders
-    allow_sign_inversion = 0 if bench_type == "unsigned_mcm" or bench_type == "complex_mult" or allow_negative_numbers == 0 else -1
+    allow_negative_numbers = 0 if bench_type == "unsigned_mcm" else also_minimize_full_adders
+    allow_sign_inversion = 0 if bench_type == "unsigned_mcm" or allow_negative_numbers == 0 else -1
 
     if "enumerate" in bench_type:
         if bench_type == "enumerate_unsigned":
@@ -112,13 +116,17 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         else: # bench_type == "enumerate_signed_negative"
             allow_sign_inversion = 1
             allow_negative_numbers = 1
+    if bench_type == "complex_mult" or bench_type == "sop_symmetry":
+        allow_sign_inversion = 0
+        allow_negative_numbers = 1
+
     # create directories if they don't already exist
     if not os.path.exists(f"{result_dir}/"):
         os.mkdir(f"{result_dir}/")
     if not os.path.exists(f"{result_dir}/{bench_type}/"):
         os.mkdir(f"{result_dir}/{bench_type}/")
-    if not os.path.exists(f"{result_dir}/{bench_type}/shift_{allow_post_add_right_shift}_FA_{also_minimize_full_adders}/"):
-        os.mkdir(f"{result_dir}/{bench_type}/shift_{allow_post_add_right_shift}_FA_{also_minimize_full_adders}/")
+    if not os.path.exists(f"{result_dir}/{bench_type}/{subdir_name}/"):
+        os.mkdir(f"{result_dir}/{bench_type}/{subdir_name}/")
     # read constants incl. costs
     constants_with_costs = read_constants(filename)
     i = 0
@@ -129,7 +137,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL"):
         else: # name_tag == "counting":
             filename_temp = f"{i}"
             i += 1
-        result_filename = f"{result_dir}/{bench_type}/shift_{allow_post_add_right_shift}_FA_{also_minimize_full_adders}/{filename_temp}.txt".replace(";","_")
+        result_filename = f"{result_dir}/{bench_type}/{subdir_name}/{filename_temp}.txt".replace(";","_")
         if os.path.isfile(result_filename):
             # result already exists
             continue

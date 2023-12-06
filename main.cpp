@@ -13,9 +13,7 @@
 #endif
 
 #ifdef USE_KISSAT
-
 #include <mcm_kissat.h>
-
 #endif
 
 #ifdef USE_Z3
