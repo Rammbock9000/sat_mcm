@@ -606,6 +606,17 @@ protected:
 	*/
 	virtual bool supports_incremental_solving() { return true; }
 
+    /*!
+     * creates a .cnf file for the current SAT problem
+     */
+    void create_cnf_file(const std::string &filename);
+
+    /*!
+     * must be overloaded e.g. for the executable-based solver backend
+     * @return whether the solver needs cnf generation to work properly
+     */
+    virtual bool needs_cnf_generation() const { return false; }
+
 private:
 	/*!
 	 * whether we want to enumerate all solutions for minimum adder count
@@ -636,11 +647,6 @@ private:
 	 * store all cnf clauses for cnf file generation
 	 */
 	std::stringstream cnf_clauses;
-
-	/*!
-	 * creates a .cnf file for the current SAT problem
-	 */
-	void create_cnf_file();
 
 	/*!
 	 * get solution from backend and store result in containers below

@@ -68,7 +68,7 @@ def get_setup(bench_type):
         filename = "benchmark/inputs/cmm/complex_8.csv"
         name_tag = "constant"
     elif bench_type == "sop_symmetry":
-        filename = "benchmark/inputs/sop/sop_symmetry_8.csv"
+        filename = "benchmark/inputs/sop/sop_symmetry_11.csv"
         name_tag = "constant"
     else:
         raise Exception(f"invalid benchmark specified: {bench_type}")
@@ -191,7 +191,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
                 worker.join()
                 worker_id = potential_worker_id
         # start new worker
-        command = f'{binary} "{constant}" {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} {min_adder_depth} {pipelining} {equalize_output_stages} 1>log_{worker_id}.txt 2>>{result_filename}'
+        command = f'{binary} "{constant}" solver_name={solver} timeout={timeout} threads={threads} quiet={quiet} minimize_full_adders={also_minimize_full_adders} allow_post_adder_right_shift={allow_post_add_right_shift} allow_negative_coefficients={allow_negative_numbers} write_cnf_files={write_cnf} allow_coefficient_sign_inversion={allow_sign_inversion} min_num_adders={min_num_add} enumerate_all={enumerate_all} min_adder_depth={min_adder_depth} pipelining={pipelining} equalize_output_stages={equalize_output_stages} 1>log_{worker_id}.txt 2>>{result_filename}'
         worker_threads[worker_id] = worker_thread(worker_id, command)
         worker_threads[worker_id].start()
 

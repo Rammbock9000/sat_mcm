@@ -5,6 +5,7 @@
 #include <memory>
 #include <cctype>
 #include <algorithm>
+#include <mcm_executable.h>
 
 #include <mcm.h>
 
@@ -41,8 +42,12 @@ int main(int argc, char **argv) {
 	bool min_adder_depth = false;
 	bool pipelining = false;
 	bool eq_output_stages = false;
+    std::string executable_binary;
+    std::string executable_pre_cnf_params;
+    std::string executable_post_cnf_params;
+    std::string solver_log_filename = "temp.log";
+    std::string solver_err_filename = "temp.err";
 #ifdef USE_KISSAT
-	// kissat backend still in development!
 	solver_name = "kissat";
 #endif
 #ifdef USE_Z3
@@ -55,45 +60,60 @@ int main(int argc, char **argv) {
 	solver_name = "cadical";
 #endif
 	if (argc == 1) {
-		std::cout
-			<< "Please call satmcm like this: ./satmcm <constant(s)> <solver name> <timeout> <threads> <quiet> <minimize full adders> <allow post adder right shfits> <allow negative coefficients> <write cnf files> <allow coefficient sign inversion> <min num adders> <enumerate all> <min adder depth> <pipelining> <equalize output stages>"
-			<< std::endl;
-		std::cout << "  => constant(s): <int:int:int>;<...>;...: specify the constant matrix" << std::endl;
+		std::cout << "Please call satmcm like this: ./satmcm \"constant(s)\" [arg1=val1 arg2=val2 ...]"
+			      << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "How to specify the constant(s):" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+		std::cout << "  => constant(s) [mandatory]: \"int:int:int;...;...\" specify the constant matrix" << std::endl;
 		std::cout << "      => separate columns with colons and rows with semicolons" << std::endl;
-		std::cout << R"(      => need to put this argument into "..." on UNIX-based systems)" << std::endl;
-		std::cout << R"(      => i.e., use "A:B:C" for SOP and "A;B;C" for MCM and "A" for SCM)" << std::endl;
-		std::cout
-			<< R"(      => e.g., specify "11:21;33:-44" to get a solution that computes both 11*x1+21*x2 and 33*x1-44*x2)"
-			<< std::endl;
-		std::cout << "  => solver name: <string>: kissat, cadical, z3, syrup are currently supported" << std::endl;
-		std::cout << "  => timeout: <uint>: number of seconds allowed per SAT instance" << std::endl;
-		std::cout << "  => threads: <uint>: number of threads allowed to use" << std::endl;
-		std::cout << "  => quiet: <0/1>: suppress debug outputs by setting this to 1" << std::endl;
-		std::cout
-			<< "  => minimize full adders: <0/1>: minimize the full adder count for the optimal number of adders by setting this to 1"
-			<< std::endl;
-		std::cout << "  => allow post adder right shifts: <0/1>: account for the optional right shift after the addition"
-							<< std::endl;
-		std::cout
-			<< "  => allow negative coefficients: <0/1>: allow the use of negative coefficients to decrease the FA count"
-			<< std::endl;
-		std::cout << "  => write cnf files: <0/1>: write all SAT programs to CNF files" << std::endl;
-		std::cout
-			<< "  => allow coefficient sign inversion: <0/1/-1>: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it if for negative requested coefficients; 0 - never allow it"
-			<< std::endl;
-		std::cout << "  => min num adders: <uint>: minimum number of adders (default: 0)" << std::endl;
-		std::cout
-			<< "  => enumerate all: <0/1>: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)"
-			<< std::endl;
-		std::cout
-			<< "  => min adder depth: <0/1>: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS"
-			<< std::endl;
-		std::cout
-			<< "  => pipelining: <0/1>: let the solver optimize under the assumption that the adder graph will be fully pipelined after each adder stage => WORK IN PROGRESS"
-			<< std::endl;
-		std::cout
-			<< "  => equalize output stages: <0/1>: force all outputs into the same pipeline stage (only relevant for pipelining) => WORK IN PROGRESS"
-			<< std::endl;
+		std::cout<<R"(      => you need to put this argument into "..." on UNIX-based systems)" << std::endl;
+		std::cout<<R"(      => this corresponds to "A:B:C" for SOP and "A;B;C" for MCM and "A" for SCM)" << std::endl;
+		std::cout<<R"(      => e.g., specify "11:21;33:-44" to get an adder graph that computes both 11*x1+21*x2 and 33*x1-44*x2)"
+			      << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "Choose your optimization settings:" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "  => minimize_full_adders=<0/1> [default=0]: minimize the full adder count for the optimal number of adders by setting this to 1"
+                  << std::endl;
+        std::cout << "  => allow_post_adder_right_shift=<0/1> [default=0]: account for the optional right shift after the addition"
+                  << std::endl;
+        std::cout << "  => allow_negative_coefficients=<0/1> [default=0]: allow the use of negative coefficients to decrease the FA count"
+                  << std::endl;
+        std::cout << "  => min_adder_depth=<0/1> [default=0]: force the solution to have minimum adder depth (useful for low-latency applications) => WORK IN PROGRESS"
+                  << std::endl;
+        std::cout << "  => pipelining=<0/1> [default=0]: let the solver optimize under the assumption that the adder graph will be fully pipelined after each adder stage => WORK IN PROGRESS"
+                  << std::endl;
+        std::cout << "  => equalize_output_stages=<0/1> [default=0]: force all outputs into the same pipeline stage (only relevant for pipelining) => WORK IN PROGRESS"
+                  << std::endl;
+        std::cout << "  => allow_coefficient_sign_inversion=<0/1/-1> [default=0]: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it for negative requested coefficients; 0 - never allow it"
+                  << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "Solver backend:" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+		std::cout << "  => solver_name=<string> [default depends on installation]: kissat, cadical, z3, syrup, executable are currently supported" << std::endl;
+		std::cout << "  => timeout=<uint> [default=300]: number of seconds allowed per SAT instance" << std::endl;
+		std::cout << "  => threads=<uint> [default=1]: number of threads allowed to use" << std::endl;
+		std::cout << "  => quiet=<0/1> [default=1]: enable/suppress debug outputs by setting this to 0/1" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "If you want to call some executable as your solver backend (e.g., some non-supported solver like Minisat):" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout<<R"(  => executable_binary=<string> [default=""]: path to binary used if solver_name=executable (execute an installed solver via system call instead of a C++ API); it should expect a .cnf file in DIMACS format and should produce an output "s (UN)SATISFIABLE" for (un)satisfiable instance in addition to solution literals as "v lit1 lit2 ..." according to the rules given by the SAT competition (url: satcompetition.org))" << std::endl;
+        std::cout << "  => pre_cnf_params=<string> [default=\"\"]: command-line parameters that are given to the executable *before* the path to the cnf file" << std::endl;
+        std::cout << "  => post_cnf_params=<string> [default=\"\"]: command-line parameters that are given to the executable *after* the path to the cnf file" << std::endl;
+        std::cout << "  => solver_log_filename=<string> [default=\"temp.log\"]: the std::out file used for communication between this program and the executable solver" << std::endl;
+        std::cout << "  => solver_err_filename=<string> [default=\"temp.err\"]: the std::err file used for communication between this program and the executable solver" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "Some general settings:" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+		std::cout << "  => write_cnf_files=<0/1>: write all SAT programs to CNF files [default=0]" << std::endl;
+		std::cout << "  => min_num_adders=<uint> [default=0]: minimum number of adders" << std::endl;
+		std::cout << "  => enumerate_all=<0/1> [default=0]: enumerate all possible solutions for optimal adder count instead of only searching for the optimum (this mode ignores the setting for <minimize full adders>; only feasible if the problem size is small enough => consider setting a timeout)"
+			      << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "Here's an example:" << std::endl;
+        std::cout << "-----------------------------------------------------------------------------------" << std::endl;
+        std::cout << "./satmcm \"43:11;7:23\" solver_name=cadical timeout=123 allow_negative_coefficients=1" << std::endl;
 		return 0;
 	}
 	if (argc > 1) {
@@ -142,6 +162,183 @@ int main(int argc, char **argv) {
 	//	}
 	//}
 
+    for (int i=2; i<argc; i++) {
+        std::string s_argv(argv[i]);
+        std::transform(s_argv.begin(), s_argv.end(), s_argv.begin(), [](unsigned char c) { return std::tolower(c); });
+        std::stringstream ss;
+        ss << s_argv;
+        std::vector<std::string> arg_elements;
+        std::string buffer;
+        while (std::getline(ss, buffer, '=')) {
+            arg_elements.emplace_back(buffer);
+        }
+        if (arg_elements.size() != 2) {
+            std::cout << "UI WARNING: ignoring user argument '" << s_argv << "' -> only arguments in the form of arg=<value> are supported" << std::endl;
+            continue;
+        }
+        std::string key = arg_elements.at(0);
+        std::string val = arg_elements.at(1);
+        if (key == "solver_name") {
+            solver_name = val;
+        }
+        else if (key == "executable_binary") {
+            executable_binary = val;
+        }
+        else if (key == "pre_cnf_params") {
+            executable_pre_cnf_params = val;
+        }
+        else if (key == "post_cnf_params") {
+            executable_post_cnf_params = val;
+        }
+        else if (key == "solver_log_filename") {
+            solver_log_filename = val;
+        }
+        else if (key == "solver_err_filename") {
+            solver_err_filename = val;
+        }
+        else if (key == "timeout") {
+            try {
+                timeout = std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "threads") {
+            try {
+                threads = std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "quiet") {
+            try {
+                auto quiet = (bool) std::stoi(val);
+                if (quiet) {
+                    verbosity = mcm::verbosity_mode::normal_mode;
+                } else {
+                    verbosity = mcm::verbosity_mode::debug_mode;
+                }
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "minimize_full_adders") {
+            try {
+                also_minimize_full_adders = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "allow_post_adder_right_shift") {
+            try {
+                allow_node_output_shift = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "allow_negative_coefficients") {
+            try {
+                allow_negative_numbers = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "write_cnf_files") {
+            try {
+                write_cnf = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "allow_coefficient_sign_inversion") {
+            try {
+                allow_coefficient_sign_inversion = std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "min_num_adders") {
+            try {
+                min_num_adders = std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "enumerate_all") {
+            try {
+                enumerate_all = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "min_adder_depth") {
+            try {
+                min_adder_depth = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "pipelining") {
+            try {
+                pipelining = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else if (key == "equalize_output_stages") {
+            try {
+                eq_output_stages = (bool) std::stoi(val);
+            }
+            catch (...) {
+                std::stringstream err_msg;
+                err_msg << "invalid argument provided for '" << key << "'" << std::endl;
+                throw std::runtime_error(err_msg.str());
+            }
+        }
+        else {
+            std::stringstream err_msg;
+            err_msg << "argument of type '" << key << "=<value>' not supported" << std::endl;
+            throw std::runtime_error(err_msg.str());
+        }
+    }
+
+#if 0
 	if (argc > 2) {
 		std::string s(argv[2]);
 		std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -295,6 +492,7 @@ int main(int argc, char **argv) {
 			throw std::runtime_error(err_msg.str());
 		}
 	}
+#endif
 
 	if (C[0].size() == 1 and C.size() == 1) {
 		std::cout << "Starting SCM for constant " << C[0].front() << std::endl;
@@ -345,10 +543,12 @@ for (auto &v : C) {
 #endif
 	} else if (solver_name == "z3") {
 #ifdef USE_Z3
-		solver = std::make_unique<mcm_z3>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
+        solver = std::make_unique<mcm_z3>(C, timeout, verbosity, threads, allow_negative_numbers, write_cnf);
 #else
-		throw std::runtime_error("Link Z3 lib to use Z3 backend");
+        throw std::runtime_error("Link Z3 lib to use Z3 backend");
 #endif
+    } else if (solver_name == "executable") {
+        solver = std::make_unique<mcm_executable>(C, executable_binary, executable_pre_cnf_params, executable_post_cnf_params, solver_log_filename, solver_err_filename, verbosity, allow_negative_numbers, write_cnf);
 	} else
 		throw std::runtime_error("unknown solver name '" + solver_name + "'");
 	solver->set_enumerate_all(enumerate_all);
@@ -360,9 +560,7 @@ for (auto &v : C) {
 	if (pipelining) solver->enable_pipelining();
 	if (eq_output_stages) solver->equalize_output_stages();
 	solver->solve();
-	auto elapsed_time =
-		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count() /
-		1000.0;
+	auto elapsed_time = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count()) / 1000.0;
 	std::cerr << "Finished solving after " << elapsed_time << " seconds" << std::endl;
 	solver->print_solution();
 	auto [a, b] = solver->solution_is_optimal();

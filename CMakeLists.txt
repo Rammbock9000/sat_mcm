@@ -87,6 +87,7 @@ file(GLOB lib_sources
         src/mcm_kissat.cpp
         src/mcm_z3.cpp
         src/mcm_syrup.cpp
+        src/mcm_executable.cpp
         )
 
 file(GLOB header_sources
@@ -98,6 +99,7 @@ file(GLOB header_sources
         src/mcm_kissat.h
         src/mcm_z3.h
         src/mcm_syrup.h
+        src/mcm_executable.h
         )
 
 # compilation settings

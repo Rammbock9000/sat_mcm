@@ -235,7 +235,18 @@ void mcm::construct_problem(formulation_mode mode) {
 	this->create_constraints(mode);
 	if (this->write_cnf) {
 		if (this->verbosity == verbosity_mode::debug_mode) std::cout << "    creating cnf file now" << std::endl;
-		this->create_cnf_file();
+        std::stringstream filename;
+        for (int i = 0; i < this->c_column_size(); i++) {
+            if (i != 0) filename << "_";
+            filename << this->C[i][0];
+            //TODO note Christoph: take a look later just naming of the .cnf file
+        }
+        if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
+            filename << "-" << this->num_adders << "-" << this->max_full_adders << ".cnf";
+        } else {
+            filename << "-" << this->num_adders << ".cnf";
+        }
+		this->create_cnf_file(filename.str());
 	}
 }
 
@@ -682,7 +693,7 @@ void mcm::create_new_variable(int idx) {
 
 void mcm::create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) {
 	this->constraint_counter++;
-	if (!this->write_cnf) return;
+	if (!this->write_cnf and !this->needs_cnf_generation()) return;
 	for (const auto &it: a) {
 		this->cnf_clauses << (it.second ? -it.first : it.first) << " ";
 	}
@@ -2239,21 +2250,8 @@ bool mcm::solution_is_valid() {
 	//return true;
 }
 
-void mcm::create_cnf_file() {
+void mcm::create_cnf_file(const std::string &filename) {
 	std::ofstream f;
-	std::stringstream constants;
-	for (int i = 0; i < this->c_column_size(); i++) {
-		if (i != 0) constants << "_";
-		constants << this->C[i][0];
-		//TODO note Christoph: take a look later just naming of the .cnf file
-	}
-	std::string filename;
-	if (this->max_full_adders != FULL_ADDERS_UNLIMITED) {
-		filename =
-			constants.str() + "-" + std::to_string(this->num_adders) + "-" + std::to_string(this->max_full_adders) + ".cnf";
-	} else {
-		filename = constants.str() + "-" + std::to_string(this->num_adders) + ".cnf";
-	}
 	f.open(filename.c_str());
 	f << "p cnf " << this->variable_counter << " " << this->constraint_counter << std::endl;
 	f << this->cnf_clauses.str();
