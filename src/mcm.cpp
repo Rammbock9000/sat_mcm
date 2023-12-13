@@ -362,12 +362,15 @@ void mcm::create_constraints(formulation_mode mode) {
 			if (this->verbosity == verbosity_mode::debug_mode)
 				std::cout << "        create_full_adder_coeff_word_size_sum_constraints" << std::endl;
 			this->create_full_adder_coeff_word_size_sum_constraints(i, mode);
-			if (this->verbosity == verbosity_mode::debug_mode)
-				std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
-			this->create_full_adder_shift_gain_constraints(i, mode);
-			if (this->verbosity == verbosity_mode::debug_mode)
-				std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
-			this->create_full_adder_shift_sum_constraints(i, mode);
+            if (!this->pipelining_enabled) {
+                // cannot cut bits on LSB side for pipelining -> shift gain = 0 and can be ignored
+                if (this->verbosity == verbosity_mode::debug_mode)
+                				std::cout << "        create_full_adder_shift_gain_constraints" << std::endl;
+                this->create_full_adder_shift_gain_constraints(i, mode);
+                if (this->verbosity == verbosity_mode::debug_mode)
+                    std::cout << "        create_full_adder_shift_sum_constraints" << std::endl;
+                this->create_full_adder_shift_sum_constraints(i, mode);
+            }
 		}
 		if (this->force_min_adder_depth or this->pipelining_enabled) {
 			if (this->verbosity == verbosity_mode::debug_mode)
@@ -1779,7 +1782,12 @@ void mcm::get_solution_from_backend() {
 							this->get_result_value(this->full_adder_coeff_word_size_variables.at({idx, w})) << w);
 					}
 					// cut msb
-					this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
+                    if (this->pipelining_enabled) {
+                        this->can_cut_msb_values[idx] = this->get_result_value(this->full_adder_msb_variables.at(idx));
+                    }
+					else {
+                        this->can_cut_msb_values[idx] = 0;
+                    }
 					// coeff word size sum
 					this->coeff_word_size_sum_values[idx] = 0;
 					auto coeff_sum_output_word_size = this->ceil_log2((idx * this->word_size) + 1);
@@ -1787,16 +1795,16 @@ void mcm::get_solution_from_backend() {
 						this->coeff_word_size_sum_values[idx] += (
 							this->get_result_value(this->full_adder_word_size_sum_variables.at({idx, w})) << w);
 					}
-					// shift gain
+					// shift gain (only for non-pipelined)
 					this->shift_gain_values[idx] = 0;
-					for (auto w = 0; w < this->shift_word_size; w++) {
+					for (auto w = 0; w < this->shift_word_size and !this->pipelining_enabled; w++) {
 						this->shift_gain_values[idx] += (
 							this->get_result_value(this->full_adder_shift_gain_variables.at({idx, w})) << w);
 					}
-					// shift sum
+					// shift sum (only for non-pipelined)
 					this->shift_sum_values[idx] = 0;
 					auto shift_sum_output_word_size = this->ceil_log2((idx * this->max_shift) + 1);
-					for (auto w = 0; w < shift_sum_output_word_size; w++) {
+					for (auto w = 0; w < shift_sum_output_word_size and !this->pipelining_enabled; w++) {
 						this->shift_sum_values[idx] += (
 							this->get_result_value(this->full_adder_shift_sum_variables.at({idx, w})) << w);
 					}
@@ -1807,7 +1815,13 @@ void mcm::get_solution_from_backend() {
 			// number of FAs
 			this->num_FAs_value = 0;
 			auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
-			auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+			int input_word_size_sub;
+            if (this->pipelining_enabled) {
+                input_word_size_sub = this->ceil_log2(this->num_adders + 1);
+            }
+            else {
+                input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+            }
 			auto output_word_size = std::max(input_word_size_add, input_word_size_sub) + 1;
 			for (auto w = 0; w < output_word_size; w++) {
 				this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
@@ -2446,7 +2460,9 @@ std::string mcm::get_adder_graph_description() {
 		// // close bracket
 		// s << "}";
 	}
+    int output_counter = -1;
     for (auto &it : this->requested_vectors) {
+        output_counter++;
         // extract elements
         auto requested_coeff = it.first;
         auto actual_coeff = it.second.first;
@@ -2467,7 +2483,10 @@ std::string mcm::get_adder_graph_description() {
             node_stage = std::max(node_stage, stage.at(node_idx));
         }
         // generate info as string
-        s << ",{'O',[";
+        if (this->num_adders > 0 or output_counter > 0) {
+            s << ",";
+        }
+        s << "{'O',[";
         for (size_t i=0; i<requested_coeff.size(); i++) {
             if (i > 0) {
                 s << ",";
@@ -2841,9 +2860,16 @@ void mcm::create_full_adder_msb_sum_constraints(formulation_mode mode) {
 
 void mcm::create_full_adder_add_subtract_inputs_constraints(formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
-	// result = shift_result[last_stage] + msb_sum
+    auto word_size_right_input = this->ceil_log2(this->num_adders + 1);
+    if (this->pipelining_enabled) {
+        // if pipelining:  result = msb_sum (here called "right input")
+        for (int w = 0; w < word_size_right_input; w++) {
+            this->full_adder_add_subtract_inputs_variables[w] = this->full_adder_msb_sum_variables.at(w);
+        }
+        return;
+    }
+	// if !pipelining: result = shift_result[last_stage] + msb_sum
 	auto word_size_left_input = this->ceil_log2(this->num_adders * this->max_shift + 1);
-	auto word_size_right_input = this->ceil_log2(this->num_adders + 1);
 	auto output_word_size = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
 	std::vector<std::pair<std::vector<int>, bool>> x(2);
 	x[0].second = x[1].second = false;
@@ -2865,7 +2891,14 @@ void mcm::create_full_adder_cpa_constraints(formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	// result = num_bits[last_stage] - (shift_result[last_stage] + msb_sum)
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
-	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+	int input_word_size_sub;
+    if (this->pipelining_enabled) {
+        // actually, the shift gain is 0 and we only need to account for MSBs being cut
+        input_word_size_sub = this->ceil_log2(this->num_adders + 1);
+    }
+    else {
+        input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+    }
 	auto output_word_size = std::max(input_word_size_add, input_word_size_sub) + 1;
 	std::vector<std::pair<std::vector<int>, bool>> x(2);
 	// decide add/sub for the two inputs
@@ -2899,7 +2932,13 @@ void mcm::create_full_adder_cpa_constraints(formulation_mode mode) {
 void mcm::create_full_adder_result_constraints() {
 	// force num_full_adders <= max_full_adders
 	auto input_word_size_add = this->ceil_log2(this->word_size * this->num_adders + 1);
-	auto input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+	int input_word_size_sub;
+    if (this->pipelining_enabled) {
+        input_word_size_sub = this->ceil_log2(this->num_adders + 1);
+    }
+    else {
+        input_word_size_sub = this->ceil_log2((this->num_adders + 1) * this->max_shift + 1);
+    }
 	auto output_word_size = std::max(input_word_size_add, input_word_size_sub) + 1;
 	int ok_last = -1;
 	int carry_last = -1;
@@ -3583,7 +3622,7 @@ void mcm::solve_enumeration() {
 	//unit vectors are trivial
     //detect unit vector by accumulating the absolute values of the vector elements and comparing to 1
 	for (auto &v: this->C) {
-		if (mcm::is_unit_vector(v)) {
+		if (!mcm::is_unit_vector(v)) {
 			trivial = false;
 			break;
 		}
@@ -3648,8 +3687,9 @@ void mcm::solve_enumeration() {
                 if (!all_even) break;
                 shifter_input_non_zero_LSBs++;
             }
-            if (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0) {
-                // we do not need to use a full adder for the shifted LSBs
+            if (!this->pipelining_enabled and (this->subtract.at(idx) == 0 or this->negate_select.at(idx) == 0)) {
+                // for pipelined adder graphs we must also store LSBs in registers
+                // BUT for non-pipelined adder graphs we can omit full adders for the shifted LSBs:
                 //   for a + b
                 //   and a - (b << s)
                 FAs_for_this_node -= (this->shift_value.at(idx) + shifter_input_non_zero_LSBs);
