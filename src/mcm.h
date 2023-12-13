@@ -638,6 +638,11 @@ private:
 	 */
 	void solve_standard();
 
+    /*!
+     * @return the number of full adders needed to implement the current solution
+     */
+    int compute_full_adder_count_from_solution();
+
 	/*!
 	 * limit on the number of full adders used
 	 * FULL_ADDERS_UNLIMITED = no limit
