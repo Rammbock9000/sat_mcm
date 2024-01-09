@@ -1,5 +1,5 @@
 //
-// Created by pschenk on 19/05/2023.
+// Created by nfiege on 05/19/2023.
 //
 
 #ifndef SATSCM_MCM_KISSAT_H
@@ -25,7 +25,7 @@ protected:
     int get_result_value(int var_idx) override;
 
     void create_arbitrary_clause(const std::vector<std::pair<int, bool>> &a) override;
-		bool supports_incremental_solving() override { return false; }
+	bool supports_incremental_solving() const override { return false; }
 
 private:
     std::unique_ptr<kissatpp::kissatpp> solver;

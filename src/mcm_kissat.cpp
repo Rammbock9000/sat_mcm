@@ -1,5 +1,5 @@
 //
-// Created by pschenk on 19/05/2023.
+// Created by nfiege on 05/19/2023.
 //
 
 #include "mcm_kissat.h"

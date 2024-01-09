@@ -17,6 +17,7 @@ protected:
     void reset_backend(formulation_mode mode) override;
     int get_result_value(int var_idx) override;
     bool needs_cnf_generation() const override { return true; }
+    bool supports_incremental_solving() const override { return false; }
 
 private:
     std::string path_to_executable;

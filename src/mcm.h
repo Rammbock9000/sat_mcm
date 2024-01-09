@@ -604,7 +604,7 @@ protected:
 	* whether the solver supports incremental solving
 	* @return default = true (overload derived class if this is not the case)
 	*/
-	virtual bool supports_incremental_solving() { return true; }
+	virtual bool supports_incremental_solving() const { return true; }
 
     /*!
      * creates a .cnf file for the current SAT problem
@@ -618,6 +618,10 @@ protected:
     virtual bool needs_cnf_generation() const { return false; }
 
 private:
+    /*!
+     * word size of the result when summing up all vector elements of the coefficients
+     */
+    int abs_coefficient_sum_width = 0;
 	/*!
 	 * whether we want to enumerate all solutions for minimum adder count
 	 */
@@ -699,6 +703,14 @@ private:
 	 * CMM Dimension
 	 */
 	std::map<std::pair<int, int>, int> output_values;
+    /*!
+     * <node idx, vector idx> -> int value
+     */
+    std::map<std::pair<int, int>, int> abs_coeff_values;
+    /*!
+     * node idx -> int value
+     */
+    std::map<int, int> abs_coeff_sum_values;
 	/*!
 	 * node idx -> int value
 	 */
@@ -1002,10 +1014,18 @@ private:
 	 * < node idx, mcm constant > -> variable idx
 	 */
 	std::map<std::tuple<int, int>, int> mcm_output_variables;
-	/*!
-	 * < node idx, bit > -> variable idx
-	 */
-	std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_variables;
+    /*!
+     * < node idx, vector idx, bit > -> variable idx
+     */
+    std::map<std::tuple<int, int, int>, int> full_adder_coeff_word_size_abs_adder_value_variables;
+    /*!
+     * < node idx, bit > -> variable idx
+     */
+    std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_abs_sum_variables;
+    /*!
+     * < node idx, bit > -> variable idx
+     */
+    std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_variables;
 	/*!
 	 * < idx, stage, bit > -> variable idx
 	 */
