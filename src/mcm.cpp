@@ -2243,6 +2243,7 @@ bool mcm::solution_is_valid() {
                     std::cout << "node #" << idx << " has invalid abs add result value at position " << v << std::endl;
                     std::cout << "  expected abs value = " << expected_abs_value << std::endl;
                     std::cout << "  actual abs value = " << actual_abs_value << std::endl;
+                    valid = false;
                 }
                 expected_abs_add_result += expected_abs_value;
             }
@@ -2255,6 +2256,7 @@ bool mcm::solution_is_valid() {
                 std::cout << "node #" << idx << " has invalid abs add result sum" << std::endl;
                 std::cout << "  expected abs add result sum = " << expected_abs_add_result << std::endl;
                 std::cout << "  actual abs add result sum = " << actual_abs_add_result << std::endl;
+                valid = false;
             }
             //this->add_result_values.at({idx, v});
             auto expected_add_result_word_size = this->ceil_log2(expected_abs_add_result);
@@ -2657,6 +2659,8 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
             //abs_coeff_bits[w] = abs_coeff_vector_element_bits[0][w];
             //abs_coeff_bits[w] = this->full_adder_coeff_word_size_abs_adder_value_variables.at({idx,0,w});
             this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = this->full_adder_coeff_word_size_abs_adder_value_variables.at({idx,0,w});
+            // no need to subtract 1 because powers of 2 (i.e., odd numbers) cannot occur
+            this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}];
         }
     }
     else {
@@ -2674,10 +2678,9 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
         auto bitheap_result = this->create_bitheap(bitheap_input);
         this->abs_coefficient_sum_width = static_cast<int>(bitheap_result.size());
         //abs_coeff_bits.resize(this->abs_coefficient_sum_width);
-        /*nfiege: COMMENTED OUT!*/ /*for (int w = 0; w < this->abs_coefficient_sum_width; w++) {
-        //    //abs_coeff_bits[w] = bitheap_result[w];
-        //    this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = bitheap_result.at(w);
-        }*/
+        for (int w = 0; w < this->abs_coefficient_sum_width; w++) {
+            this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = bitheap_result.at(w);
+        }
         // subtract 1 => this is needed since summation results for CMM/SOP can *exactly* be powers of two
         // where the succeeding algorithm for word size computation yields a result 1 too large
         // we subtract 1 by adding 1 in each bit position
@@ -2688,19 +2691,20 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
             // sum = i xnor c_i
             int sum = ++this->variable_counter;
             this->create_new_variable(this->variable_counter);
-            this->create_2x1_equiv(bitheap_result.at(w), c_i, sum);
-            this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = sum;
+            this->create_2x1_equiv(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, sum);
+            this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = sum;
             if (w < this->abs_coefficient_sum_width-1) {
                 // create carry clauses and propagate carry bit to next stage
                 // c_o = i or c_i
                 int c_o = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
-                this->create_2x1_or(bitheap_result.at(w), c_i, c_o);
+                this->create_2x1_or(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, c_o);
                 c_i = c_o;
             }
         }
     }
     // compute word size of sum(abs(c)) by finding the leading one's position
+    // for SOP/CMM we use the version where we subtracted one earlier since powers of 2 can occur
     // carry-input = 0
     int carry_bit = this->init_const_zero_bit();
     // initial value = 0
@@ -2712,7 +2716,7 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
         auto max_val = this->abs_coefficient_sum_width - w;
         auto w_out = this->ceil_log2(max_val + 1);
         //auto &bit_value = abs_coeff_bits.at(w);
-        auto bit_value = this->full_adder_coeff_word_size_abs_sum_variables.at({idx, w});
+        auto bit_value = this->full_adder_coeff_word_size_abs_sum_minus_one_variables.at({idx, w});
         // temp_or = carry OR bit_value
         auto temp_or = ++this->variable_counter;
         this->create_new_variable(this->variable_counter);

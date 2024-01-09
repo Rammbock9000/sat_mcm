@@ -1025,6 +1025,10 @@ private:
     /*!
      * < node idx, bit > -> variable idx
      */
+    std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_abs_sum_minus_one_variables;
+    /*!
+     * < node idx, bit > -> variable idx
+     */
     std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_variables;
 	/*!
 	 * < idx, stage, bit > -> variable idx
