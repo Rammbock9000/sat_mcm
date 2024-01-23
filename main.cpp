@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
 
     for (int i=2; i<argc; i++) {
         std::string s_argv(argv[i]);
-        std::transform(s_argv.begin(), s_argv.end(), s_argv.begin(), [](unsigned char c) { return std::tolower(c); });
+        //std::transform(s_argv.begin(), s_argv.end(), s_argv.begin(), [](unsigned char c) { return std::tolower(c); });
         std::stringstream ss;
         ss << s_argv;
         std::vector<std::string> arg_elements;
@@ -178,23 +178,25 @@ int main(int argc, char **argv) {
         }
         std::string key = arg_elements.at(0);
         std::string val = arg_elements.at(1);
+        std::string original_val = val; // copy it for case-sensitive parameters (e.g., path to executable_binary)
+        std::transform(val.begin(), val.end(), val.begin(), [](unsigned char c) { return std::tolower(c); });
         if (key == "solver_name") {
             solver_name = val;
         }
         else if (key == "executable_binary") {
-            executable_binary = val;
+            executable_binary = original_val;
         }
         else if (key == "pre_cnf_params") {
-            executable_pre_cnf_params = val;
+            executable_pre_cnf_params = original_val;
         }
         else if (key == "post_cnf_params") {
-            executable_post_cnf_params = val;
+            executable_post_cnf_params = original_val;
         }
         else if (key == "solver_log_filename") {
-            solver_log_filename = val;
+            solver_log_filename = original_val;
         }
         else if (key == "solver_err_filename") {
-            solver_err_filename = val;
+            solver_err_filename = original_val;
         }
         else if (key == "timeout") {
             try {

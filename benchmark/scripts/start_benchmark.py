@@ -67,6 +67,15 @@ def get_setup(bench_type):
     elif bench_type == "complex_mult":
         filename = "benchmark/inputs/cmm/complex_8.csv"
         name_tag = "constant"
+    elif bench_type == "fft_rotators":
+        filename = "benchmark/inputs/cmm/fft_rotators.csv"
+        name_tag = "constant"
+    elif bench_type == "low_complexity_rotators":
+        filename = "benchmark/inputs/cmm/low_complexity_rotators.csv"
+        name_tag = "constant"
+    elif bench_type == "rpag_cmm":
+        filename = "benchmark/inputs/cmm/rpag_cmm.csv"
+        name_tag = "constant"
     elif bench_type == "sop_symmetry":
         filename = "benchmark/inputs/sop/sop_symmetry_11.csv"
         name_tag = "constant"
@@ -114,6 +123,8 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
         timeout_mul = 24*7 # 1 week for enumeration
     elif "complex_mult" in bench_type or "sop_symmetry" in bench_type:
         timeout_mul = 24*5 # 5 days for complex multiplications and sop instances
+    elif "rotators" in bench_type or "cmm" in bench_type:
+        timeout_mul = 24   # 1 day for rotators/cmm optimization (don't necessarily have to be optimal)
     if pipelining:
         timeout_mul *= 2 # pipelining is harder
     timeout = 3600*timeout_mul
@@ -140,6 +151,9 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
             allow_negative_numbers = 1
     if bench_type == "complex_mult" or bench_type == "sop_symmetry":
         allow_sign_inversion = 0
+        allow_negative_numbers = 1
+    elif "rotators" in bench_type or "cmm" in bench_type:
+        allow_sign_inversion = 1
         allow_negative_numbers = 1
 
     # create directories if they don't already exist
