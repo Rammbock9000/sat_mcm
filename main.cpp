@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
                   << std::endl;
         std::cout << "  => equalize_output_stages=<0/1> [default=0]: force all outputs into the same pipeline stage (only relevant for pipelining) => WORK IN PROGRESS"
                   << std::endl;
-        std::cout << "  => allow_coefficient_sign_inversion=<0/1/-1> [default=0]: 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it for negative requested coefficients; 0 - never allow it"
+        std::cout << "  => allow_coefficient_sign_inversion=<-1/0/1/2> [default=0]: 2 - generate coefficients EXACTLY as requested (e.g., you request a -5 with allow_negative_coefficients=1 and you get an adder graph for -5 even though it needs 1 adder more than an adder graph for +5); 1 - allow the SAT solver to invert the sign of ANY requested coefficient to reduce the FA count; -1 - only allow it for negative requested coefficients; 0 - never allow it"
                   << std::endl;
         std::cout << "-----------------------------------------------------------------------------------" << std::endl;
         std::cout << "Solver backend:" << std::endl;
@@ -556,7 +556,22 @@ for (auto &v : C) {
 	solver->set_enumerate_all(enumerate_all);
 	if (also_minimize_full_adders) solver->also_minimize_full_adders();
 	if (allow_node_output_shift) solver->allow_node_output_shift();
-	if (allow_coefficient_sign_inversion != 0) solver->ignore_sign(allow_coefficient_sign_inversion == -1);
+	if (allow_coefficient_sign_inversion != 0) {
+        // = 0: always implement the positive versions
+        // = 1: apply to all coefficients
+        // = -1: only apply to negative coefficients
+        // = 2: always implement coefficients exactly as requested
+        if (allow_coefficient_sign_inversion == 1 or allow_coefficient_sign_inversion == -1) {
+            auto only_apply_to_negative_coeffs = allow_coefficient_sign_inversion == -1;
+            solver->ignore_sign(only_apply_to_negative_coeffs);
+        }
+        else if (allow_coefficient_sign_inversion == 2) {
+            solver->implement_signs_as_requested();
+        }
+        else {
+            throw std::runtime_error("invalid value for allow_coefficient_sign_inversion");
+        }
+    }
 	if (min_num_adders >= 0) solver->set_min_add(min_num_adders);
 	if (min_adder_depth) solver->minimize_adder_depth();
 	if (pipelining) solver->enable_pipelining();

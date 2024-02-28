@@ -81,10 +81,18 @@ public:
 	/*!
 	 * allow the solver to choose whether to implement a coefficient C_i or -C_i
 	 * depending on the implementation costs
+     * -> do not use together with implement_signs_as_requested!!!
 	 * @param only_apply_to_negative_coefficients only allow this option for negative requested coefficients
 	 */
 	void ignore_sign(bool only_apply_to_negative_coefficients);
 
+    /*!
+     * force the solver to implement the sign exactly as requested
+     * sometimes this makes it use one more adder (e.g., y=-5*x needs 2 adders whereas y=5*x only needs 1)
+     * but sometimes costs are equal so you can use this setting to get exactly what you want
+     * -> do not use together with ignore_sign!!!
+     */
+    void implement_signs_as_requested();
 	/*!
 	 * solve the problem
 	 */
@@ -491,9 +499,14 @@ protected:
 	 * this is only relevant when ...
 	 *   ... minimizing full adders
 	 *   ... the solver is allowed to use negative numbers
-	 *   ... doing MCM
+	 *   ... doing MCM/CMM
 	 */
-	std::map<int, bool> sign_inversion_allowed;
+    std::map<int, bool> sign_inversion_allowed;
+    /*!
+     * force the solver to implement coefficient signs exactly as requested
+     * default: false, gets set by this->implement_signs_as_requested
+     */
+    bool implement_coeff_signs_as_requested = false;
 	/*!
 	 * word size of all operations
 	 */
@@ -531,7 +544,7 @@ protected:
 
 	/*!
 	 * whether to assume a fully pipelined adder graph
-	 * -> i.e., minimize the number of registered operations (#reg_add + #reg)
+	 * -> i.e., minimize the number of registered operations (#reg_add + #reg_pure)
 	 */
 	bool pipelining_enabled = false;
 	/*!
@@ -619,6 +632,10 @@ protected:
 
 private:
     /*!
+     * @return internal word size for the subtract input that's used to compute the final bit-level cost
+     */
+    int get_word_size_sub();
+    /*!
      * word size of the result when summing up all vector elements of the coefficients
      */
     int abs_coefficient_sum_width = 0;
@@ -643,9 +660,11 @@ private:
 	void solve_standard();
 
     /*!
-     * @return the number of full adders needed to implement the current solution
+     * with pipelining enabled: bit-level costs reflect the number of registers
+     * with pipelining disabled: bit-level costs reflect the number of bit-adders (i.e., full/half adders)
+     * @return the bit-level costs needed to implement the current solution
      */
-    int compute_full_adder_count_from_solution();
+    int compute_full_bit_level_costs_from_solution();
 
 	/*!
 	 * limit on the number of full adders used
@@ -765,12 +784,12 @@ private:
 	void optimization_loop(formulation_mode mode);
 
 	/*!
-	 * check if vector has only positv values after they were flipped in the constructor
+	 * check if vector has only positve values after they were flipped in the constructor
 	 * the solver can then allow sign inversion for this vector
 	 * @param v current vector to check
-	 * @return true when vector is all positiv else false
+	 * @return true when vector is all positive else false
 	 */
-	bool vector_all_positive(const std::vector<int> v);
+	bool vector_all_positive(const std::vector<int> &v);
 
 	/*!
 	 * @return C[0].size()
@@ -787,7 +806,7 @@ private:
 	 * @return idx input buffer caused by multiple inputs in SOP and CMM
 	 * not sure yet if the -1 is correct
 	 */
-	inline int idx_input_buffer() { return C[0].size() - 1; }
+	inline int idx_input_buffer() { return static_cast<int>(this->C[0].size()) - 1; }
 
 	/*!
 	 * cache values for ceil(log2(n))

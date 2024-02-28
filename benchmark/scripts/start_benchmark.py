@@ -1,6 +1,7 @@
 import os
 import threading
 from sys import argv
+from time import sleep
 
 def get_num_threads_from_user():
     if len(argv) < 2:
@@ -35,7 +36,7 @@ def read_constants(filename):
             constants_with_costs.append([elements[0], elements[1]])
     return constants_with_costs
 
-def get_setup(bench_type):
+def get_setup(bench_type, subdir=None):
     bench_type = bench_type.lower()
     if bench_type == "scm_reduced" or bench_type == "pscm_reduced":
         filename = "benchmark/inputs/scm/scm_reduced.csv"
@@ -76,6 +77,9 @@ def get_setup(bench_type):
     elif bench_type == "rpag_cmm":
         filename = "benchmark/inputs/cmm/rpag_cmm.csv"
         name_tag = "constant"
+    elif bench_type == "cmm_rnd":
+        filename = f"benchmark/inputs/cmm_rnd/{subdir}.csv"
+        name_tag = "constant"
     elif bench_type == "sop_symmetry":
         filename = "benchmark/inputs/sop/sop_symmetry_11.csv"
         name_tag = "constant"
@@ -86,13 +90,19 @@ def get_setup(bench_type):
 def main():
     bench_type_tuples = [("mcm","shift_0_FA_0",0,0), ("mcm","shift_0_FA_1",1,0), ("unsigned_mcm","shift_0_FA_1",1,0), ("scm_lagoon_metodi","shift_0_FA_0",0,0), ("scm_reduced","shift_0_FA_0",0,0), ("scm_reduced","shift_1_FA_1",1,1), ("scm","shift_0_FA_0",0,0), ("scm","shift_1_FA_0",0,1), ("enumerate_unsigned","shift_1_FA_0",0,1), ("enumerate_signed_negative","shift_1_FA_0",0,1), ("enumerate_signed_all","shift_1_FA_0",0,1)]
     num_threads = get_num_threads_from_user()
+    worker_threads = [None for _ in range(num_threads)]
     for bench_type_tuple in bench_type_tuples:
-        do_it(bench_type_tuple, "cadical", num_worker_threads=num_threads)
+        worker_threads = do_it(bench_type_tuple, "cadical", worker_threads)
         bit_str = "with bit-level cost minimization" if bench_type_tuple[1] == 1 else "without bit-level cost minimization"
         shift_str = "including post-add right shifter" if bench_type_tuple[2] == 1 else "without post-add right shifter"
-        print(f"finished benchmark {bench_type_tuple[0]} :)")
+    # now wait for all remaining threads to finish
+    for worker in worker_threads:
+        if worker is None:
+            continue
+        worker.join()
+    print(f"finished :)")
 
-def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
+def do_it(bench_type_tuple, solver="CaDiCaL", worker_threads=[None]):
     # setup
     min_adder_depth = 0
     equalize_output_stages = 0
@@ -108,25 +118,27 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
         pipe_str = "with pipelining"
     else:
         pipe_str = "without pipelining"
-    print(f"executing experiment '{bench_type}' ({also_minimize_full_adders}/{allow_post_add_right_shift}) {pipe_str} now")
-    filename, name_tag = get_setup(bench_type)
+    print(f"executing experiment '{bench_type}/{subdir_name}' ({also_minimize_full_adders}/{allow_post_add_right_shift}) {pipe_str} now")
+    filename, name_tag = get_setup(bench_type, subdir_name)
     # paths
     result_dir = "benchmark/results"
     binary = "./satmcm"
     # timeout
     timeout_mul = 1 # standard timeout: 1h
     if "mcm" in bench_type:
-        timeout_mul = 2 # 2h for mcm
+        timeout_mul =  2   # 2h for mcm
     elif "lagoon" in bench_type:
         timeout_mul = 24*7 # 1 week for very hard scm instances
     elif "enumerate" in bench_type:
         timeout_mul = 24*7 # 1 week for enumeration
     elif "complex_mult" in bench_type or "sop_symmetry" in bench_type:
         timeout_mul = 24*5 # 5 days for complex multiplications and sop instances
-    elif "rotators" in bench_type or "cmm" in bench_type:
-        timeout_mul = 24   # 1 day for rotators/cmm optimization (don't necessarily have to be optimal)
+    elif "rotators" in bench_type or "rpag_cmm" in bench_type:
+        timeout_mul = 24*7 # 7 days for cmm optimization (it's hard)
+    elif "cmm" in bench_type:
+        timeout_mul = 24*1 # 1 day for "normal" cmm experiments based on random matrices
     if pipelining:
-        timeout_mul *= 2 # pipelining is harder
+        timeout_mul *= 2   # pipelining is even harder
     timeout = 3600*timeout_mul
     if "enumerate" in bench_type:
         enumerate_all = 1
@@ -164,7 +176,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
     if not os.path.exists(f"{result_dir}/{bench_type}/{subdir_name}/"):
         os.mkdir(f"{result_dir}/{bench_type}/{subdir_name}/")
     # init thread management system (a simple list lol)
-    worker_threads = [None for _ in range(num_worker_threads)]
+    #worker_threads = [None for _ in range(num_worker_threads)]
     # read constants incl. costs
     constants_with_costs = read_constants(filename)
     i = 0
@@ -186,15 +198,11 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
         fa_min_str = "without FA minimization"
         if also_minimize_full_adders:
             fa_min_str = "with FA minimization"
-        # simply execute the program (DEPRECATED -> USE WORKER THREADS INSTEAD)
-        #command = f'{binary} "{constant}" {solver} {timeout} {threads} {quiet} {also_minimize_full_adders} {allow_post_add_right_shift} {allow_negative_numbers} {write_cnf} {allow_sign_inversion} {min_num_add} {enumerate_all} {min_adder_depth} {pipelining} {equalize_output_stages} 1>log.txt 2>>{result_filename}'
-        #print(f"  -> executing '{command}'")
-        #os.system(command)
         # wait until we can spawn a new worker thread
         worker_id = -1
         while worker_id < 0:
             for potential_worker_id, worker in enumerate(worker_threads):
-                if worker == None:
+                if worker is None:
                     # found uninitialized worker
                     worker_id = potential_worker_id
                     break
@@ -204,11 +212,13 @@ def do_it(bench_type_tuple, solver="CaDiCaL", num_worker_threads=1):
                 # found idle (finished) worker
                 worker.join()
                 worker_id = potential_worker_id
+            sleep(0.1)
         # start new worker
         command = f'{binary} "{constant}" solver_name={solver} timeout={timeout} threads={threads} quiet={quiet} minimize_full_adders={also_minimize_full_adders} allow_post_adder_right_shift={allow_post_add_right_shift} allow_negative_coefficients={allow_negative_numbers} write_cnf_files={write_cnf} allow_coefficient_sign_inversion={allow_sign_inversion} min_num_adders={min_num_add} enumerate_all={enumerate_all} min_adder_depth={min_adder_depth} pipelining={pipelining} equalize_output_stages={equalize_output_stages} 1>log_{worker_id}.txt 2>>{result_filename}'
         worker_threads[worker_id] = worker_thread(worker_id, command)
         worker_threads[worker_id].start()
-
+        sleep(0.1)
+    return worker_threads
 
     
 if __name__=="__main__":
