@@ -390,7 +390,7 @@ void mcm::create_constraints(formulation_mode mode) {
 
 void mcm::create_input_node_variables() {
 	for (int v = 0; v < c_row_size(); v++) {
-		for (int idx = 0; idx <= idx_input_buffer(); idx++) {
+		for (int idx = 0; idx < c_row_size(); idx++) {
 			for (int i = 0; i < this->word_size; i++) {
 				this->output_value_variables[{idx, i, v}] = ++this->variable_counter;
 				this->create_new_variable(this->variable_counter);
@@ -402,7 +402,7 @@ void mcm::create_input_node_variables() {
 void mcm::create_input_node_depth_variables() {
 	if (!this->force_min_adder_depth and !this->pipelining_enabled) return;
 	// force adder depth for all inputs to zero
-	for (int idx = 0; idx <= idx_input_buffer(); idx++) {
+	for (int idx = 0; idx < c_row_size(); idx++) {
 		for (int w = 0; w < this->adder_depth_word_size; w++) {
 			this->adder_depth_variables[{idx, w}] = this->init_const_zero_bit();
 		}
@@ -411,8 +411,7 @@ void mcm::create_input_node_depth_variables() {
 
 void mcm::create_input_select_mux_variables(int idx) {
 	if (idx < 2) return;
-	if (idx <= idx_input_buffer()) return;
-	//example 3x3 matrix: idx <= 2
+	if (idx < c_row_size()) return;
 	auto select_word_size = this->ceil_log2(idx);
 #if INPUT_SELECT_MUX_OPT
 	auto num_muxs = idx-1;
@@ -442,7 +441,7 @@ void mcm::create_input_select_mux_variables(int idx) {
 
 void mcm::create_input_select_selection_variables(int idx) {
 	if (idx == 1) return;
-	if (idx <= idx_input_buffer()) return;
+	if (idx < c_row_size()) return;
 	//example 3x3 matrix: idx <= (1 + 2)
 	auto select_word_size = this->ceil_log2(idx);
 	for (auto &dir: input_directions) {
@@ -1055,7 +1054,7 @@ void mcm::create_input_select_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
-	if (idx <= idx_input_buffer()) return;
+	if (idx < c_row_size()) return;
 
 	//create constraints for all muxs
 	if (this->verbosity == verbosity_mode::debug_mode) {
@@ -1414,7 +1413,7 @@ void mcm::create_adder_constraints(int idx, formulation_mode mode) {
 void mcm::create_input_select_limitation_constraints(int idx, formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	if (idx <= 1) return;
-	if (idx <= idx_input_buffer()) return;
+	if (idx < c_row_size()) return;
 	auto select_input_word_size = this->ceil_log2(idx);
 	int max_representable_input_select = (1 << select_input_word_size) - 1;
 	for (auto &dir: this->input_directions) {
@@ -1457,7 +1456,7 @@ void mcm::create_adder_depth_computation_select_constraints(int idx, formulation
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	// stage 1 has no input MUX because it can only be connected to the input node with idx=0
 	if (idx < 2) return;
-	if (idx <= idx_input_buffer()) return;
+	if (idx < c_row_size()) return;
 
 	//create constraints for all muxs
 	if (this->verbosity == verbosity_mode::debug_mode) {
@@ -1649,7 +1648,7 @@ void mcm::get_solution_from_backend() {
 	this->pipeline_stage.clear();
 	this->num_FAs_value = 0;
 	// get solution
-	for (int idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+	for (int idx = 0; idx < (this->num_adders + c_row_size()); idx++) {
 		for (int v = 0; v < c_row_size(); v++) {
 			// output_values
 			this->output_values[{idx, v}] = 0;
@@ -1658,7 +1657,7 @@ void mcm::get_solution_from_backend() {
 			}
 			if (this->calc_twos_complement)
 				this->output_values[{idx, v}] = sign_extend(this->output_values[{idx, v}], this->word_size);
-			if (idx > (0 + idx_input_buffer())) {
+			if (idx >= c_row_size()) {
 				if (idx > 1) {
 					// input_select
 					for (auto &dir: this->input_directions) {
@@ -1775,7 +1774,7 @@ void mcm::get_solution_from_backend() {
 				this->num_FAs_value += (this->get_result_value(this->full_adder_result_variables.at(w)) << w);
 			}
 		}
-		if (this->pipelining_enabled and idx > idx_input_buffer()) {
+		if (this->pipelining_enabled and idx >= c_row_size()) {
 			//this->is_register[idx] = this->get_result_value(this->register_variables.at(idx));
 			auto idx_l = this->input_select.at({idx, input_direction::left});
 			auto idx_r = this->input_select.at({idx, input_direction::right});
@@ -1790,7 +1789,7 @@ void mcm::get_solution_from_backend() {
 			for (int w = 0; w < this->adder_depth_word_size; w++) {
 				auto val = this->get_result_value(this->adder_depth_variables.at({idx, w}));
 				val = this->get_result_value(this->adder_depth_computation_max_variables.at({idx, w}));
-				if (idx > idx_input_buffer() + 1) {
+				if (idx > c_row_size()) {
 					val = this->get_result_value(
 						this->adder_depth_computation_input_variables.at({idx, input_direction::left, w}));
 					val = this->get_result_value(
@@ -1817,17 +1816,10 @@ void mcm::print_solution() {
         return;
     }
     // found solution! -> print general info
-    std::cout << "Found solution for constant multiplication by:" << std::endl;
-    for (auto &v: this->C) {
-        std::cout << "  <";
-        for (auto c: v) {
-            std::cout << " " << c;
-        }
-        std::cout << " >" << std::endl;
-    }
+    std::cout << "Found solution!" << std::endl;
     std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
     // print remaining nodes
-    for (auto idx = 0; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+    for (auto idx = 0; idx < (this->num_adders + c_row_size()); idx++) {
         std::stringstream const_value_as_str;
         const_value_as_str << "[";
         for (int v = 0; v < c_row_size(); v++) {
@@ -1839,7 +1831,7 @@ void mcm::print_solution() {
         std::cout << "  node #" << idx << " = "
                   << const_value_as_str.str()
                   << std::endl;
-        if (idx <= idx_input_buffer()) continue;
+        if (idx < c_row_size()) continue;
         std::cout << "    left input: node " << this->input_select[{idx, mcm::left}] << std::endl;
         std::cout << "    right input: node " << this->input_select[{idx, mcm::right}] << std::endl;
         std::cout << "    shift value: " << this->shift_value[idx] << std::endl;
@@ -1871,14 +1863,14 @@ void mcm::print_solution() {
 			std::cout << "#adders = " << this->num_adders << ", word size = " << this->word_size << std::endl;
 
 			//print input nodes
-			for (int i = 0; i <= idx_input_buffer(); i++) {
+			for (int i = 0; i < c_row_size(); i++) {
 				std::cout << "  node #" << i << " = "
 									<< (this->calc_twos_complement ? sign_extend(this->output_values[{i, v}], this->word_size)
 																								 : this->output_values[{i, v}]) << std::endl;
 			}
 
 			//print following nodes
-			for (auto idx = (1 + idx_input_buffer()); idx <= (this->num_adders + idx_input_buffer()); idx++) {
+			for (auto idx = c_row_size(); idx < (this->num_adders + c_row_size()); idx++) {
 				std::cout << "  node #" << idx << " = "
 									<< (this->calc_twos_complement ? sign_extend((int64_t) this->output_values[{idx, v}],
 																															 this->word_size) : this->output_values[{idx, v}])
@@ -1914,7 +1906,7 @@ void mcm::print_solution() {
 
 bool mcm::solution_is_valid() {
 	bool valid = true;
-	for (int idx = idx_input_buffer() + 1; idx <= (this->num_adders + idx_input_buffer()); idx++) {
+	for (int idx = c_row_size(); idx < (this->num_adders + c_row_size()); idx++) {
 		for (int v = 0; v < c_row_size(); v++) {
 
             //std::cout << "test where I left the function 1" << std::endl;
@@ -2231,6 +2223,21 @@ bool mcm::solution_is_valid() {
                 else {
                     std::cout << "    add result value = " <<  this->add_result_values.at({idx, 0}) << std::endl;
                 }
+                std::cout << "  found leading 1 in the following bit vector: ";
+                for (int w=this->abs_coefficient_sum_width-1; w>=0; w--) {
+                    std::cout << this->get_result_value(this->full_adder_coeff_word_size_abs_sum_minus_one_variables.at({idx, w}));
+                }
+                std::cout << " = ";
+                for (int w=this->abs_coefficient_sum_width-1; w>=0; w--) {
+                    std::cout << this->get_result_value(this->full_adder_coeff_word_size_abs_sum_variables.at({idx, w}));
+                }
+                std::cout << " - " << this->get_result_value(this->full_adder_at_least_one_positive_variables.at(idx));
+                std::cout << std::endl;
+                std::cout << "  where " << this->get_result_value(this->full_adder_at_least_one_positive_variables.at(idx)) << " = OR (";
+                for (int v=0; v<this->c_row_size(); v++) {
+                    std::cout << " " << this->get_result_value(this->full_adder_coeff_positive_variables.at({idx, v}));
+                }
+                std::cout << " )" << std::endl;
                 std::cout << "  expected word size = " << expected_add_result_word_size << std::endl;
                 std::cout << "  actual word size = " << actual_add_result_word_size << std::endl;
                 valid = false;
@@ -2300,11 +2307,11 @@ std::string mcm::get_adder_graph_description() {
 	s << "{";
 	std::map<int, int> stage;
 	//build initial stage for inputs
-	for (int i = 0; i <= idx_input_buffer(); i++) {
+	for (int i = 0; i < c_row_size(); i++) {
 		stage[i] = 0;
 	}
 
-	for (int idx = (1 + idx_input_buffer()); idx <= (this->num_adders + idx_input_buffer()); idx++) {
+	for (int idx = c_row_size(); idx < (this->num_adders + c_row_size()); idx++) {
 		// get left and right inputs and their shift
 		int left_idx;
 		int right_idx;
@@ -2315,42 +2322,9 @@ std::string mcm::get_adder_graph_description() {
 		int left_stage;
 		int right_stage;
 		int current_stage;
-		// for (int v=0; v<c_row_size(); v++) {
-		//     // insert comma if needed
-		//     if (idx > (1 + idx_input_buffer())) s << ",";
-		//     left_idx = this->input_select.at({idx, mcm::left});
-		//     right_idx = this->input_select.at({idx, mcm::right});
-		//     left_input = this->output_values.at({left_idx,v});
-		//     right_input = this->output_values.at({right_idx,v});
-		//     left_shift = this->shift_value.at(idx);
-		//     right_shift = 0;
-		//     // add/sub?
-		//     if (this->negate_select.at(idx) == 0) {
-		//         // swap again for subtract
-		//         int idx_cpy = left_idx;
-		//         int input_cpy = left_input;
-		//         int shift_cpy = left_shift;
-		//         left_idx = right_idx;
-		//         left_input = right_input;
-		//         left_shift = right_shift;
-		//         right_idx = idx_cpy;
-		//         right_input = input_cpy;
-		//         right_shift = shift_cpy;
-		//     }
-		//     if (this->subtract.at(idx) == 1) {
-		//         right_input *= -1;
-		//     }
-		//     // calc stage
-		//     left_stage = stage.at(left_idx);
-		//     right_stage = stage.at(right_idx);
-		//     current_stage = std::max(left_stage, right_stage) + 1;
-		//     stage[idx] = current_stage;
-		// }
-
-		//TODO there has to be a way to do this more efficient this is pretty ugly
 
         // separate nodes with comma
-        if (idx > (1 + idx_input_buffer())) {
+        if (idx > c_row_size()) {
             s << ",";
         }
 		// basic node info
@@ -2548,7 +2522,7 @@ void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
 		if (only_apply_to_negative_coefficients) {
 			// only allow sign inversion for all negative coefficients
 			if (this->inverted_coeff_requested[C[m - 1]]) {
-				if (this->vector_all_positive(C[m - 1])) {
+				if (this->vector_all_positive(this->C[m - 1])) {
 					this->sign_inversion_allowed[m] = true;
 				}
 			}
@@ -2562,28 +2536,22 @@ void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
 bool mcm::vector_all_positive(const std::vector<int> &v) {
 	bool all_positive = true;
 	for (auto &c: v) {
-		//skip over negative values
-		if (c >= 0)continue;
+		// skip over negative values
+		if (c >= 0) continue;
 		else {
-			//break out for the first non negative value and return false
-			all_positive = false;
-			break;
+			// found negative element => return false
+			return false;
 		}
 	}
-	//only negative elements => return true
-	return all_positive;
+	// only positive elements => return true
+	return true;
 }
 
 void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
-	//std::vector<int> abs_coeff_bits;
-    //std::vector<std::vector<int>> abs_coeff_vector_element_bits(this->c_row_size(), std::vector<int>(this->word_size));
     for (int v = 0; v < c_row_size(); v++) {
         if (this->calc_twos_complement) {
             // compute abs(c) using a MUX and an inversion and a +1 adder
-            /*int carry_bit = ++this->variable_counter;
-            this->create_new_variable(this->variable_counter);
-            this->force_bit(carry_bit, 1);*/
             int carry_bit = this->init_const_one_bit();
             std::vector<int> inv_c_bits(this->word_size);
             int sign_bit;
@@ -2597,7 +2565,7 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
             }
             for (int w = 0; w < this->word_size; w++) {
                 // first, implement c*(-1)
-                auto sum_bit = inv_c_bits[w] = ++this->variable_counter; // sum bit
+                auto sum_bit = inv_c_bits[w] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
                 int add_bit;
                 if (this->pipelining_enabled) {
@@ -2612,18 +2580,15 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
                     int carry_out_bit = ++this->variable_counter;
                     this->create_new_variable(this->variable_counter);
                     // create clauses for sum and carry bits
-                    //this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit, carry_out_bit);
                     this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false},
                                             {carry_out_bit, false});
                     // pass carry bit to next stage
                     carry_bit = carry_out_bit;
                 } else {
                     // only create clauses for sum bit
-                    //this->create_half_adder_inv_b(carry_bit, add_bit, sum_bit);
                     this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false});
                 }
                 // now, implement the MUX, controlled by the sign bit
-                //auto mux_bit = abs_coeff_vector_element_bits[v][w] = ++this->variable_counter;
                 auto mux_bit = this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
                 this->create_2x1_mux(add_bit, sum_bit, sign_bit, mux_bit);
@@ -2631,8 +2596,6 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
         } else {
             // abs(c) = c because c is an unsigned number
             for (int w = 0; w < this->word_size; w++) {
-                //abs_coeff_vector_element_bits[v][w] = this->adder_output_value_variables.at({idx, w, v});
-                //this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}] = this->adder_output_value_variables.at({idx, w, v});
                 if (this->pipelining_enabled) {
                     // registers only depend on the coefficient word size after post-add right shift
                     this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}] = this->output_value_variables.at({idx, w, v});
@@ -2648,13 +2611,8 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
     if (this->c_row_size() == 1) {
         // only one element in the vector => sum(abs(c)) = abs(c[0])
         this->abs_coefficient_sum_width = this->word_size;
-        //abs_coeff_bits.resize(this->abs_coefficient_sum_width);
         for (int w = 0; w < this->word_size; w++) {
-            //abs_coeff_bits[w] = abs_coeff_vector_element_bits[0][w];
-            //abs_coeff_bits[w] = this->full_adder_coeff_word_size_abs_adder_value_variables.at({idx,0,w});
             this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = this->full_adder_coeff_word_size_abs_adder_value_variables.at({idx,0,w});
-            // no need to subtract 1 because powers of 2 (i.e., odd numbers) cannot occur
-            this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}];
         }
     }
     else {
@@ -2665,36 +2623,100 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
             bitheap_input[v].second = false;
             bitheap_input[v].first.resize(this->word_size);
             for (int w = 0; w < this->word_size; w++) {
-                //bitheap_input[v].first[w] = abs_coeff_vector_element_bits[v][w];
                 bitheap_input[v].first[w] = this->full_adder_coeff_word_size_abs_adder_value_variables.at({idx,v,w});
             }
         }
         auto bitheap_result = this->create_bitheap(bitheap_input);
         this->abs_coefficient_sum_width = static_cast<int>(bitheap_result.size());
-        //abs_coeff_bits.resize(this->abs_coefficient_sum_width);
         for (int w = 0; w < this->abs_coefficient_sum_width; w++) {
             this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}] = bitheap_result.at(w);
         }
-        // subtract 1 => this is needed since summation results for CMM/SOP can *exactly* be powers of two
-        // where the succeeding algorithm for word size computation yields a result 1 too large
-        // we subtract 1 by adding 1 in each bit position
-        // this works since sum(abs(c)) should never be equal to zero and is guaranteed to be unsigned
-        int c_i = this->init_const_zero_bit();
-        for (int w=0; w<this->abs_coefficient_sum_width; w++) {
-            // create result bit
-            // sum = i xnor c_i
-            int sum = ++this->variable_counter;
-            this->create_new_variable(this->variable_counter);
-            this->create_2x1_equiv(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, sum);
-            this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = sum;
-            if (w < this->abs_coefficient_sum_width-1) {
-                // create carry clauses and propagate carry bit to next stage
-                // c_o = i or c_i
-                int c_o = ++this->variable_counter;
+    }
+    // subtract 1 conditionally under the following circumstances:
+    // -> CMM/SOP or pipelining is used
+    // -> there is at least one positive number
+    if (c_row_size() > 1 or this->pipelining_enabled) {
+        if (this->calc_twos_complement) {
+            // we must subtract 1 if there is at least one positive number
+            // => create variables
+            for (int v=0; v<this->c_row_size(); v++) {
+                this->full_adder_coeff_positive_variables[{idx, v}] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
-                this->create_2x1_or(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, c_o);
+                int helper_var = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                // this->adder_output_value_variables.at({idx, w, v})
+                // helper[v] = OR_{w=0}^{W-2} adder_output_value_variables[v,w]
+                std::vector<std::pair<int, bool>> or_me_clause(this->word_size);
+                or_me_clause[this->word_size-1] = {helper_var, true};
+                for (int w=0; w<this->word_size-1; w++) {
+                    or_me_clause[w] = {this->adder_output_value_variables.at({idx, w, v}), false};
+                    this->create_1x1_implication(this->adder_output_value_variables.at({idx, w, v}), helper_var);
+                }
+                this->create_arbitrary_clause(or_me_clause);
+                // full_adder_coeff_positive_variables[v] = helper[v] and (not adder_output_value_variables[v,W-1])
+                this->create_1x1_implication(this->full_adder_coeff_positive_variables[{idx, v}], helper_var);
+                this->create_1x1_negated_implication(this->full_adder_coeff_positive_variables[{idx, v}], this->adder_output_value_variables.at({idx, this->word_size-1, v}));
+                this->create_arbitrary_clause({{this->adder_output_value_variables.at({idx, this->word_size-1, v}), false}, {helper_var, true}, {this->full_adder_coeff_positive_variables[{idx, v}], false}});
+            }
+            // => first of all, create clauses to check whether there is at least 1 positive number
+            if (this->c_row_size() > 1) {
+                this->full_adder_at_least_one_positive_variables[idx] = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                // full_adder_at_least_one_positive_variables = OR_{v=0}^{c_row_size-1} full_adder_coeff_positive_variables[v]
+                std::vector<std::pair<int, bool>> or_me_clause(this->c_row_size()+1);
+                or_me_clause[this->c_row_size()] = {this->full_adder_at_least_one_positive_variables[idx], true};
+                for (int v=0; v<this->c_row_size(); v++) {
+                    or_me_clause[v] = {this->full_adder_coeff_positive_variables[{idx, v}], false};
+                    this->create_1x1_implication(this->full_adder_coeff_positive_variables[{idx, v}], this->full_adder_at_least_one_positive_variables[idx]);
+                }
+                this->create_arbitrary_clause(or_me_clause);
+            }
+            else {
+                this->full_adder_at_least_one_positive_variables[idx] = this->full_adder_coeff_positive_variables.at({idx, 0});
+            }
+
+            // => now do the subtraction by adding that bit in each bit position
+            int c_i = this->init_const_zero_bit();
+            for (int w=0; w<this->abs_coefficient_sum_width; w++) {
+                // full adder
+                int c_o = -1;
+                if (w < this->abs_coefficient_sum_width-1) {
+                    c_o = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
+                }
+                int sum = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                this->create_full_adder({this->full_adder_at_least_one_positive_variables[idx], false}, {this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], false}, {c_i, false}, {sum, false}, {c_o, false});
+                this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = sum;
                 c_i = c_o;
             }
+        }
+        else {
+            // always subtract 1 because there is always a positive number if internal numbers are all unsigned
+            this->full_adder_at_least_one_positive_variables[idx] = this->init_const_one_bit();
+            int c_i = this->init_const_zero_bit();
+            for (int w=0; w<this->abs_coefficient_sum_width; w++) {
+                // create result bit
+                // sum = i xnor c_i
+                int sum = ++this->variable_counter;
+                this->create_new_variable(this->variable_counter);
+                this->create_2x1_equiv(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, sum);
+                this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = sum;
+                if (w < this->abs_coefficient_sum_width-1) {
+                    // create carry clauses and propagate carry bit to next stage
+                    // c_o = i or c_i
+                    int c_o = ++this->variable_counter;
+                    this->create_new_variable(this->variable_counter);
+                    this->create_2x1_or(this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}], c_i, c_o);
+                    c_i = c_o;
+                }
+            }
+        }
+    }
+    else {
+        // no need to conditionally subtract 1 since powers of 2 cannot occur
+        for (int w = 0; w < this->abs_coefficient_sum_width; w++) {
+            this->full_adder_coeff_word_size_abs_sum_minus_one_variables[{idx, w}] = this->full_adder_coeff_word_size_abs_sum_variables[{idx, w}];
         }
     }
     // compute word size of sum(abs(c)) by finding the leading one's position
@@ -2777,7 +2799,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
     auto m = this->full_adder_msb_variables[idx] = ++this->variable_counter;
     this->create_new_variable(this->variable_counter);
     int s_c = this->adder_output_value_variables.at({idx, this->word_size - 1, 0});
-    if (idx <= (1 + idx_input_buffer()) && idx > 0) {
+    if (idx <= c_row_size() && idx > 0) {
         // m = not s_c
         this->create_1x1_negated_implication(s_c, m);
         this->create_1x1_reversed_negated_implication(s_c, m);
@@ -2827,7 +2849,7 @@ void mcm::create_full_adder_msb_constraints(int idx, formulation_mode mode) {
 void mcm::create_full_adder_coeff_word_size_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	auto num_bits_word_size = this->ceil_log2(this->abs_coefficient_sum_width + 1);
-	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
+	if (idx <= c_row_size() && idx > 0) {
 		// no addition necessary -> just set container with variables
 		for (int w = 0; w < num_bits_word_size; w++) {
 			this->full_adder_word_size_sum_variables[{idx, w}] = this->full_adder_coeff_word_size_variables.at({idx, w});
@@ -2886,7 +2908,7 @@ void mcm::create_full_adder_shift_gain_constraints(int idx, formulation_mode mod
 void mcm::create_full_adder_shift_sum_constraints(int idx, formulation_mode mode) {
 	if (mode == formulation_mode::only_FA_limit and this->supports_incremental_solving()) return;
 	auto num_bits_word_size = this->ceil_log2(this->max_shift + 1);
-	if (idx <= (1 + idx_input_buffer()) && idx > 0) {
+	if (idx <= c_row_size() && idx > 0) {
 		// no addition necessary -> just set container with variables
 		for (int w = 0; w < num_bits_word_size; w++) {
 			this->full_adder_shift_sum_variables[{idx, w}] = this->full_adder_shift_gain_variables.at({idx, w});
@@ -3196,8 +3218,8 @@ void mcm::create_mcm_output_constraints(formulation_mode mode) {
 }
 
 void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
-	if (idx_input_buffer() > 0) return;
-	//this constraint is not needed for CMM and SOP
+	if (c_row_size() > 1) return;
+	// this constraint cannot be added for CMM and SOP!
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
 	for (int v = 0; v < c_row_size(); v++) {
 		this->force_bit(this->output_value_variables.at({idx, 0, v}), 1);
@@ -3206,7 +3228,7 @@ void mcm::create_odd_fundamentals_constraints(int idx, formulation_mode mode) {
 
 void mcm::create_pipelining_register_constraints(int idx, mcm::formulation_mode mode) {
 	if (mode != formulation_mode::reset_all and this->supports_incremental_solving()) return;
-	// just let the solver figure it out by itself lol
+	// do nothing; just let the solver figure it out by itself lol
     // possibility 1: set left_input = right_input, pre_add_left_shift=1, perform a subtraction
     //                => y = (x << 1) - x = 2*x - x = x
     // possibility 2: set left_input = right_input, perform an addition, post_add_right_shift = 1

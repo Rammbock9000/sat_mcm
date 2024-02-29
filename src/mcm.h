@@ -794,19 +794,12 @@ private:
 	/*!
 	 * @return C[0].size()
 	 */
-	inline int c_row_size() { return C[0].size(); }
+	inline int c_row_size() { return static_cast<int>(this->C[0].size()); }
 
 	/*!
 	 * @return C.size()
 	 */
-	inline int c_column_size() { return C.size(); }
-
-	/*!
-	 * C[0].size() idx are reserved by the inputs
-	 * @return idx input buffer caused by multiple inputs in SOP and CMM
-	 * not sure yet if the -1 is correct
-	 */
-	inline int idx_input_buffer() { return static_cast<int>(this->C[0].size()) - 1; }
+	inline int c_column_size() { return static_cast<int>(this->C.size()); }
 
 	/*!
 	 * cache values for ceil(log2(n))
@@ -1057,10 +1050,18 @@ private:
 	 * < idx, stage, bit > -> variable idx
 	 */
 	std::map<std::tuple<int, int>, int> full_adder_coeff_word_size_internal_carry_input_variables;
-	/*!
-	 * < node idx > -> variable idx
-	 */
-	std::map<int, int> full_adder_msb_variables;
+    /*!
+     * < node idx > -> variable idx
+     */
+    std::map<int, int> full_adder_msb_variables;
+    /*!
+     * < < node idx, CMM dimension > > -> variable idx
+     */
+    std::map<std::pair<int, int>, int> full_adder_coeff_positive_variables;
+    /*!
+     * < node idx > -> variable idx
+     */
+    std::map<int, int> full_adder_at_least_one_positive_variables;
 	/*!
 	 * < idx, bit > -> variable idx
 	 */
