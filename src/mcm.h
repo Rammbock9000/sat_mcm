@@ -555,6 +555,10 @@ protected:
 	 * current number of adders
 	 */
 	int num_adders = 0;
+    /*!
+     * minimum number of adders given by user
+     */
+    int num_adders_given_by_user = 0;
 	/*!
 	 * keep track how to get the requested constants from the computed nodes (relevant if constants are negative or even)
 	 * requested constant -> < adder node output, number of shifted bits >

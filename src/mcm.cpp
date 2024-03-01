@@ -35,59 +35,38 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 			}
 			shifted_bits++;
 		}
-		// look for first nonzero value in vector and check if its > or < 0 => needed for normalizing
-		for (auto &c: v) {
-			if (c > 0) {
-				this->inverted_coeff_requested[v] = false;
-				break;
-			} else if (c < 0) {
-				this->inverted_coeff_requested[v] = true;
-				break;
-			} else {
-				continue;
-			}
-		}
-		// flip the sign of all values in the vector if its requested
-		if (this->inverted_coeff_requested[v]) {
-            std::vector<int> new_vec;
-			for (auto &c: v) {
-                new_vec.emplace_back(-c);
-				if (c == 0) continue;
-				c = -c;
-			}
-            this->inverted_coeff_requested[new_vec] = true;
-		}
 		this->requested_vectors[original_vector] = {v, shifted_bits}; // store "requested vs. actual" info
 	}
-	// check if C has negative values while negative numbers are not allowed and throw an error
-	for (auto &v: this->C) {
-		for (auto &c: v) {
-			if (c < 0 and !allow_negative_numbers) {
-				//throw an exception
-				throw std::invalid_argument("input contains at least one negative number while 'allow_negative_coefficients' parameter is set to 0 => please set it to 1 via the UI");
-			}
-		}
-	}
+    // check if C and -C are requested
+    std::map<std::vector<int>, bool> both_coeff_versions_requested;
+    for (auto &it1 : this->C) {
+        auto vec_1 = it1;
+        both_coeff_versions_requested[vec_1] = false;
+        for (auto &it2 : this->C) {
+            auto vec_2 = it2;
+            bool are_neg = true;
+            for (size_t i=0; i<vec_1.size(); i++) {
+                auto eq = vec_1[i] == -vec_2[i];
+                are_neg = eq and are_neg;
+            }
+            if (are_neg) {
+                both_coeff_versions_requested[vec_1] = true;
+            }
+        }
+    }
 	// set word sizes & track unique constants
 	this->word_size = 1;
 	std::set<std::vector<int>> non_one_unique_vectors;
-	std::vector<int> absV;
 	for (auto &v: this->C) {
-		for (auto &i : v) {
-			absV.emplace_back(std::abs(i));
-		}
-
 		// nfiege: for pipelining we cannot ignore unit vectors (or 1's in the MCM case)
 		// sort them out later, i.e., before solving, if pipelining is not used
 		// only ignore all-zero vectors here
 		if (!std::all_of(v.begin(), v.end(), [](int i) { return i == 0; })) non_one_unique_vectors.insert(v);
-
 		//calculate ceiling over all values to compute the internal word size
 		for (auto &c: v) {
 			auto w = this->ceil_log2(std::abs(c)) + 1 ;
 			if (w > this->word_size) this->word_size = w;
 		}
-		absV.clear();
 	}
 
 	this->max_shift = this->word_size - 1;
@@ -97,21 +76,34 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 	}
 
 	this->shift_word_size = std::max(this->ceil_log2(this->max_shift + 1), 1);
-	this->num_adders = (int) non_one_unique_vectors.size() - 1;
-	if (this->verbosity != verbosity_mode::quiet_mode) {
-		std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
-	}
 	// set constants matrix
 	this->C.clear();
 	for (auto &v: non_one_unique_vectors) {
-		this->C.emplace_back(v);
+        bool already_in_container = false;
+        for (auto &c_it : this->C) {
+            bool is_equal = true;
+            for (size_t i=0; i<c_it.size(); i++) {
+                if (c_it.at(i) != v.at(i)) is_equal = false;
+            }
+            if (is_equal) already_in_container = true;
+        }
+		if (!already_in_container) this->C.emplace_back(v);
+        if (both_coeff_versions_requested[v]) {
+            std::vector<int> v2;
+            for (auto &it : v) {
+                v2.emplace_back(-it);
+            }
+            already_in_container = false;
+            for (auto &c_it : this->C) {
+                bool is_equal = true;
+                for (size_t i=0; i<c_it.size(); i++) {
+                    if (c_it.at(i) != v2.at(i)) is_equal = false;
+                }
+                if (is_equal) already_in_container = true;
+            }
+            if (!already_in_container) this->C.emplace_back(v2);
+        }
 	}
-	std::cout << std::endl;
-	std::cout << "---------------" << std::endl;
-	std::cout << "word size: " << this->word_size - 1 << std::endl;
-	std::cout << "max shift: " << this->max_shift << std::endl;
-	std::cout << "number of adders: " << this->num_adders << std::endl;
-	std::cout << "shift word size: " << this->shift_word_size << std::endl;
 }
 
 void mcm::optimization_loop(formulation_mode mode) {
@@ -1847,7 +1839,8 @@ void mcm::print_solution() {
         }
     }
     // lastly, print adder graph
-    std::cerr << "Adder graph: " << this->get_adder_graph_description() << std::endl;
+    auto adder_graph_str = this->get_adder_graph_description();
+    std::cerr << "Adder graph: " << adder_graph_str << std::endl;
 #else
 	if (this->found_solution) {
 		std::cout << "Solution for Vector" << std::endl;
@@ -2433,19 +2426,6 @@ std::string mcm::get_adder_graph_description() {
 		s << "]," << right_stage << "," << right_shift;
 		// close bracket
 		s << "}";
-
-		// s <<"]";
-		// // basic node info
-		// s << "{'A',[" << this->output_values.at({idx,v}) << "]," << current_stage;
-		// if (this->enable_node_output_shift) {
-		//     s << "," << this->post_adder_shift_value.at(idx);
-		// }
-		// // left input
-		// s << ",[" << left_input << "]," << left_stage << "," << left_shift;
-		// // right input
-		// s << ",[" << right_input << "]," << right_stage << "," << right_shift;
-		// // close bracket
-		// s << "}";
 	}
     int output_counter = -1;
     for (auto &it : this->requested_vectors) {
@@ -2457,8 +2437,7 @@ std::string mcm::get_adder_graph_description() {
         // get stage of the node that computes this output value
         // in case of multiple duplicate "correct" values (i.e., for pipelining), take the one in the last stage
         int node_stage = 0;
-        std::cout << std::endl;
-        int sign = 1;
+        std::vector<int> found_coeff;
         for (int idx=0; idx<this->num_adders; idx++) {
             bool correct_one = true;
             bool correct_one_inverted_sign = true;
@@ -2467,14 +2446,27 @@ std::string mcm::get_adder_graph_description() {
                 if (this->output_values.at({node_idx, v}) != actual_coeff.at(v)) correct_one = false;
                 if (this->output_values.at({node_idx, v}) != -actual_coeff.at(v)) correct_one_inverted_sign = false;
             }
-            if (correct_one or correct_one_inverted_sign) {
+            // this is the correct one :)
+            if (correct_one) {
                 node_stage = std::max(node_stage, stage.at(node_idx));
-                sign = 1;
+                found_coeff.clear();
+                found_coeff = std::vector<int>(this->c_row_size());
+                for (int v=0; v<this->c_row_size(); v++) {
+                    found_coeff[v] = this->output_values.at({node_idx, v});
+                }
             }
-            if (correct_one_inverted_sign) {
+            // only choose the node with the wrong sign if it's allowed by the user
+            if (correct_one_inverted_sign and !this->implement_coeff_signs_as_requested) {
                 node_stage = std::max(node_stage, stage.at(node_idx));
-                sign = -1;
+                found_coeff.clear();
+                found_coeff = std::vector<int>(this->c_row_size());
+                for (int v=0; v<this->c_row_size(); v++) {
+                    found_coeff[v] = this->output_values.at({node_idx, v});
+                }
             }
+        }
+        if (found_coeff.empty()) {
+            throw std::runtime_error("failed to find adder node for output");
         }
         // generate info as string
         if (this->num_adders > 0 or output_counter > 0) {
@@ -2488,21 +2480,21 @@ std::string mcm::get_adder_graph_description() {
             s << requested_coeff.at(i);
         }
         s << "]," << node_stage << ",["; // the output is available in the same stage as the node that computes it
-        for (size_t i=0; i<actual_coeff.size(); i++) {
+        auto sign = (requested_coeff.at(0)*found_coeff.at(0) < 0)?-1:1;
+        for (size_t i=0; i<found_coeff.size(); i++) {
             if (i>0) {
                 s << ",";
             }
-            s << sign*actual_coeff.at(i);
+            s << sign*found_coeff.at(i);
         }
-        s << "]," << node_stage << "}";
+        s << "]," << node_stage << "," << node_output_shift << "}";
     }
 	s << "}";
 	return s.str();
 }
 
 void mcm::set_min_add(int new_min_add) {
-	this->num_adders = std::max(this->num_adders, new_min_add - 1);
-	this->num_adders = std::max(this->num_adders, 0);
+    this->num_adders_given_by_user = new_min_add;
 }
 
 void mcm::also_minimize_full_adders() {
@@ -2521,7 +2513,7 @@ void mcm::ignore_sign(bool only_apply_to_negative_coefficients) {
 	for (int m = 1; m <= c_column_size(); m++) {
 		if (only_apply_to_negative_coefficients) {
 			// only allow sign inversion for all negative coefficients
-			if (this->inverted_coeff_requested[C[m - 1]]) {
+			if (this->inverted_coeff_requested[this->C[m - 1]]) {
 				if (this->vector_all_positive(this->C[m - 1])) {
 					this->sign_inversion_allowed[m] = true;
 				}
@@ -4038,21 +4030,97 @@ void mcm::compute_opt_adder_depth_value() {
 }
 
 void mcm::preprocess_constants() {
+    // normalize (if wanted)
+    std::vector<std::vector<int>> new_C;
+    for (auto &c_it : this->C) {
+        // check if it can be normalized
+        bool invert_c = false;
+        for (auto &v : c_it) {
+            if (v == 0) {
+                continue; // keep searching
+            }
+            else if (v > 0) {
+                break; // do not invert c
+            }
+            else {
+                // v < 0 => invert signs in c
+                invert_c = true;
+            }
+        }
+        // do it (if wanted) and handle container
+        if (invert_c) {
+            if (this->calc_twos_complement and this->implement_coeff_signs_as_requested) {
+                this->inverted_coeff_requested[c_it] = false;
+            }
+            else {
+                if (this->implement_coeff_signs_as_requested) {
+                    throw std::runtime_error("You requested a negative coefficient WITHOUT allowing sign inversions AND WITHOUT allowing negative numbers. This does not work. Please change your setting!");
+                }
+                for (auto &v : c_it) {
+                    v = -v;
+                }
+                this->inverted_coeff_requested[c_it] = true;
+            }
+        }
+        else {
+            this->inverted_coeff_requested[c_it] = false;
+        }
+        // check for duplicates and put into new_C if there isn't
+        bool already_in_container = false;
+        for (auto &new_c_it : new_C) {
+            bool is_equal = true;
+            for (size_t i=0; i<c_it.size(); i++) {
+                if (c_it.at(i) != new_c_it.at(i)) is_equal = false;
+            }
+            if (is_equal) already_in_container = true;
+        }
+        if (!already_in_container) new_C.emplace_back(c_it);
+    }
+    this->C = new_C;
+    this->num_adders = static_cast<int>(this->C.size());
+    this->num_adders = std::max(this->num_adders, this->num_adders_given_by_user);
+    this->num_adders--; // -1 because the optimization loop starts by adding 1
+    this->num_adders = std::max(this->num_adders, 0);
+    std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
 	// constants are fine as they are if pipelining is enabled and output stages must be equalized
-	if (this->pipelining_enabled and this->force_output_stages_equal) return;
-	// if it's disabled, we must eliminate all unit vectors from the list of constants
-	// and adjust the lower bound on the number of adders
-	bool vec_eliminated = true;
-	while (vec_eliminated) {
-		vec_eliminated = false;
-		for (auto it = this->C.begin(); it != this->C.end(); it++) {
-			if (!mcm::is_unit_vector(*it)) continue;
-			this->C.erase(it);
-			this->num_adders--;
-			vec_eliminated = true;
-			break;
-		}
-	}
+	if (!this->pipelining_enabled or !this->force_output_stages_equal) {
+        // if it's disabled, we must eliminate all unit vectors from the list of constants
+        // and adjust the lower bound on the number of adders
+        bool vec_eliminated = true;
+        while (vec_eliminated) {
+            vec_eliminated = false;
+            for (auto it = this->C.begin(); it != this->C.end(); it++) {
+                if (!mcm::is_unit_vector(*it)) continue;
+                this->C.erase(it);
+                this->num_adders--;
+                vec_eliminated = true;
+                break;
+            }
+        }
+    }
+    // check if C has negative values while negative numbers are not allowed and throw an error
+    for (auto &v: this->C) {
+        for (auto &c: v) {
+            if (c < 0 and !this->calc_twos_complement) {
+                //throw an exception
+                throw std::runtime_error("input contains at least one negative number while 'allow_negative_coefficients' parameter is set to 0 => please set it to 1 via the UI");
+            }
+        }
+    }
+    if (this->verbosity != verbosity_mode::quiet_mode) {
+        std::cout << "Coefficients after preprocessing:" << std::endl;
+        for (auto &v : this->C) {
+            std::cout << "  ";
+            for (auto &it : v) {
+                std::cout << " " << it;
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "---------------" << std::endl;
+        std::cout << "word size: " << this->word_size - 1 << std::endl;
+        std::cout << "max shift: " << this->max_shift << std::endl;
+        std::cout << "shift word size: " << this->shift_word_size << std::endl;
+    }
 }
 
 void mcm::create_max_cell(int a_i, int b_i, int x_i, int y_i, int c_o, int x_o, int y_o) {
