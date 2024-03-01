@@ -69,7 +69,7 @@ mcm::mcm(const std::vector<std::vector<int>> &C, int timeout, verbosity_mode ver
 		}
 	}
 
-	this->max_shift = this->word_size - 1;
+	this->max_shift = std::max(this->word_size - 1, 1); // a shift smaller than 1 does not make sense
 	if (this->calc_twos_complement) {
 		// account for sign bit
 		this->word_size++;
@@ -3796,7 +3796,7 @@ void mcm::solve_enumeration() {
 	// unit vectors are trivial
     // detect unit vector by accumulating the absolute values of the vector elements and comparing the result to 1
 	for (auto &v: this->C) {
-		if (!mcm::is_unit_vector(v)) {
+        if (!mcm::is_unit_vector(v) or (this->implement_coeff_signs_as_requested and !mcm::is_non_negative_vector(v))) {
 			trivial = false;
 			break;
 		}
@@ -3890,7 +3890,7 @@ void mcm::solve_standard() {
 	bool trivial = true;
 	// inputs that comprise ONLY unit vectors are trivial
 	for (auto &v: this->C) {
-		if (!mcm::is_unit_vector(v)) {
+		if (!mcm::is_unit_vector(v) or (this->implement_coeff_signs_as_requested and !mcm::is_non_negative_vector(v))) {
 			trivial = false;
 			break;
 		}
@@ -4081,7 +4081,6 @@ void mcm::preprocess_constants() {
     this->num_adders = std::max(this->num_adders, this->num_adders_given_by_user);
     this->num_adders--; // -1 because the optimization loop starts by adding 1
     this->num_adders = std::max(this->num_adders, 0);
-    std::cout << "Min num adders = " << this->num_adders + 1 << std::endl;
 	// constants are fine as they are if pipelining is enabled and output stages must be equalized
 	if (!this->pipelining_enabled or !this->force_output_stages_equal) {
         // if it's disabled, we must eliminate all unit vectors from the list of constants
@@ -4090,7 +4089,14 @@ void mcm::preprocess_constants() {
         while (vec_eliminated) {
             vec_eliminated = false;
             for (auto it = this->C.begin(); it != this->C.end(); it++) {
-                if (!mcm::is_unit_vector(*it)) continue;
+                // do not erase non-unit vectors
+                if (!mcm::is_unit_vector(*it)) {
+                    continue;
+                }
+                // do not erase negative unit vectors if the user explicitly wants them
+                if (this->implement_coeff_signs_as_requested and !mcm::is_non_negative_vector(*it)) {
+                    continue;
+                }
                 this->C.erase(it);
                 this->num_adders--;
                 vec_eliminated = true;
@@ -4107,6 +4113,11 @@ void mcm::preprocess_constants() {
             }
         }
     }
+    // account for weird corner cases with negative numbers
+    if (this->implement_coeff_signs_as_requested or this->c_row_size() > 1 or this->pipelining_enabled) {
+        this->word_size++;
+    }
+    // some debug output
     if (this->verbosity != verbosity_mode::quiet_mode) {
         std::cout << "Coefficients after preprocessing:" << std::endl;
         for (auto &v : this->C) {
@@ -4117,9 +4128,10 @@ void mcm::preprocess_constants() {
             std::cout << std::endl;
         }
         std::cout << "---------------" << std::endl;
-        std::cout << "word size: " << this->word_size - 1 << std::endl;
+        std::cout << "internal word size: " << this->word_size << std::endl;
         std::cout << "max shift: " << this->max_shift << std::endl;
         std::cout << "shift word size: " << this->shift_word_size << std::endl;
+        std::cout << "min #adders: " << this->num_adders+1 << std::endl;
     }
 }
 
@@ -4214,6 +4226,10 @@ void mcm::equalize_output_stages() {
 
 bool mcm::is_unit_vector(const std::vector<int> &vec) {
     return std::accumulate(vec.begin(), vec.end(), 0, [](const int &running_abs, const int &x) {return running_abs+std::abs(x);}) == 1;
+}
+
+bool mcm::is_non_negative_vector(const std::vector<int> &vec) {
+    return std::all_of(vec.begin(), vec.end(), [](const int &x) {return x >= 0;});
 }
 
 int mcm::get_word_size_sub() {

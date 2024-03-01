@@ -131,6 +131,13 @@ public:
      */
     static bool is_unit_vector(const std::vector<int> &vec);
 
+    /*!
+     * check if a vector only has non-negative values
+     * @param vec the vector to check
+     * @return the answer
+     */
+    static bool is_non_negative_vector(const std::vector<int> &vec);
+
 protected:
 	/*!
 	 * check feasibility after constructing the problem

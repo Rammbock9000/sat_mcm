@@ -504,8 +504,8 @@ int main(int argc, char **argv) {
 			for (auto &c: v)
 				std::cout << c << std::endl;
 		}
-	} else {
-		std::cout << "Starting CMM for matrix" << std::endl;
+	} else if (C.size() == 1) {
+		std::cout << "Starting SOP for matrix" << std::endl;
 		for (auto &v: C) {
 			std::cout << "<";
 			for (auto &c: v) {
@@ -513,15 +513,16 @@ int main(int argc, char **argv) {
 			}
 			std::cout << " >" << std::endl;
 		}
+    } else {
+        std::cout << "Starting CMM for matrix" << std::endl;
+        for (auto &v: C) {
+            std::cout << "<";
+            for (auto &c: v) {
+                std::cout << " " << c;
+            }
+            std::cout << " >" << std::endl;
+        }
 	}
-	/* old console output for SCM and MCM
-std::cout << "Starting CMM for constant(s)" << (C.size()>1?"s\n":" ");
-for (auto &v : C) {
-		for (auto &c : v) {
-					std::cout << (C.size() > 1 ? "  " : "") << c << (C.size() > 1 ? "\n" : " ");
-			}
-}
-*/
 	std::cout << "and " << timeout << " seconds timeout with solver " << solver_name << " and " << threads
 						<< " allowed threads" << std::endl;
 	auto start_time = std::chrono::steady_clock::now();
