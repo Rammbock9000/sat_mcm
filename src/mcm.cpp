@@ -171,10 +171,10 @@ void mcm::reset_backend(formulation_mode mode) {
 	this->constraint_counter = 0;
 	this->variable_counter = 0;
 	this->cnf_clauses.str("");
-	if (mode == formulation_mode::reset_all) {
+	//if (mode == formulation_mode::reset_all) {
 		this->const_one_bit = -1;
 		this->const_zero_bit = -1;
-	}
+	//}
     for (auto &clause : this->already_enumerated_solutions_cache) {
         this->create_arbitrary_clause(clause);
     }
@@ -1899,6 +1899,36 @@ void mcm::print_solution() {
 
 bool mcm::solution_is_valid() {
 	bool valid = true;
+    if (this->const_one_bit > 0) {
+        int expected_value = 1;
+        int actual_value = this->get_result_value(this->const_one_bit);
+        if (this->verbosity == verbosity_mode::debug_mode) {
+            std::cout << "const one bit" << std::endl;
+            std::cout << "  expected value = " << expected_value << std::endl;
+            std::cout << "  actual value = " << actual_value << std::endl;
+        }
+        if (expected_value != actual_value) {
+            std::cout << "const one bit has invalid value" << std::endl;
+            std::cout << "  expected value = " << expected_value << std::endl;
+            std::cout << "  actual value = " << actual_value << std::endl;
+            valid = false;
+        }
+    }
+    if (this->const_zero_bit > 0) {
+        int expected_value = 0;
+        int actual_value = this->get_result_value(this->const_zero_bit);
+        if (this->verbosity == verbosity_mode::debug_mode) {
+            std::cout << "const zero bit" << std::endl;
+            std::cout << "  expected value = " << expected_value << std::endl;
+            std::cout << "  actual value = " << actual_value << std::endl;
+        }
+        if (expected_value != actual_value) {
+            std::cout << "const zero bit has invalid value" << std::endl;
+            std::cout << "  expected value = " << expected_value << std::endl;
+            std::cout << "  actual value = " << actual_value << std::endl;
+            valid = false;
+        }
+    }
 	for (int idx = c_row_size(); idx < (this->num_adders + c_row_size()); idx++) {
 		for (int v = 0; v < c_row_size(); v++) {
 
@@ -2149,7 +2179,15 @@ bool mcm::solution_is_valid() {
             int expected_abs_add_result = 0;
             for (int v = 0; v < c_row_size(); v++) {
                 auto actual_abs_value = this->abs_coeff_values.at({idx, v});
-                auto expected_abs_value = std::abs(this->add_result_values.at({idx, v}));
+                int expected_abs_value ;
+                if (this->pipelining_enabled) {
+                    // word size based on output value
+                    expected_abs_value = std::abs(this->output_values.at({idx, v}));
+                }
+                else {
+                    // word size based on adder
+                    expected_abs_value = std::abs(this->add_result_values.at({idx, v}));
+                }
                 if (this->verbosity == verbosity_mode::debug_mode) {
                     std::cout << "node #" << idx << " abs add result value at position " << v << std::endl;
                     std::cout << "  actual abs value = " << actual_abs_value << std::endl;
@@ -2545,7 +2583,7 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
         if (this->calc_twos_complement) {
             // compute abs(c) using a MUX and an inversion and a +1 adder
             int carry_bit = this->init_const_one_bit();
-            std::vector<int> inv_c_bits(this->word_size);
+            //std::vector<int> inv_c_bits(this->word_size);
             int sign_bit;
             if (this->pipelining_enabled) {
                 // registers only depend on the coefficient word size after post-add right shift
@@ -2557,7 +2595,8 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
             }
             for (int w = 0; w < this->word_size; w++) {
                 // first, implement c*(-1)
-                auto sum_bit = inv_c_bits[w] = ++this->variable_counter;
+                //auto sum_bit = inv_c_bits[w] = ++this->variable_counter;
+                auto sum_bit = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
                 int add_bit;
                 if (this->pipelining_enabled) {
@@ -2581,9 +2620,9 @@ void mcm::create_full_adder_coeff_word_size_constraints(int idx, formulation_mod
                     this->create_half_adder({carry_bit, false}, {add_bit, true}, {sum_bit, false});
                 }
                 // now, implement the MUX, controlled by the sign bit
-                auto mux_bit = this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}] = ++this->variable_counter;
+                this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}] = ++this->variable_counter;
                 this->create_new_variable(this->variable_counter);
-                this->create_2x1_mux(add_bit, sum_bit, sign_bit, mux_bit);
+                this->create_2x1_mux(add_bit, sum_bit, sign_bit, this->full_adder_coeff_word_size_abs_adder_value_variables[{idx,v,w}]);
             }
         } else {
             // abs(c) = c because c is an unsigned number

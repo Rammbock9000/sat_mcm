@@ -1160,8 +1160,8 @@ private:
 	int init_const_one_bit();
 
 	/*!
-	 * init this->const_one_bit if not yet initialized
-	 * @return this->const_one_bit after init
+	 * init this->const_zero_bit if not yet initialized
+	 * @return this->const_zero_bit after init
 	 */
 	int init_const_zero_bit();
 };
