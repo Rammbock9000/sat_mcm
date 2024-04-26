@@ -136,9 +136,9 @@ def do_it(bench_type_tuple, solver="CaDiCaL", worker_threads=[None]):
     elif "rotators" in bench_type or "rpag_cmm" in bench_type:
         timeout_mul = 24*7 # 7 days for cmm optimization (it's hard)
     elif "cmm" in bench_type:
-        timeout_mul = 24*1 # 1 day for "normal" cmm experiments based on random matrices
-    if pipelining:
-        timeout_mul *= 2   # pipelining is even harder
+        timeout_mul = 12*1 # 1/2 day for "normal" cmm experiments based on random matrices
+    #if pipelining:
+    #    timeout_mul *= 2   # pipelining is even harder
     timeout = 3600*timeout_mul
     if "enumerate" in bench_type:
         enumerate_all = 1
