@@ -76,18 +76,20 @@ def start_job_and_get_id(job, dep=None):
 
 def main():
     experiments = ["cmm", "pcmm", "conv", "pconv", "complex", "pcomplex"]
-    experiments = ["cmm"]
     for experiment in experiments:
         cmm_file = create_cmm_slurm_script(experiment)
         clean_file = create_cleanup_slurm_script(experiment)
-        job_id_1 = start_job_and_get_id(cmm_file)
-        job_id_2 = start_job_and_get_id(clean_file, dep=job_id_1)
-        job_id_3 = start_job_and_get_id(cmm_file, dep=job_id_2)
-        #job_id_4 = start_job_and_get_id(clean_file, dep=job_id_3)
-        #job_id_5 = start_job_and_get_id(cmm_file, dep=job_id_4)
-        #job_id_6 = start_job_and_get_id(clean_file, dep=job_id_5)
-        #job_id_7 = start_job_and_get_id(cmm_file, dep=job_id_6)
-        #_ = start_job_and_get_id(clean_file, dep=job_id_7)
+        job_id = start_job_and_get_id(clean_file)
+        job_id = start_job_and_get_id(cmm_file, dep=job_id)
+        #job_id = start_job_and_get_id(clean_file, dep=job_id)
+        #job_id = start_job_and_get_id(cmm_file, dep=job_id)
+        #job_id = start_job_and_get_id(clean_file, dep=job_id)
+        #job_id = start_job_and_get_id(cmm_file, dep=job_id)
+        #job_id = start_job_and_get_id(clean_file, dep=job_id)
+        #job_id = start_job_and_get_id(cmm_file, dep=job_id)
+        job_id = start_job_and_get_id(clean_file, dep=job_id)
+        job_id = start_job_and_get_id(cmm_file, dep=job_id)
+        _ = start_job_and_get_id(clean_file, dep=job_id)
 
 
 if __name__ == '__main__':
