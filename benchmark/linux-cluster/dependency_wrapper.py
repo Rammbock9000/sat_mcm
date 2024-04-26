@@ -55,9 +55,9 @@ def create_cleanup_slurm_script(experiment):
 
 def start_job_and_get_id(job, dep=None):
     if dep is None:
-        command = ["sbatch", f'"{job}"']
+        command = ["sbatch", f"{job}"]
     else:
-        command = ["sbatch", f'"--dependency=afterany:{dep} {job}"']
+        command = ["sbatch", f"--dependency=afterany:{dep} {job}"]
     output = subprocess.run(command, stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip()
     elems = output.split()
     if len(elems) < 5:
