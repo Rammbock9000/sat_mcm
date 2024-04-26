@@ -58,10 +58,10 @@ def start_job_and_get_id(job, dep=None):
     if dep is None:
         command = ["sbatch", f"{job}"]
     else:
-        command = ["sbatch", f"--dependency=afterany:{dep} {job}"]
+        command = ["sbatch", f"--dependency=afterany:{dep}", job]
     print(f"PYTHON: start executing command: {command}")
     output = subprocess.run(command, stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip()
-    print(f"PYTHON: finished executing command")
+    print(f"PYTHON: finished")
     elems = output.split()
     if len(elems) < 4:
         raise Exception(f"failed to queue batch jobs (code 0 - '{output}')")
