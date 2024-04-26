@@ -23,15 +23,16 @@ def start_job_and_get_id(job, dep=None):
 
 def main():
     experiments = ["cmm", "pcmm", "conv", "pconv", "complex", "pcomplex"]
+    experiments = ["cmm"]
     for experiment in experiments:
         job_id_1 = start_job_and_get_id(f"start_cmm.sh {experiment}")
         job_id_2 = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_1)
         job_id_3 = start_job_and_get_id(f"start_cmm.sh {experiment}", dep=job_id_2)
-        job_id_4 = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_3)
-        job_id_5 = start_job_and_get_id(f"start_cmm.sh {experiment}", dep=job_id_4)
-        job_id_6 = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_5)
-        job_id_7 = start_job_and_get_id(f"start_cmm.sh {experiment}", dep=job_id_6)
-        _ = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_7)
+        #job_id_4 = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_3)
+        #job_id_5 = start_job_and_get_id(f"start_cmm.sh {experiment}", dep=job_id_4)
+        #job_id_6 = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_5)
+        #job_id_7 = start_job_and_get_id(f"start_cmm.sh {experiment}", dep=job_id_6)
+        #_ = start_job_and_get_id(f"start_cleanup.sh {experiment}", dep=job_id_7)
 
 
 if __name__ == '__main__':

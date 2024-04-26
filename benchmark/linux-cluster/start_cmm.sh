@@ -4,7 +4,7 @@
 #SBATCH --tasks-per-node=48
 #SBATCH -p public2023
 #SBATCH --mem=251000
-#SBATCH --time=6-00:00:00
+#SBATCH --time=0-00:01:00
 #SBATCH --mail-user=nfiege@uni-kassel.de
 #SBATCH --mail-type=ALL
 
