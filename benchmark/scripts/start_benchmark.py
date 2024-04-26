@@ -78,7 +78,7 @@ def get_setup(bench_type, subdir=None):
         filename = "benchmark/inputs/cmm/rpag_cmm.csv"
         name_tag = "constant"
     elif bench_type == "cmm_rnd":
-        filename = f"benchmark/inputs/cmm_rnd/{subdir}.csv"
+        filename = f"benchmark/inputs/cmm_rnd/{subdir.replace('_pipeline', '')}.csv"
         name_tag = "constant"
     elif bench_type == "sop_symmetry":
         filename = "benchmark/inputs/sop/sop_symmetry_11.csv"
