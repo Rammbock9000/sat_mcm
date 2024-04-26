@@ -6,6 +6,7 @@ def create_cmm_slurm_script(experiment):
     num_tasks = 48
     time_limit = f"0-00:01:00"
     num_tasks = 2
+    mem = 5000*num_tasks
     base_dir="/home/groups/fb16-digi/projects/constmult/sat_mcm/"
     script_base="benchmark/scripts"
     filename = f"{base_dir}benchmark/linux-cluster/start_cmm-{experiment}.sh"
@@ -14,7 +15,7 @@ def create_cmm_slurm_script(experiment):
         f.write(f"#SBATCH --nodes=1\n")
         f.write(f"#SBATCH --tasks-per-node={num_tasks}\n")
         f.write(f"#SBATCH -p pub23\n")
-        f.write(f"#SBATCH --mem=251000\n")
+        f.write(f"#SBATCH --mem={mem}\n")
         f.write(f"#SBATCH --time={time_limit}\n")
         f.write(f"#SBATCH --mail-user=nfiege@uni-kassel.de\n")
         f.write(f"#SBATCH --mail-type=ALL\n")
