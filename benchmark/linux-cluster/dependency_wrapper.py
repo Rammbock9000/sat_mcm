@@ -61,17 +61,15 @@ def start_job_and_get_id(job, dep=None):
         command = ["sbatch", f"--dependency=afterany:{dep} {job}"]
     output = subprocess.run(command, stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip()
     elems = output.split()
-    if len(elems) < 5:
+    if len(elems) < 4:
         raise Exception(f"failed to queue batch jobs (code 0 - '{output}')")
-    if elems[0] != "successfully":
+    if elems[0] != "Submitted":
         raise Exception(f"failed to queue batch jobs (code 1 - '{elems[0]}')")
-    if elems[1] != "submitted":
+    if elems[1] != "batch":
         raise Exception(f"failed to queue batch jobs (code 2 - '{elems[1]}')")
-    if elems[2] != "batch":
+    if elems[2] != "job":
         raise Exception(f"failed to queue batch jobs (code 3 - '{elems[2]}')")
-    if elems[3] != "job":
-        raise Exception(f"failed to queue batch jobs (code 4 - '{elems[3]}')")
-    return elems[4]
+    return elems[3]
 
 
 def main():
