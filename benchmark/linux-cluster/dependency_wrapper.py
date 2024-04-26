@@ -50,7 +50,7 @@ def create_cleanup_slurm_script(experiment):
         f.write(f"#SBATCH --mail-user=nfiege@uni-kassel.de\n")
         f.write(f"#SBATCH --mail-type=ALL\n")
         f.write(f"#SBATCH --output={base_dir}benchmark/linux-cluster/clean-{experiment}.out\n")
-        f.write(f"cd ${base_dir};python3 {script_base}/cleanup_intermediate.py {result_dir} {experiment}\n")
+        f.write(f"cd {base_dir};python3 {script_base}/cleanup_intermediate.py {result_dir} {experiment}\n")
     return filename
 
 
