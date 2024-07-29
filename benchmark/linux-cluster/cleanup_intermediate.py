@@ -2,31 +2,65 @@ import os
 import sys
 
 
-def get_subdir_list(experiment_type):
+def get_int_from_user_arg(idx, default_value):
+    if len(argv) < idx+1:
+        return default_value
+    try:
+        return int(argv[idx])
+    except ValueError as e:
+        print(f"unable to convert '{argv[idx]}' to int: {repr(e)}")
+    return default_value
+
+
+def get_subdir_list(experiment_type, Ws=None, Ms=None, Ns=None):
     subdir_list = []
     if experiment_type == "cmm":
-        for W in [4,6,8]:
-            for M in [2,3,4,5,6,7,8,9]:
-                for N in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [4,6,8]
+        if Ms is None:
+            Ms = [2,3,4,5,6,7,8,9]
+        if Ns is None:
+            Ns = [2,3,4,5,6,7,8,9]
+        for W in Ws:
+            for M in Ms:
+                for N in Ns:
                     subdir_list.append(f"{M}x{N}_{W}_bit")
     if experiment_type == "pcmm":
-        for W in [4,6,8]:
-            for M in [2,3,4,5,6,7,8,9]:
-                for N in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [4,6,8]
+        if Ms is None:
+            Ms = [2,3,4,5,6,7,8,9]
+        if Ns is None:
+            Ns = [2,3,4,5,6,7,8,9]
+        for W in Ws:
+            for M in Ms:
+                for N in Ns:
                     subdir_list.append(f"{M}x{N}_{W}_bit_pipeline")
     if experiment_type == "complex":
-        for W in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [2,3,4,5,6,7,8,9]
+        for W in Ws:
             subdir_list.append(f"complex_mult_{W}_bit")
     if experiment_type == "pcomplex":
-        for W in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [2,3,4,5,6,7,8,9]
+        for W in Ws:
             subdir_list.append(f"complex_mult_{W}_bit_pipeline")
     if experiment_type == "conv":
-        for W in [2,4,6,8]:
-            for N in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [2,4,6,8]
+        if Ns is None:
+            Ns = [2,3,4,5,6,7,8,9]
+        for W in Ws:
+            for N in Ns:
                 subdir_list.append(f"1x{N}_{W}_bit")
     if experiment_type == "pconv":
-        for W in [2,4,6,8]:
-            for N in [2,3,4,5,6,7,8,9]:
+        if Ws is None:
+            Ws = [2,4,6,8]
+        if Ns is None:
+            Ns = [2,3,4,5,6,7,8,9]
+        for W in Ws:
+            for N in Ns:
                 subdir_list.append(f"1x{N}_{W}_bit_pipeline")
     return subdir_list
 
@@ -39,7 +73,16 @@ def main():
     if argc < 3:
         raise Exception("need program argument: experiment type")
     basedir = argv[1]
-    subdir_list = get_subdir_list(argv[2])
+    Ws = get_int_from_user_arg(3, None)
+    Ms = get_int_from_user_arg(4, None)
+    Ns = get_int_from_user_arg(5, None)
+    if Ws is not None:
+        Ws = [Ws]
+    if Ms is not None:
+        Ms = [Ms]
+    if Ns is not None:
+        Ns = [Ns]
+    subdir_list = get_subdir_list(argv[2], Ws, Ms, Ns)
     for subdir in subdir_list:
         dir_path = f"{basedir}/{subdir}"
         if not os.path.isdir(dir_path):

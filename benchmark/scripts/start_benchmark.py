@@ -4,13 +4,17 @@ from sys import argv
 from time import sleep
 
 def get_num_threads_from_user():
-    if len(argv) < 2:
-        return 1
+    return get_int_from_user_arg(1, 1)
+
+def get_int_from_user_arg(idx, default_value):
+    if len(argv) < idx+1:
+        return default_value
     try:
-        return int(argv[1])
+        return int(argv[idx])
     except ValueError as e:
-        print(f"unable to convert '{argv[1]}' to #threads (int): {repr(e)}")
-    return 1
+        print(f"unable to convert '{argv[idx]}' to int: {repr(e)}")
+    return default_value
+
 
 class worker_thread(threading.Thread):
     def __init__(self, id, command):

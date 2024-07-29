@@ -8,8 +8,18 @@ def main():
     #template: bench_type_tuples = [("cmm_rnd","subdir",0,1,0)]
     bench_type_tuples = []
     # add experiments "1xN vs W bits"
-    for W in [2,4,6,8]:
-        for N in [2,3,4,5,6,7,8,9]:
+    Ws = get_int_from_user_arg(2, None)
+    Ns = get_int_from_user_arg(3, None)
+    if Ws is None:
+        Ws = [2,4,6,8]
+    else:
+        Ws = [Ws]
+    if Ns is None:
+        Ns = [2,3,4,5,6,7,8,9]
+    else:
+        Ns = [Ns]
+    for W in Ws:
+        for N in Ns:
             bench_type_tuples.append(("cmm_rnd", f"1x{N}_{W}_bit_pipeline",1,1,1))
     # run benchmarks
     for bench_type_tuple in bench_type_tuples:

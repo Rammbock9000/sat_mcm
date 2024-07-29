@@ -1,4 +1,5 @@
-from start_benchmark import do_it, get_num_threads_from_user
+from start_benchmark import do_it, get_num_threads_from_user, get_int_from_user_arg
+
 
 def main():
     num_threads = get_num_threads_from_user()
@@ -8,7 +9,12 @@ def main():
     #template: bench_type_tuples = [("cmm_rnd","subdir",0,1,0)]
     bench_type_tuples = []
     # add experiments "complex with W bits"
-    for W in [2,3,4,5,6,7,8,9]:
+    Ws = get_int_from_user_arg(2, None)
+    if Ws is None:
+        Ws = [2,3,4,5,6,7,8,9]
+    else:
+        Ws = [Ws]
+    for W in Ws:
         bench_type_tuples.append(("cmm_rnd", f"complex_mult_{W}_bit",1,1,0))
     # run benchmarks
     for bench_type_tuple in bench_type_tuples:
