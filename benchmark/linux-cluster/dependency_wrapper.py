@@ -1,6 +1,33 @@
 import subprocess
 
 
+completed = set([
+    "complex",
+    "pcomplex",
+    ("cmm", 4, 2, 2),
+    ("cmm", 4, 2, 3),
+    ("cmm", 4, 2, 4),
+    ("cmm", 4, 2, 5),
+    ("cmm", 4, 2, 6),
+    ("cmm", 4, 2, 7),
+    ("cmm", 4, 2, 8),
+    ("cmm", 4, 2, 9),
+    ("cmm", 4, 3, 2),
+    ("cmm", 4, 3, 3),
+    ("cmm", 4, 3, 4),
+    ("cmm", 4, 3, 5),
+    ("cmm", 4, 3, 6),
+    ("cmm", 4, 4, 2),
+    ("cmm", 4, 5, 2),
+])
+
+
+def is_completed(experiment, W=None, M=None, N=None):
+    if experiment in completed:
+        return True
+    return (experiment, W, M, N) in completed
+
+
 def get_additional_args(experiment, W, M, N):
     if "complex" in experiment:
         return f"{W}"
@@ -91,22 +118,27 @@ def get_loops(experiment):
 
 
 def main():
-    experiments = ["cmm", "pcmm", "conv", "pconv", "complex", "pcomplex"]
+    no_pipe_experiments = ["cmm", "conv", "complex"]
+    pipe_experiments = ["pcmm", "pconv", "pcomplex"]
+    experiments = no_pipe_experiments # pipe_experiments + no_pipe_experiments
     how_often = 1
     num_submitted_total = 0
     for experiment in experiments:
         num_submitted = 0
+        if is_completed(experiment):
+            continue
         Ws, Ms, Ns = get_loops(experiment)
         for W in Ws:
             for M in Ms:
                 for N in Ns:
+                    if is_completed(experiment, W, M, N):
+                        continue
                     cmm_file = create_cmm_slurm_script(experiment, W, M, N)
                     clean_file = create_cleanup_slurm_script(experiment, W, M, N)
-                    job_id = start_job_and_get_id(clean_file)
-                    num_submitted += 1
+                    job_id = None
                     for _ in range(how_often):
-                        job_id = start_job_and_get_id(cmm_file, dep=job_id)
                         job_id = start_job_and_get_id(clean_file, dep=job_id)
+                        job_id = start_job_and_get_id(cmm_file, dep=job_id)
                         num_submitted += 2
         num_submitted_total += num_submitted
         print(f"Submitted {num_submitted} jobs for experiment '{experiment}'")
