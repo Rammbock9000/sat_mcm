@@ -17,7 +17,7 @@ def create_cmm_slurm_script(experiment, W, M, N):
     mem = 5000*num_tasks
     base_dir="/home/groups/fb16-digi/projects/constmult/sat_mcm/"
     script_base="benchmark/scripts"
-    filename = f"{base_dir}benchmark/linux-cluster/start_cmm-{experiment}.sh"
+    filename = f"{base_dir}benchmark/linux-cluster/start_cmm-{experiment}_{additional_args.replace(' ', '_')}.sh"
     with open(filename, "w") as f:
         f.write(f"#!/bin/bash\n")
         f.write(f"#SBATCH --nodes=1\n")
@@ -48,7 +48,7 @@ def create_cmm_slurm_script(experiment, W, M, N):
 def create_cleanup_slurm_script(experiment, W, M, N):
     base_dir="/home/groups/fb16-digi/projects/constmult/sat_mcm/"
     script_base="benchmark/linux-cluster"
-    filename = f"{base_dir}{script_base}/start_cleanup-{experiment}.sh"
+    filename = f"{base_dir}{script_base}/start_cleanup-{experiment}_{get_additional_args(experiment, W, M, N).replace(' ', '_')}.sh"
     result_dir=f"{base_dir}benchmark/results/cmm_rnd"
     with open(filename, "w") as f:
         f.write(f"#!/bin/bash\n")
@@ -93,7 +93,9 @@ def get_loops(experiment):
 def main():
     experiments = ["cmm", "pcmm", "conv", "pconv", "complex", "pcomplex"]
     how_often = 1
+    num_submitted_total = 0
     for experiment in experiments:
+        num_submitted = 0
         Ws, Ms, Ns = get_loops(experiment)
         for W in Ws:
             for M in Ms:
@@ -101,9 +103,14 @@ def main():
                     cmm_file = create_cmm_slurm_script(experiment, W, M, N)
                     clean_file = create_cleanup_slurm_script(experiment, W, M, N)
                     job_id = start_job_and_get_id(clean_file)
+                    num_submitted += 1
                     for _ in range(how_often):
                         job_id = start_job_and_get_id(cmm_file, dep=job_id)
                         job_id = start_job_and_get_id(clean_file, dep=job_id)
+                        num_submitted += 2
+        num_submitted_total += num_submitted
+        print(f"Submitted {num_submitted} jobs for experiment '{experiment}'")
+    print(f"Submitted {num_submitted_total} jobs in total!")
 
 
 if __name__ == '__main__':
