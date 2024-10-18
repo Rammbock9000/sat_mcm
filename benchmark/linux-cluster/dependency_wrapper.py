@@ -17,8 +17,36 @@ completed = set([
     ("cmm", 4, 3, 4),
     ("cmm", 4, 3, 5),
     ("cmm", 4, 3, 6),
+    ("cmm", 4, 3, 7),
+    ("cmm", 4, 3, 8),
     ("cmm", 4, 4, 2),
+    ("cmm", 4, 4, 3),
+    ("cmm", 4, 4, 5),
     ("cmm", 4, 5, 2),
+    ("cmm", 4, 6, 2),
+    ("cmm", 4, 6, 4),
+    ("cmm", 4, 8, 3),
+    ("cmm", 4, 9, 3),
+    ("cmm", 6, 2, 2),
+    ("cmm", 6, 2, 3),
+    ("cmm", 6, 2, 4),
+    ("cmm", 6, 3, 2),
+    ("cmm", 6, 3, 3),
+    ("cmm", 6, 4, 2),
+    ("cmm", 6, 4, 3),
+    ("cmm", 6, 5, 2),
+    ("cmm", 6, 6, 2),
+    ("cmm", 6, 7, 2),
+    ("cmm", 6, 8, 2),
+    ("cmm", 6, 9, 2),
+    ("cmm", 8, 2, 2),
+    ("cmm", 8, 2, 3),
+    ("cmm", 8, 3, 2),
+    ("cmm", 8, 4, 2),
+    ("cmm", 8, 5, 2),
+    ("cmm", 8, 6, 2),
+    ("cmm", 8, 9, 2),
+    ("conv", 2, 9),
 ])
 
 
@@ -120,9 +148,11 @@ def get_loops(experiment):
 def main():
     no_pipe_experiments = ["cmm", "conv", "complex"]
     pipe_experiments = ["pcmm", "pconv", "pcomplex"]
-    experiments = no_pipe_experiments # pipe_experiments + no_pipe_experiments
+    experiments = no_pipe_experiments + pipe_experiments # pipe_experiments + no_pipe_experiments
     how_often = 1
     num_submitted_total = 0
+    max_jobs = 498
+    limit_reached = False
     for experiment in experiments:
         num_submitted = 0
         if is_completed(experiment):
@@ -131,12 +161,15 @@ def main():
         for W in Ws:
             for M in Ms:
                 for N in Ns:
-                    if is_completed(experiment, W, M, N):
+                    if limit_reached or is_completed(experiment, W, M, N):
                         continue
                     cmm_file = create_cmm_slurm_script(experiment, W, M, N)
                     clean_file = create_cleanup_slurm_script(experiment, W, M, N)
                     job_id = None
                     for _ in range(how_often):
+                        if num_submitted_total + num_submitted + 2 > max_jobs:
+                            limit_reached = True
+                            break
                         job_id = start_job_and_get_id(clean_file, dep=job_id)
                         job_id = start_job_and_get_id(cmm_file, dep=job_id)
                         num_submitted += 2
