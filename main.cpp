@@ -172,12 +172,26 @@ int main(int argc, char **argv) {
         while (std::getline(ss, buffer, '=')) {
             arg_elements.emplace_back(buffer);
         }
-        if (arg_elements.size() != 2) {
+        if (arg_elements.size() < 2) {
             std::cout << "UI WARNING: ignoring user argument '" << s_argv << "' -> only arguments in the form of arg=<value> are supported" << std::endl;
             continue;
         }
         std::string key = arg_elements.at(0);
-        std::string val = arg_elements.at(1);
+        std::string val;
+        if (arg_elements.size() == 2) {
+            // we got something in the form arg=<value> with exactly 1 '='
+            val = arg_elements.at(1);
+        }
+        else {
+            // we got something in the form arg=<value> with more than 1 '='
+            // e.g., for the parameter "post_cnf_params" we can have an argument like "post_cnf_params='--time=300'"
+            for (size_t arg_elem_it=1; arg_elem_it<arg_elements.size(); arg_elem_it++) {
+                if (arg_elem_it > 1) {
+                    val += "=";
+                }
+                val += arg_elements.at(arg_elem_it);
+            }
+        }
         std::string original_val = val; // copy it for case-sensitive parameters (e.g., path to executable_binary)
         std::transform(val.begin(), val.end(), val.begin(), [](unsigned char c) { return std::tolower(c); });
         if (key == "solver_name") {
