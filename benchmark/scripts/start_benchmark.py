@@ -78,6 +78,12 @@ def get_setup(bench_type, subdir=None):
     elif bench_type == "low_complexity_rotators":
         filename = "benchmark/inputs/cmm/low_complexity_rotators.csv"
         name_tag = "constant"
+    elif bench_type == "fft_rot_kaya_garrido_2024":
+        filename = "benchmark/inputs/cmm/fft_rot_kaya_garrido_2024.csv"
+        name_tag = "constant"
+    elif bench_type == "fft_rot_garrido_malagon_2021":
+        filename = "benchmark/inputs/cmm/fft_rot_garrido_malagon_2021.csv"
+        name_tag = "constant"
     elif bench_type == "rpag_cmm":
         filename = "benchmark/inputs/cmm/rpag_cmm.csv"
         name_tag = "constant"
@@ -137,7 +143,7 @@ def do_it(bench_type_tuple, solver="CaDiCaL", worker_threads=[None]):
         timeout_mul = 24*7 # 1 week for enumeration
     elif "complex_mult" in bench_type or "sop_symmetry" in bench_type:
         timeout_mul = 24*5 # 5 days for complex multiplications and sop instances
-    elif "rotators" in bench_type or "rpag_cmm" in bench_type:
+    elif "fft" in bench_type or "rotators" in bench_type or "rpag_cmm" in bench_type:
         timeout_mul = 24*7 # 7 days for cmm optimization (it's hard)
     elif "cmm" in bench_type:
         timeout_mul = 12*1 # 1/2 day for "normal" cmm experiments based on random matrices

@@ -10,6 +10,7 @@
 #include <fstream>
 #include <algorithm>
 #include <numeric>
+#include <sstream>
 
 #define INPUT_SELECT_MUX_OPT 0 // only create a mux tree with reduced size instead of the whole (power of 2 sized) one => nfiege: I have NO IDEA WHY but apparently setting this to 0 is slightly faster (setting to 1 might be buggy, was not exhaustively tested because it is slower)
 #define FPGA_ADD 0 // try out full adders as used in FPGAs. Maybe SAT solvers like those better than normal ones?! => nfiege: Turns out they don't...
@@ -2476,10 +2477,10 @@ std::string mcm::get_adder_graph_description() {
         // in case of multiple duplicate "correct" values (i.e., for pipelining), take the one in the last stage
         int node_stage = 0;
         std::vector<int> found_coeff;
-        for (int idx=0; idx<this->num_adders; idx++) {
+        for (int idx=0; idx<this->num_adders+this->c_row_size(); idx++) {
             bool correct_one = true;
             bool correct_one_inverted_sign = true;
-            auto node_idx = idx+this->c_row_size();
+            auto node_idx = idx;//+this->c_row_size();
             for (int v=0; v<this->c_row_size(); v++) {
                 if (this->output_values.at({node_idx, v}) != actual_coeff.at(v)) correct_one = false;
                 if (this->output_values.at({node_idx, v}) != -actual_coeff.at(v)) correct_one_inverted_sign = false;
@@ -2504,7 +2505,19 @@ std::string mcm::get_adder_graph_description() {
             }
         }
         if (found_coeff.empty()) {
-            throw std::runtime_error("failed to find adder node for output");
+			std::stringstream err_msg;
+			err_msg << "failed to find adder node for output [";
+			for (size_t coeff_cnt = 0; coeff_cnt < requested_coeff.size(); coeff_cnt++) {
+				if (coeff_cnt > 0) err_msg << ", ";
+				err_msg << requested_coeff[coeff_cnt];
+			}
+			err_msg << "] = [";
+			for (size_t coeff_cnt = 0; coeff_cnt < actual_coeff.size(); coeff_cnt++) {
+				if (coeff_cnt > 0) err_msg << ", ";
+				err_msg << actual_coeff[coeff_cnt];
+			}
+			err_msg << "] << " << node_output_shift;
+            throw std::runtime_error(err_msg.str());
         }
         // generate info as string
         if (this->num_adders > 0 or output_counter > 0) {

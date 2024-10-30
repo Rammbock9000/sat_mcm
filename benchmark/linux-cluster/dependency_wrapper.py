@@ -19,12 +19,25 @@ completed = set([
     ("cmm", 4, 3, 6),
     ("cmm", 4, 3, 7),
     ("cmm", 4, 3, 8),
+    ("cmm", 4, 3, 9),
     ("cmm", 4, 4, 2),
     ("cmm", 4, 4, 3),
+    ("cmm", 4, 4, 4),
     ("cmm", 4, 4, 5),
+    ("cmm", 4, 4, 6),
+    ("cmm", 4, 4, 7),
+    ("cmm", 4, 4, 8),
+    ("cmm", 4, 4, 9),
     ("cmm", 4, 5, 2),
+    ("cmm", 4, 5, 3),
+    ("cmm", 4, 5, 4),
+    ("cmm", 4, 5, 5),
+    ("cmm", 4, 5, 6),
+    ("cmm", 4, 5, 7),
     ("cmm", 4, 6, 2),
+    ("cmm", 4, 6, 3),
     ("cmm", 4, 6, 4),
+    ("cmm", 4, 6, 6),
     ("cmm", 4, 8, 3),
     ("cmm", 4, 9, 3),
     ("cmm", 6, 2, 2),
@@ -53,7 +66,8 @@ completed = set([
 def is_completed(experiment, W=None, M=None, N=None):
     if experiment in completed:
         return True
-    return (experiment, W, M, N) in completed
+    #return (experiment, W, M, N) in completed
+    return False
 
 
 def get_additional_args(experiment, W, M, N):
@@ -163,16 +177,23 @@ def main():
                 for N in Ns:
                     if limit_reached or is_completed(experiment, W, M, N):
                         continue
-                    cmm_file = create_cmm_slurm_script(experiment, W, M, N)
-                    clean_file = create_cleanup_slurm_script(experiment, W, M, N)
+                    #cmm_file = create_cmm_slurm_script(experiment, W, M, N)
+                    #clean_file = create_cleanup_slurm_script(experiment, W, M, N)
                     job_id = None
                     for _ in range(how_often):
-                        if num_submitted_total + num_submitted + 2 > max_jobs:
+                        if num_submitted_total + num_submitted + 1 > max_jobs:
                             limit_reached = True
                             break
-                        job_id = start_job_and_get_id(clean_file, dep=job_id)
-                        job_id = start_job_and_get_id(cmm_file, dep=job_id)
-                        num_submitted += 2
+                        else:
+                            #job_id = start_job_and_get_id(clean_file, dep=job_id)
+                            num_submitted += 1
+                        if num_submitted_total + num_submitted + 1 > max_jobs:
+                            limit_reached = True
+                            break
+                        else:
+                            #job_id = start_job_and_get_id(cmm_file, dep=job_id)
+                            #num_submitted += 1
+                            pass
         num_submitted_total += num_submitted
         print(f"Submitted {num_submitted} jobs for experiment '{experiment}'")
     print(f"Submitted {num_submitted_total} jobs in total!")
