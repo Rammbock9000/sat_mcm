@@ -178,14 +178,14 @@ def main():
                     if limit_reached or is_completed(experiment, W, M, N):
                         continue
                     #cmm_file = create_cmm_slurm_script(experiment, W, M, N)
-                    #clean_file = create_cleanup_slurm_script(experiment, W, M, N)
+                    clean_file = create_cleanup_slurm_script(experiment, W, M, N)
                     job_id = None
                     for _ in range(how_often):
                         if num_submitted_total + num_submitted + 1 > max_jobs:
                             limit_reached = True
                             break
                         else:
-                            #job_id = start_job_and_get_id(clean_file, dep=job_id)
+                            job_id = start_job_and_get_id(clean_file, dep=job_id)
                             num_submitted += 1
                         if num_submitted_total + num_submitted + 1 > max_jobs:
                             limit_reached = True
