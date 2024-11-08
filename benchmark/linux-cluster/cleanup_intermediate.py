@@ -2,8 +2,8 @@ import os
 import sys
 
 
-def get_int_from_user_arg(idx, default_value):
-    if len(argv) < idx+1:
+def get_int_from_user_arg(idx, default_value, argv, argc):
+    if len(argv) < idx+1 or len(argv) < argc+1:
         return default_value
     try:
         return int(argv[idx])
@@ -73,9 +73,9 @@ def main():
     if argc < 3:
         raise Exception("need program argument: experiment type")
     basedir = argv[1]
-    Ws = get_int_from_user_arg(3, None)
-    Ms = get_int_from_user_arg(4, None)
-    Ns = get_int_from_user_arg(5, None)
+    Ws = get_int_from_user_arg(3, None, argv, argc)
+    Ms = get_int_from_user_arg(4, None, argv, argc)
+    Ns = get_int_from_user_arg(5, None, argv, argc)
     if Ws is not None:
         Ws = [Ws]
     if Ms is not None:
