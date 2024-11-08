@@ -4,8 +4,8 @@ import sys
 
 def get_int_from_user_arg(idx, default_value):
     argc = len(sys.argv)
-    if len(sys.argv) < idx+1 or len(sys.argv) < argc+1:
-        print(f"get_int_from_user_arg: return default value '{default_value}', len(sys.argv)={len(sys.argv)} idx={idx} argc={argc}")
+    if argc < idx+1:
+        print(f"get_int_from_user_arg: return default value '{default_value}', idx={idx} argc={argc}")
         return default_value
     try:
         return int(sys.argv[idx])

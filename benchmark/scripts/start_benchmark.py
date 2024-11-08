@@ -8,7 +8,7 @@ def get_num_threads_from_user():
 
 def get_int_from_user_arg(idx, default_value):
     argc = len(sys.argv)
-    if len(sys.argv) < idx+1 or len(sys.argv) < argc+1:
+    if argc < idx+1:
         return default_value
     try:
         return int(sys.argv[idx])
