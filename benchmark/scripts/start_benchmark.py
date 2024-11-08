@@ -1,18 +1,19 @@
 import os
 import threading
-from sys import argv
+import sys
 from time import sleep
 
 def get_num_threads_from_user():
     return get_int_from_user_arg(1, 1)
 
 def get_int_from_user_arg(idx, default_value):
-    if len(argv) < idx+1:
+    argc = len(sys.argv)
+    if len(sys.argv) < idx+1 or len(sys.argv) < argc+1:
         return default_value
     try:
-        return int(argv[idx])
+        return int(sys.argv[idx])
     except ValueError as e:
-        print(f"unable to convert '{argv[idx]}' to int: {repr(e)}")
+        print(f"unable to convert '{sys.argv[idx]}' to int: {repr(e)}")
     return default_value
 
 

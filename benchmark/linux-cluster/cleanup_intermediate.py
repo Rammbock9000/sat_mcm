@@ -2,13 +2,14 @@ import os
 import sys
 
 
-def get_int_from_user_arg(idx, default_value, argv, argc):
-    if len(argv) < idx+1 or len(argv) < argc+1:
+def get_int_from_user_arg(idx, default_value):
+    argc = len(sys.argv)
+    if len(sys.argv) < idx+1 or len(sys.argv) < argc+1:
         return default_value
     try:
-        return int(argv[idx])
+        return int(sys.argv[idx])
     except ValueError as e:
-        print(f"unable to convert '{argv[idx]}' to int: {repr(e)}")
+        print(f"unable to convert '{sys.argv[idx]}' to int: {repr(e)}")
     return default_value
 
 
@@ -73,9 +74,9 @@ def main():
     if argc < 3:
         raise Exception("need program argument: experiment type")
     basedir = argv[1]
-    Ws = get_int_from_user_arg(3, None, argv, argc)
-    Ms = get_int_from_user_arg(4, None, argv, argc)
-    Ns = get_int_from_user_arg(5, None, argv, argc)
+    Ws = get_int_from_user_arg(3, None)
+    Ms = get_int_from_user_arg(4, None)
+    Ns = get_int_from_user_arg(5, None)
     if Ws is not None:
         Ws = [Ws]
     if Ms is not None:
