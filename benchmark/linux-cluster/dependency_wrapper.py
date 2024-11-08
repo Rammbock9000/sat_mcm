@@ -96,8 +96,8 @@ def create_cmm_slurm_script(experiment, W, M, N):
         f.write(f"#SBATCH -p pub23\n")
         f.write(f"#SBATCH --mem={mem}\n")
         f.write(f"#SBATCH --time={time_limit}\n")
-        f.write(f"#SBATCH --mail-user=nfiege@uni-kassel.de\n")
-        f.write(f"#SBATCH --mail-type=ALL\n")
+        #f.write(f"#SBATCH --mail-user=nfiege@uni-kassel.de\n")
+        #f.write(f"#SBATCH --mail-type=ALL\n")
         f.write(f"#SBATCH --output={base_dir}benchmark/linux-cluster/cmm-{experiment}_{additional_args.replace(' ', '_')}.out\n")
         if experiment == "cmm":
             f.write(f"cd {base_dir};python3 {script_base}/cmm_benchmark.py {num_tasks-1} {additional_args}\n")
@@ -167,9 +167,10 @@ def main():
     experiments = no_pipe_experiments + pipe_experiments # pipe_experiments + no_pipe_experiments
     how_often = 1
     num_submitted_total = 0
-    max_jobs = 498
+    max_jobs = 200
     limit_reached = False
     DEBUGGING = False
+    ONLY_CLEAN = True
     for experiment in experiments:
         num_submitted = 0
         if is_completed(experiment):
@@ -182,7 +183,8 @@ def main():
                         continue
                     if not DEBUGGING:
                         clean_file = create_cleanup_slurm_script(experiment, W, M, N)
-                        cmm_file = create_cmm_slurm_script(experiment, W, M, N)
+                        if not ONLY_CLEAN:
+                            cmm_file = create_cmm_slurm_script(experiment, W, M, N)
                     job_id = None
                     for _ in range(how_often):
                         if num_submitted_total + num_submitted + 1 > max_jobs:
@@ -196,9 +198,10 @@ def main():
                             limit_reached = True
                             break
                         else:
-                            if not DEBUGGING:
-                                job_id = start_job_and_get_id(cmm_file, dep=job_id)
-                            num_submitted += 1
+                            if not ONLY_CLEAN:
+                                if not DEBUGGING:
+                                    job_id = start_job_and_get_id(cmm_file, dep=job_id)
+                                num_submitted += 1
         num_submitted_total += num_submitted
         print(f"Submitted {num_submitted} jobs for experiment '{experiment}'")
     print(f"Submitted {num_submitted_total} jobs in total!")

@@ -74,16 +74,18 @@ def main():
     if argc < 3:
         raise Exception("need program argument: experiment type")
     basedir = argv[1]
+    experiment_type = argv[2]
     Ws = get_int_from_user_arg(3, None)
     Ms = get_int_from_user_arg(4, None)
     Ns = get_int_from_user_arg(5, None)
+    print(f"Run cleanup for {experiment_type}: {Ws}/{Ms}/{Ns}")
     if Ws is not None:
         Ws = [Ws]
     if Ms is not None:
         Ms = [Ms]
     if Ns is not None:
         Ns = [Ns]
-    subdir_list = get_subdir_list(argv[2], Ws, Ms, Ns)
+    subdir_list = get_subdir_list(experiment_type, Ws, Ms, Ns)
     for subdir in subdir_list:
         dir_path = f"{basedir}/{subdir}"
         if not os.path.isdir(dir_path):
