@@ -157,7 +157,7 @@ def get_loops(experiment):
         return [2,3,4,5,6,7,8,9], [-1], [-1]
     if "conv" in experiment:
         return [2,4,6,8], [-1], [2,3,4,5,6,7,8,9]
-    # "conv"/"pconv"
+    # matrix multiplication
     return [4,6,8], [2,3,4,5,6,7,8,9], [2,3,4,5,6,7,8,9]
 
 

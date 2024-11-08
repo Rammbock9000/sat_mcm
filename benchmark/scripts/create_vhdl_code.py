@@ -2,10 +2,42 @@ import sys
 import math
 import os
 
-def create_vhdl_code(mcm_str, input_word_size, output_filename):
+
+def get_word_size(c):
+    c_abs = [abs(x) for x in c]
+    c_sum = sum(c_abs)
+    w = math.ceil(math.log2(c_sum))
+    if all([x < 0 for x in c]) and math.ceil(math.log2(c_sum)) == math.floor(math.log2(c_sum)):
+        w += 1
+    return w
+
+
+def get_c(comma_sep_coefficient_str):
+    c_str = comma_sep_coefficient_str.split(",")
+    c = [int(x) for x in c_str]
+    c_neg = [-x for x in c]
+    c_str = "_".join([f"m{abs(x)}" if x < 0 else f"{x}" for x in c])
+    return c, c_str, c_neg
+
+
+def is_unit_vector(c_vec):
+    return (1 in c_vec) and (sum(c_vec) == 1)
+
+
+def get_input_dimensions(adder_graph_str)
+    s = adder_graph_str.split("[")
+    if len(s) < 2:
+        raise Exception(f"Cannot determine input dimensions from adder graph {adder_graph_str}")
+    s = s[1]
+    s = s.split("]")[0]
+    return len(s.split(","))
+
+
+def create_vhdl_code(adder_graph_str, input_word_size, output_filename):
+    num_inputs = get_input_dimensions(adder_graph_str)
     coeffs = []
-    word_sizes = {1 : 0}
-    indices = {1 : 0}
+    word_sizes = {[1] : 0}
+    indices = {[1] : 0}
     output_shifts = {}
     inputs = {}
     signal_names = {1 : "x_1"}
@@ -14,7 +46,7 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
     subtract = {}
     copy_sign_left = {}
     copy_sign_right = {}
-    nodes_str = mcm_str.split("},{")
+    nodes_str = adder_graph_str.split("},{")
     nodes_str_new = []
     # preprocess mcm string
     for i in range(len(nodes_str)):
@@ -32,7 +64,7 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
         node = node.replace("A,", "")
         nodes_str_new.append(node)
     nodes_str = nodes_str_new
-    # extract info from mcm string
+    # extract info from adder graph
     idx_counter = 0
     for node in nodes_str:
         elem = node.split(",")
@@ -44,29 +76,32 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
             idx_offset = 1
         else:
             continue
-        c = int(elem[0])
-        if c < 0:
-            signal_names[c] = f"x_m{abs(c)}"
-            port_names[c] = f"y_m{abs(c)}"
-            inst_names[c] = f"inst_m{abs(c)}_x"
-        else:
-            signal_names[c] = f"x_{c}"
-            port_names[c] = f"y_{c}"
-            inst_names[c] = f"inst_{c}_x"
-        output_shifts[c] = shift_o
+        # extract coefficient
+        c, c_str, c_neg = get_c(elem[0])
         coeffs.append(c)
+        # extract shifts
+        shift_in_left = int(elem[4+idx_offset])
+        shift_in_right = int(elem[7+idx_offset])
+        if (shift_in_left < 0) and (shift_in_right == shift_in_left):
+            shift_o = -shift_in_left
+            shift_in_left = 0
+            shift_in_right = 0
+        output_shifts[c] = shift_o
+        # extract left and right inputs
+        c_in_left, c_in_left_str, c_in_left_neg = get_c(elem[2+idx_offset])
+        c_in_right, c_in_right_str, c_in_right_neg = get_c(elem[5+idx_offset])
+        # define names
+        signal_names[c] = f"x_{c_str}"
+        port_names[c] = f"y_{c_str}"
+        inst_names[c] = f"inst_{c_str}"
         indices[c] = idx_counter
         idx_counter += 1
-        word_sizes[c] = math.ceil(math.log2(abs(c)))
-        c_in_left = int(elem[2+idx_offset])
-        c_in_right = int(elem[5+idx_offset])
-        if (c_in_right not in coeffs and -c_in_right in coeffs) or c_in_right == -1:
+        word_sizes[c] = get_word_size(c)
+        if (c_in_right not in coeffs and c_in_right_neg in coeffs) or is_unit_vector(c_in_right_neg):
             subtract[c] = True
             c_in_right = -c_in_right
         else:
             subtract[c] = False
-        shift_in_left = int(elem[4+idx_offset])
-        shift_in_right = int(elem[7+idx_offset])
         inputs[c] = (signal_names[c_in_left], signal_names[c_in_right], shift_in_left, shift_in_right, word_sizes[c_in_left], word_sizes[c_in_right])
         if (c >= 0 and c_in_left >= 0) or (c < 0 and c_in_left < 0):
             copy_sign_left[c] = True
@@ -87,16 +122,16 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
         f.write("use ieee.numeric_std.all;\n")
         f.write("\n")
         # entity
-        f.write("entity mcm is\n")
+        f.write("entity const_mult is\n")
         f.write("  port (\n")
         for c in coeffs:
                 f.write(f"    {port_names[c]} : out std_logic_vector({input_word_size}+{word_sizes[c]}-1 downto 0);\n")
         f.write(f"    x : in std_logic_vector({input_word_size}-1 downto 0)\n")
         f.write("  );\n")
-        f.write("end mcm;\n")
+        f.write("end const_mult;\n")
         f.write("\n")
         # architecture head
-        f.write("architecture mcm of mcm is\n")
+        f.write("architecture const_mult of const_mult is\n")
         f.write(f"  signal x_1 : signed({input_word_size}-1 downto 0);\n")
         for c in coeffs:
             f.write(f"  signal {signal_names[c]} : signed({input_word_size}+{word_sizes[c]}-1 downto 0);\n")
@@ -131,7 +166,7 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
             f.write(f"      z_o => {signal_names[c]}\n")
             f.write("    );\n")
         # architecture tail
-        f.write("end mcm;\n")
+        f.write("end const_mult;\n")
     
     # create testbench from info
     if ".vhdl" in output_filename:
@@ -150,11 +185,11 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
         f.write("use ieee.numeric_std.all;\n")
         f.write("\n")
         # entity
-        f.write("entity mcm_tb is\n")
-        f.write("end mcm_tb;\n")
+        f.write("entity const_mult_tb is\n")
+        f.write("end const_mult_tb;\n")
         f.write("\n")
         # architecture head
-        f.write("architecture mcm_tb of mcm_tb is\n")
+        f.write("architecture const_mult_tb of const_mult_tb is\n")
         f.write(f"  signal x_1 : std_logic_vector({input_word_size}-1 downto 0) := (others => '0');\n")
         f.write(f"  signal x_1_int : integer;\n")
         for c in coeffs:
@@ -176,7 +211,7 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
         for c in coeffs:
             f.write(f"  {signal_names[c]}_expected <= {c} * x_1_int;\n")
             f.write(f"  {signal_names[c]}_ok <= '1' when {signal_names[c]}_expected = to_integer(signed({signal_names[c]})) else '0';\n")
-        f.write(f"  DUT : entity work.mcm\n")
+        f.write(f"  DUT : entity work.const_mult\n")
         f.write(f"    port map (\n")
         for c in coeffs:
             f.write(f"      {port_names[c]} => {signal_names[c]},\n")
@@ -187,7 +222,7 @@ def create_vhdl_code(mcm_str, input_word_size, output_filename):
         f.write(f"    wait for 1ns;\n")
         f.write(f"    x_1 <= std_logic_vector(signed(x_1) + 1);\n")
         f.write(f"  end process;\n")
-        f.write("end mcm_tb;\n")
+        f.write("end const_mult_tb;\n")
 
 def get_mcm_str(filepath):
     adder_graph = ""
