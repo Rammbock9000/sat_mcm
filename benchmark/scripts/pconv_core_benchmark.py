@@ -1,4 +1,4 @@
-from start_benchmark import do_it, get_num_threads_from_user
+from start_benchmark import do_it, get_num_threads_from_user, get_int_from_user_arg
 
 def main():
     num_threads = get_num_threads_from_user()
