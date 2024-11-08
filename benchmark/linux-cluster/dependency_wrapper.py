@@ -170,7 +170,7 @@ def main():
     max_jobs = 200
     limit_reached = False
     DEBUGGING = False
-    ONLY_CLEAN = True
+    ONLY_CLEAN = False
     for experiment in experiments:
         num_submitted = 0
         if is_completed(experiment):
