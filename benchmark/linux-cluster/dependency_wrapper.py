@@ -2,6 +2,56 @@ import subprocess
 
 
 completed = set([
+    ("conv", 2, -1, 2),
+    ("conv", 2, -1, 3),
+    ("conv", 2, -1, 4),
+    ("conv", 2, -1, 5),
+    ("conv", 2, -1, 6),
+    ("conv", 2, -1, 7),
+    ("conv", 2, -1, 8),
+    ("conv", 2, -1, 9),
+    ("conv", 4, -1, 2),
+    ("conv", 4, -1, 3),
+    ("conv", 4, -1, 4),
+    ("conv", 4, -1, 5),
+    ("conv", 4, -1, 6),
+    ("conv", 4, -1, 7),
+    ("conv", 4, -1, 8),
+    ("conv", 4, -1, 9),
+    ("conv", 6, -1, 2),
+    ("conv", 6, -1, 3),
+    ("conv", 6, -1, 4),
+    ("conv", 6, -1, 5),
+    ("conv", 6, -1, 6),
+    ("conv", 6, -1, 7),
+    ("conv", 6, -1, 8),
+    ("conv", 8, -1, 2),
+    ("conv", 8, -1, 3),
+    ("conv", 8, -1, 4),
+
+    ("pconv", 2, -1, 2),
+    ("pconv", 2, -1, 3),
+    ("pconv", 2, -1, 4),
+    ("pconv", 2, -1, 5),
+    ("pconv", 2, -1, 6),
+    ("pconv", 2, -1, 7),
+    ("pconv", 2, -1, 8),
+    ("pconv", 2, -1, 9),
+    ("pconv", 4, -1, 2),
+    ("pconv", 4, -1, 3),
+    ("pconv", 4, -1, 4),
+    ("pconv", 4, -1, 5),
+    ("pconv", 4, -1, 6),
+    ("pconv", 4, -1, 7),
+    ("pconv", 4, -1, 8),
+    ("pconv", 4, -1, 9),
+    ("pconv", 6, -1, 2),
+    ("pconv", 6, -1, 3),
+    ("pconv", 6, -1, 4),
+    ("pconv", 6, -1, 5),
+    ("pconv", 6, -1, 6),
+    ("pconv", 6, -1, 7),
+    ("pconv", 8, -1, 2),
     "cmm",  # SKIP IT FOR NOW
     "pcmm", # SKIP IT FOR NOW
     "complex",
@@ -68,7 +118,7 @@ completed = set([
 def is_completed(experiment, W=None, M=None, N=None):
     if experiment in completed:
         return True
-    #return (experiment, W, M, N) in completed
+    return (experiment, W, M, N) in completed
     return False
 
 
@@ -162,14 +212,14 @@ def get_loops(experiment):
 
 
 def main():
-    no_pipe_experiments = ["cmm", "conv", "complex"]
-    pipe_experiments = ["pcmm", "pconv", "pcomplex"]
+    no_pipe_experiments = ["conv"]  # ["cmm", "conv", "complex"]
+    pipe_experiments = ["pconv"]  # ["pcmm", "pconv", "pcomplex"]
     experiments = no_pipe_experiments + pipe_experiments # pipe_experiments + no_pipe_experiments
-    how_often = 1
+    how_often = 2
     num_submitted_total = 0
-    max_jobs = 200
+    max_jobs = 300
     limit_reached = False
-    DEBUGGING = False
+    DEBUGGING = True
     ONLY_CLEAN = False
     for experiment in experiments:
         num_submitted = 0
