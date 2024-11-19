@@ -219,7 +219,7 @@ def main():
     num_submitted_total = 0
     max_jobs = 300
     limit_reached = False
-    DEBUGGING = True
+    DEBUGGING = False
     ONLY_CLEAN = False
     for experiment in experiments:
         num_submitted = 0
