@@ -1,4 +1,25 @@
-Installation instructions
+## General Information
+
+Contents of the main branch are published under:
+
+N. Fiege, M. Kumm and P. Zipf, "Bit-Level Optimized Constant Multiplication Using Boolean Satisfiability," in IEEE Transactions on Circuits and Systems I: Regular Papers, vol. 71, no. 1, pp. 249-261, Jan. 2024, doi: 10.1109/TCSI.2023.3327814.
+
+Please cite our work if you found it helpful:
+
+    @ARTICLE{10320216,
+        author={Fiege, Nicolai and Kumm, Martin and Zipf, Peter},
+        journal={IEEE Transactions on Circuits and Systems I: Regular Papers},
+        title={Bit-Level Optimized Constant Multiplication Using Boolean Satisfiability},
+        year={2024},
+        volume={71},
+        number={1},
+        pages={249-261},
+        doi={10.1109/TCSI.2023.3327814}
+    }
+    
+Contents of the CMM branch are currently under review for publication... Please cite the above paper until then.
+
+## Installation instructions
 
 This project is set up to be extendable to various SAT backends.
 CaDiCaL, Glucose-Syrup and Z3 are currently supported.
@@ -36,6 +57,8 @@ cmake -DCMAKE_PREFIX_PATH="/path/to/backend/install/dir/" -DCMAKE_INSTALL_PREFIX
 e.g.
 
 cmake -DCMAKE_PREFIX_PATH="/opt/cadical/;/opt/z3/" -DCMAKE_INSTALL_PREFIX="/opt/mcm/" .
+
+## Reproduction of SCM/MCM results
 
 To reproduce all our experiments do the following:
 
