@@ -17,7 +17,7 @@ Please cite our work if you found it helpful:
         doi={10.1109/TCSI.2023.3327814}
     }
     
-Contents of the CMM branch are currently under review for publication... Please cite the above paper until then.
+Attention: This repository is deprecated. Please refer to [https://gitlab.uni-kassel.de/uk025743/sat_cmm](https://gitlab.uni-kassel.de/uk025743/sat_cmm) for the latest features and the most stable versions.
 
 ## Installation instructions
 
